@@ -1,0 +1,65 @@
+version: '3'
+
+services:
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+      args:
+        - BASE_PATH=$BASE_PATH
+    container_name: ${NGINX_HOST}
+    restart: always
+    environment:
+      - API_PORT=${API_PORT}
+      - API_HOST=${API_HOST}
+      - BASE_PATH=${BASE_PATH}
+    ports:
+        - "94:${API_PORT}"
+    
+
+  mongo:
+    image: mongo:6.0
+    container_name: "${DB_HOST}"
+    env_file:
+      - .env
+    restart: always
+    volumes:
+     - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
+     - mongodb-data:${MONGODB_DATA_DIR}
+    ports:
+      - "${DB_PORT}:27017"
+
+  server:
+    build: ./server
+    container_name: ${API_HOST}
+    restart: always
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    ports:
+      - "5000:5000"  # Expose
+
+  celery:
+    build: ./server
+    command: celery --app app.celery_app worker --loglevel=info --autoscale=1,1 --max-tasks-per-child=1
+    restart: always
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    depends_on:
+      - server
+      - mongo
+      - redis
+
+  redis:
+    image: "redis:alpine"
+
+volumes:
+  app:
+  mongodb-data:
+  node_modules:

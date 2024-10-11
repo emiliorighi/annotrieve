@@ -1,0 +1,38 @@
+variables:
+  APP_NAME_FRONT: rnaget-nginx
+  APP_NAME_BACK: rnaget-server
+  BASE_PATH: /rnaget-beacon
+
+stages: 
+  - build
+  - deploy
+
+build_containers:
+  only:
+    - master
+
+  tags:
+    - docker
+    - monstre
+
+  stage: build
+  image: docker:latest
+
+  before_script:
+    - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
+
+  script:
+    - docker build --build-arg BASE_PATH="$BASE_PATH" -t gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_FRONT ./nginx
+    - docker push gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_FRONT
+    - docker build -t gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_BACK ./server
+    - docker push gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_BACK
+
+deploy_containers:
+  stage: deploy
+  tags:
+    - shell
+    - monstre
+  script:
+    - cat $ENV_FILE > .env
+    - docker-compose -f docker-compose.yml down -v
+    - docker-compose -f docker-compose.yml up -d

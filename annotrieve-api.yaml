@@ -1,0 +1,764 @@
+openapi: 3.0.0
+
+info:
+  version: "1.0.0"
+  title: "Annotrieve API"
+  contact:
+    email: "emilio.righi@crg.eu"
+
+servers:
+  - url: https://genome.crg.es/annotrieve/api
+
+tags:
+- name: "organisms"
+- name: "assemblies"
+- name: "taxons"
+- name: "annotations"
+- name: "taxonomy"
+- name: "stats"
+- name: "lookup"
+
+paths:
+
+  /lookup:
+    get:
+      tags: 
+        - "stats"
+      summary: "Database stats"
+      responses:
+        "200":
+          description: "successful operations"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  assemblies:
+                    type: number
+                  annotations:
+                    type: number
+                  biosamples:
+                    type: number
+                  local_samples:
+                    type: number
+                  experiments:
+                    type: number
+                  organisms:
+                    type: number
+                  taxons:
+                    type: number
+                    
+  /stats/{model}/{field}:
+    get:
+      tags: 
+        - "stats"
+      summary: "get model field statistics"
+      parameters:
+        - name: filters
+          in: query
+          description: "Dynamic filters as key-value pairs"
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+        - in: 'path'
+          name: 'model'
+          required: true
+          schema:
+            type: "string"
+            enum:
+            - "assemblies"
+            - "annotations"
+            - "organisms"
+            - "taxons"
+        - in: 'path'
+          name: 'field'
+          required: true
+          description: "Field to retrieve frequencies from"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "successfull operations"
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {
+                    type: number
+                  }
+                  
+  /tree:
+    get:
+      tags:
+        - "taxonomy"
+      summary: "retrieve all the taxons contained in the database in a taxonomic tree"
+      responses:
+        "200":
+          description: "successful operations"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreeNode"
+            
+  /organisms:
+    get:
+      tags:
+        - "organisms"
+      summary: "Endpoint to retrieve a paginated list of organisms"
+      parameters:
+        - in: 'query'
+          name: 'filter'
+          description: 'Filter by scientific name or taxid'
+          schema:
+            type: 'string'
+        - in: 'query'
+          name: 'parent_taxon'
+          schema:
+            type: 'string'
+        - in: "query"
+          name: "countries"
+          schema:
+            type: "string"
+          description: "country code, ex: US, ES"
+        - in: 'query'
+          name: 'sort_order'
+          schema:
+            type: 'string'
+            enum:
+            - "asc"
+            - "desc"
+        - in: 'query'
+          name: 'format'
+          schema:
+            type: 'string'
+            enum:
+            - "tsv"
+            - "json"
+        - in: 'query'
+          name: 'sort_column'
+          schema:
+            type: 'string'
+        - in: 'query'
+          name: 'offset'
+          schema:
+            type: 'number'
+            default: 0
+        - in: 'query'
+          name: 'limit'
+          schema:
+            type: 'number'
+            default: 20
+        - name: fields[]
+          in: query
+          description: "Fields to return"
+          schema:
+            type: array
+            items:
+              type: string
+        - name: filters
+          in: query
+          description: "Dynamic filters as key-value pairs"
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/components/schemas/Organism"
+                  total:
+                    type: "number"
+            text/tab-separated-values: 
+              schema: 
+                type: "string"
+                example: "key1\tkey2\nexample\t123"
+              
+  /organisms/{taxid}:
+    get:
+      tags:
+        - "organisms"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organism"
+        "404":
+          description: "Organism not found"
+
+  /organisms/{taxid}/lookup:
+    get:
+      tags:
+        - "organisms"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: "Organism not found"
+
+  /organisms/{taxid}/lineage:
+    get:
+      tags:
+        - "organisms"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreeNode"
+        "404":
+          description: "Organism not found"
+
+  /organisms/{taxid}/assemblies:
+    get:
+      tags:
+        - "organisms"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Assembly"
+        "404":
+          description: "Organism not found"
+
+  /organisms/{taxid}/annotations:
+    get:
+      tags:
+        - "organisms"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Annotation"
+        "404":
+          description: "Organism not found"
+
+  /assemblies:
+    get:
+      tags:
+        - "assemblies"
+      summary: "Endpoint to retrieve a paginated list of assemblies"
+      parameters:
+        - in: 'query'
+          name: 'filter'
+          description: 'Filter by scientific name or assembly name'
+          schema:
+            type: 'string'
+        - in: 'query'
+          name: 'format'
+          schema:
+            type: 'string'
+            enum:
+            - "tsv"
+            - "json"
+        - in: 'query'
+          name: 'sort_order'
+          schema:  
+            type: "string"
+            enum:
+            - "asc"
+            - "desc"
+        - in: 'query'
+          name: 'sort_column'
+          schema:
+            type: "string"
+        - in: 'query'
+          name: 'blobtoolkit'
+          schema:
+            type: 'boolean'
+            default: 'false'
+        - in: 'query'
+          name: 'offset'
+          schema:
+            type: 'number'
+            default: 0
+        - in: 'query'
+          name: 'limit'
+          schema:
+            type: 'number'
+            default: 20
+        - name: fields[]
+          in: query
+          description: "Fields to return"
+          schema:
+            type: array
+            items:
+              type: string
+        - name: filters
+          in: query
+          description: "Dynamic filters as key-value pairs"
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/components/schemas/Assembly"
+                  total:
+                    type: "number"
+            text/tab-separated-values: 
+              schema: 
+                type: "string"
+                example: "key1\tkey2\nexample\t123"
+
+  /assemblies/{accession}:
+    get:
+      tags:
+        - "assemblies"
+      parameters:
+        - in: 'path'
+          name: 'accession'
+          required: true
+          schema:
+            type: 'string'
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assembly"
+        "404":
+          description: "Assembly not found"
+
+  /assemblies/{accession}/lookup:
+    get:
+      tags:
+        - "assemblies"
+      parameters:
+        - in: 'path'
+          name: 'accession'
+          required: true
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: "Assembly not found"
+
+  /assemblies/{accession}/annotations:
+    get:
+      tags:
+        - "assemblies"
+      parameters:
+        - in: 'path'
+          name: 'accession'
+          required: true
+          schema:
+            type: 'string'
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Annotation"
+        "404":
+          description: "Assembly not found"
+
+  /assemblies/{accession}/chromosomes:
+    get:
+      tags:
+        - "assemblies"
+      parameters:
+        - in: 'path'
+          name: 'accession'
+          required: true
+          schema:
+            type: 'string'
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/Chromosome"
+        "404":
+          description: "Assembly not found"
+
+  /annotations:
+    get:
+      tags:
+        - "annotations"
+      summary: "Endpoint to retrieve a paginated list of genomic annotations"
+      parameters:
+        - in: 'query'
+          name: 'filter'
+          schema:
+            type: 'string'
+        - in: 'query'
+          name: 'format'
+          schema:
+            type: 'string'
+            enum:
+            - "tsv"
+            - "json"
+        - in: 'query'
+          name: 'offset'
+          schema:
+            type: 'number'
+            default: 0
+        - in: 'query'
+          name: 'limit'
+          schema:
+            type: 'number'
+            default: 20
+        - name: fields[]
+          in: query
+          description: "Fields to return"
+          schema:
+            type: array
+            items:
+              type: string
+        - name: filters
+          in: query
+          description: "Dynamic filters as key-value pairs"
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/components/schemas/Annotation"
+                  total:
+                    type: "number"
+            text/tab-separated-values: 
+              schema: 
+                type: "string"
+                example: "key1\tkey2\nexample\t123"
+
+  /annotations/{name}:
+    get:
+      tags:
+        - "annotations"
+      parameters:
+        - in: 'path'
+          name: 'name'
+          required: true
+          schema:
+            type: 'string'
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+        "404":
+          description: "annotation not found"
+          
+  /taxons:
+    get:
+      tags:
+        - "taxons"
+      summary: "Endpoint to retrieve a paginated list of taxons"
+      parameters:
+        - in: 'query'
+          name: 'filter'
+          schema:  
+            type: 'string'
+        - in: 'query'
+          name: 'rank'
+          schema:
+            type: 'string'
+            enum: 
+              - 'kingdom'
+              - 'phylum'
+              - 'class'
+              - 'order'
+              - 'family'
+        - in: 'query'
+          name: 'offset'
+          schema:
+            type: 'number'
+            default: 0
+        - in: 'query'
+          name: 'limit'
+          schema:
+            type: 'number'
+            default: 20
+        - name: fields[]
+          in: query
+          description: "Fields to return"
+          schema:
+            type: array
+            items:
+              type: string
+        - name: filters
+          in: query
+          description: "Dynamic filters as key-value pairs"
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                properties:
+                  data:
+                    type: "array"
+                    items:
+                      $ref: "#/components/schemas/TaxonNode"
+                  total:
+                    type: "number"
+            text/tab-separated-values: 
+              schema: 
+                type: "string"
+                example: "key1\tkey2\nexample\t123"
+
+  /taxons/{taxid}:
+    get:
+      tags:
+        - "taxons"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:  
+            type: 'string'
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxonNode"
+        "404":
+          description: "Taxon not found"
+
+  /taxons/{taxid}/children:
+    get:
+      tags:
+        - "taxons"
+      parameters:
+        - in: 'path'
+          name: 'taxid'
+          required: true
+          schema:  
+            type: 'string'
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                type: "array"
+                items:
+                  $ref: "#/components/schemas/TaxonNode"
+        "404":
+          description: "Taxon not found"
+        
+components:
+  schemas:
+    Assembly:
+      type: "object"
+      description: "object containing the urls to download the gzipped masked genome and its indexed versions"
+      properties:
+        accession:
+          type: "string"
+        assembly_name:
+          type: "string"
+        taxid:
+          type: "string"
+        scientific_name:
+          type: "string"
+        chromosomes:
+          type: "array"
+          items:
+            type: "string"
+        taxon_lineage:
+          type: "array"
+          items:
+            type: "string"
+          description: "list of chromosome accessions"
+      additionalProperties:
+        type: "string"
+        description: "Additional properties that are not explicitly defined in the model."
+
+    Annotation:
+      type: "object"
+      description: "object containing the urls to download the gzipped gff3 file"
+      properties:
+        name:
+          type: "string"
+          description: "annotation name"
+        taxid:
+          type: "string"
+        assembly_accession:
+          type: "string"
+        assembly_name:
+          type: "string"
+        processing_status:
+          type: "string"
+          enum:
+            - "pending"
+            - "processing"
+            - "complete"
+            - "error"
+        source_db:
+          type: "string"
+          enum:
+            - "ncbi"
+            - "ensembl"
+        taxon_lineage:
+          type: "array"
+          items:
+            type: "string"
+        source_link:
+          type: "string"
+        bgzipped_link:
+          type: "string"
+        tabix_link: 
+          type: "string"
+      additionalProperties:
+        type: "string"
+        description: "Additional properties that are not explicitly defined in the model."
+    
+    Chromosome:
+      type: "object"
+      properties:
+        accession_version:
+          type: "string"
+        name:
+          type: "object"
+        length:
+          type: "number"
+      additionalProperties:
+        type: "string"
+        description: "Additional properties that are not explicitly defined in the model."
+        
+    TreeNode:
+      type: "object"
+      properties:
+        taxid: 
+          type: "string"
+        name:
+          type: "string"
+        rank:
+          type: "string"
+        leaves:
+          type: "number"
+        children:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/TreeNode"
+
+    TaxonNode:
+      type: "object"
+      properties:
+        children:
+          type: "array"
+          items:
+            type: "string"
+          description: "list of taxid of the taxon node childrens"
+        name:
+          type: "string"
+        rank: 
+          type: "string"
+        leaves:
+          type: "number"
+        taxid:
+          type: "string"
+    
+    Organism:
+      type: "object"
+      properties:
+        insdc_common_name:
+          type: "string"
+        scientific_name:
+          type: "string"
+          description: "organism name"
+        taxid:
+          type: "string"
+          description: "NCBI taxonomic identifier"
+        taxon_lineage:
+          type: "array"
+          items:
+            type: "string"
+          description: "asc list of taxIDs"
+          
+          
