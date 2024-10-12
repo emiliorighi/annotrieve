@@ -1,6 +1,6 @@
 from . import taxonomy_service
 from flask_restful import Resource
-from jobs import taxonomy
+from job import taxonomy
 
 
 # class RelativeTaxonomyTreeApi(Resource):

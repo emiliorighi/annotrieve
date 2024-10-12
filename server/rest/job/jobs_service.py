@@ -1,4 +1,4 @@
-from job import retrieve_annotations
+from jobs import retrieve_annotations, process_gffs,taxonomy
 from werkzeug.exceptions import NotFound, BadRequest,Unauthorized
 from celery.result import AsyncResult
 import os
@@ -6,13 +6,21 @@ import os
 USER = os.getenv('USER')
 PWD = os.getenv('PWD')
 
-def launch_matrix_job(request):
-    data = request.json if request.is_json else request.form
-    check_credentials(data)
-    task = retrieve_annotations.get_annotations.delay()
-    return dict(id=task.id, state=task.state )
+def launch_annotations_import(request):
+    check_credentials(request)
+    retrieve_annotations.get_annotations.delay()
 
-def check_credentials(data):
+def launch_gffs_processing(request):
+    check_credentials(request)
+    process_gffs.process_gff_files.delay()
+
+def launch_tree_computing(request):
+    check_credentials(request)
+    taxonomy.compute_tree()
+
+def check_credentials(request):
+    data = request.json if request.is_json else request.form
+
     fields = ['username', 'password']
     missing_fields = [field for field in fields if field not in data]
     if missing_fields:

@@ -5,6 +5,7 @@ from .taxon import taxons_controller
 from .taxonomy import taxonomy_controller
 from .stats import stats_controller
 from .lookup import lookup_controller
+from .job import jobs_controller
 
 def initialize_routes(api):
 
@@ -42,3 +43,7 @@ def initialize_routes(api):
     ##TAXONOMY
     api.add_resource(taxonomy_controller.RootTreeApi, '/api/tree')
 
+    #JOBS
+    api.add_resource(jobs_controller.UploadAnnotationsAPI, '/api/jobs/import_annotations')
+    api.add_resource(jobs_controller.ProcessAnnotations, '/api/jobs/process_gffs')
+    api.add_resource(jobs_controller.ComputeTree, '/api/jobs/compute_tree')

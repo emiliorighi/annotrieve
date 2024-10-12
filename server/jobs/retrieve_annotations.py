@@ -43,25 +43,36 @@ def get_annotations():
                     if GenomeAnnotation.objects(name=annot_obj.name).first():
                         continue
 
-                    organism = organism_helper.handle_organism(annot_obj.taxid)
+                    organism = handle_organism(annot_obj)
                     if not organism:
-                        print(f"Organisms {annot_obj.scientific_name} with taxid {annot_obj.taxid} not found in INSDC")
                         continue
                     
-                    if not Assembly.objects(accession=annot_obj.assembly_accession).first():
-                        assembly = assembly_helper.get_assembly_from_ncbi(annot_obj.assembly_accession)
-                        if not assembly:
-                            print(f"Assembly {annot_obj.assembly_name} with accession {annot_obj.assembly_accession} not found in INSDC")
-                            continue
-                        assembly_helper.save_chromosomes(assembly)
-                        assembly.taxon_lineage = organism.taxon_lineage
-                        assembly.save()
-
-                    annot_obj.taxon_lineage = organism.taxon_lineage
-                    annot_obj.save()
+                    assembly = handle_assembly(annot_obj,organism)
+                    if not assembly:
+                        continue
 
                 except Exception as e:
                     print(e)
                 
 
+def handle_organism(annot_obj):
+    organism = organism_helper.handle_organism(annot_obj.taxid)
+    if organism:
+        return organism
+    print(f"Organisms {annot_obj.scientific_name} with taxid {annot_obj.taxid} not found in INSDC")
 
+
+def handle_assembly(annot_obj, organism):
+    assembly = Assembly.objects(accession=annot_obj.assembly_accession).first()
+    if assembly:
+        return assembly
+    
+    assembly = assembly_helper.get_assembly_from_ncbi(annot_obj.assembly_accession)
+    if not assembly:
+        print(f"Assembly {annot_obj.assembly_name} with accession {annot_obj.assembly_accession} not found in INSDC")
+        return
+    
+    assembly_helper.save_chromosomes(assembly)
+    assembly.taxon_lineage = organism.taxon_lineage
+    assembly.save()
+    return assembly
