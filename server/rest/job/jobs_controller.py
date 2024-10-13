@@ -20,5 +20,5 @@ class ComputeTree(Resource):
 
 class ProcessAnnotations(Resource):
     def post(self):
-        resp = jobs_service.process_gffs(request)
+        resp = jobs_service.launch_gffs_processing(request)
         return Response(json.dumps(resp), mimetype="application/json", status=200)

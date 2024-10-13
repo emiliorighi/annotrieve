@@ -23,10 +23,10 @@ def initialize_routes(api):
     api.add_resource(assemblies_controller.AssembliesRelatedChromosomesApi, '/api/assemblies/<accession>/chromosomes')
     api.add_resource(assemblies_controller.AssemblyChrAliasesApi, '/api/assemblies/<accession>/chr_aliases')
 
-	##ANNOTATIONS
+	##ANNOTATIONS TODO: Add regions query
     api.add_resource(annotations_controller.AnnotationsApi, '/api/annotations')
     api.add_resource(annotations_controller.AnnotationApi,  '/api/annotations/<name>')
-    api.add_resource(annotations_controller.StreamAnnotations, '/api/download/<filename>')
+    api.add_resource(annotations_controller.StreamAnnotations, '/api/files/<filename>')
 
 	##TAXONS
     api.add_resource(taxons_controller.TaxonsApi, '/api/taxons')

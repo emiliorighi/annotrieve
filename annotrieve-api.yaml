@@ -690,10 +690,13 @@ components:
             type: "string"
         source_link:
           type: "string"
-        bgzipped_link:
+          description: "Link to ncbi or ensembl annotation"
+        bgzipped_path:
           type: "string"
-        tabix_link: 
+          description: "Path to local sorted bgzipped annotation"
+        tabix_path: 
           type: "string"
+          description: "Path to local sorted tabindexed annotation"
       additionalProperties:
         type: "string"
         description: "Additional properties that are not explicitly defined in the model."
@@ -710,7 +713,7 @@ components:
       additionalProperties:
         type: "string"
         description: "Additional properties that are not explicitly defined in the model."
-        
+
     TreeNode:
       type: "object"
       properties:

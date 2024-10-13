@@ -1,5 +1,8 @@
 FROM python:3.7.11-stretch
 
+# Update package repositories to use buster release
+RUN sed -i 's/stretch/buster/g' /etc/apt/sources.list
+
 # Install dependencies for gt (GenomeTools), bgzip, and tabix
 RUN apt-get update && apt-get install -y \
     curl \
@@ -11,17 +14,10 @@ RUN apt-get update && apt-get install -y \
     bcftools \
     libhts-dev
 
-# Download and make scripts executable
-RUN curl -o datasets 'https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/LATEST/linux-amd64/datasets' \
-    chmod +x datasets \
+# Download and make NCBI datasets executable
+RUN curl -o datasets 'https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/LATEST/linux-amd64/datasets' && \
+    chmod +x datasets && \
     mv datasets /usr/local/bin
-
-# Install GenomeTools (gt) using curl
-RUN curl -L http://genometools.org/pub/genometools-1.6.2.tar.gz -o genometools-1.6.2.tar.gz && \
-    tar -xvzf genometools-1.6.2.tar.gz && \
-    cd genometools-1.6.2 && \
-    make && \
-    make install
 
 # Install bgzip (provided by htslib) using curl
 RUN curl -L https://github.com/samtools/htslib/releases/download/1.14/htslib-1.14.tar.bz2 -o htslib-1.14.tar.bz2 && \

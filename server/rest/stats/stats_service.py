@@ -1,5 +1,4 @@
 from db.models import Assembly,GenomeAnnotation,Organism,TaxonNode
-from extensions.cache import cache
 from helpers import data as data_helper
 
 MODEL_LIST = {
@@ -10,7 +9,6 @@ MODEL_LIST = {
     }
 
 
-@cache.memoize(timeout=300)
 def get_stats(model, field, query):
     # Check if the model exists in MODEL_LIST
 

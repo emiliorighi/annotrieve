@@ -22,6 +22,7 @@ def get_annotations():
     # Send the request to retrieve the TSV file with streaming
     with requests.get(URL, stream=True) as response:
         # Ensure the request was successful
+
         if response.status_code != 200:
             print(f"Failed to retrieve the file. Status code: {response.status_code}")
             return
@@ -29,6 +30,8 @@ def get_annotations():
         # Stream and process each line
         for line_num, line in enumerate(response.iter_lines(decode_unicode=True), start=1):
             # Skip empty lines
+            if line_num == 10:
+                break
             if not line.strip():
                 continue
                 # Handle the header (first line)
@@ -37,7 +40,6 @@ def get_annotations():
                 try:
                 # Split the data line by tab and process it
                     row = line.split('\t')
-
                     annot_obj=annotation_parser.parse_annotation(row)
 
                     if GenomeAnnotation.objects(name=annot_obj.name).first():
@@ -51,8 +53,12 @@ def get_annotations():
                     if not assembly:
                         continue
 
+                    annot_obj.taxon_lineage = organism.taxon_lineage
+                    annot_obj.save()
+
                 except Exception as e:
-                    print(e)
+                    raise e
+                    # print(e)
                 
 
 def handle_organism(annot_obj):
@@ -73,6 +79,7 @@ def handle_assembly(annot_obj, organism):
         return
     
     assembly_helper.save_chromosomes(assembly)
+
     assembly.taxon_lineage = organism.taxon_lineage
     assembly.save()
     return assembly

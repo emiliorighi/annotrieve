@@ -14,7 +14,8 @@ def parse_taxons_from_ncbi_datasets(taxonomy_nodes):
 
 def parse_taxon_from_ena_browser(xml):
     root = etree.fromstring(xml)
-    lineage = [root[0].attrib]
+    organism = root[0].attrib
+    lineage = [organism]
     for taxon in root[0]:
         if taxon.tag == 'lineage':
             for node in taxon:
@@ -26,7 +27,7 @@ def parse_taxon_from_ena_browser(xml):
         rank = node['rank'] if 'rank' in node.keys() else 'other'
         taxon_node = TaxonNode(taxid=node['taxId'], name=node['scientificName'], rank=rank)
         taxon_lineage.append(taxon_node)
-    return taxon_lineage
+    return organism, taxon_lineage
 
 def parse_taxons_from_ena_browser(xml):
     root = etree.fromstring(xml)

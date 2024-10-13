@@ -2,9 +2,9 @@ from db.models import GenomeAnnotation, Assembly
 from helpers import data as data_helper
 from werkzeug.exceptions import NotFound
 from flask import send_from_directory
+import os
 
-ANNOTATIONS_DATA_PATH = '/server/annotations_data'
-
+ANNOTATIONS_PATH= os.getenv('LOCAL_ANNOTATION_PATH')
 
 def get_annotations(args):
     return data_helper.get_items('annotations', args)
@@ -23,4 +23,4 @@ def get_annotation(name):
 
 def stream_annotation(filename):
     mime_type = 'binary/octet-stream'
-    return send_from_directory(ANNOTATIONS_DATA_PATH, filename, conditional=True, mimetype=mime_type)
+    return send_from_directory(ANNOTATIONS_PATH, filename, conditional=True, mimetype=mime_type)

@@ -2,7 +2,6 @@ from db.models import TaxonNode
 from helpers import taxonomy as taxonomy_helper
 from werkzeug.exceptions import NotFound
 from flask import Response, send_file
-from extensions.cache import cache
 import json
 import os
 

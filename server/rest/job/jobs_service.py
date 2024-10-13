@@ -5,6 +5,7 @@ import os
 
 USER = os.getenv('USER')
 PWD = os.getenv('PWD')
+BASE_PATH = os.getenv('BASE_PATH')
 
 def launch_annotations_import(request):
     check_credentials(request)

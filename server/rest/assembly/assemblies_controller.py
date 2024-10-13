@@ -1,10 +1,6 @@
 from flask_restful import Resource
 from flask import Response, request
-import json
 from . import assemblies_service
-from flask_jwt_extended import jwt_required
-from wrappers.data_manager import data_manager_required
-from wrappers.admin import admin_required
 
 class AssembliesApi(Resource):
     def get(self):
