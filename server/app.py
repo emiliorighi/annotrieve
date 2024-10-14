@@ -4,7 +4,8 @@ from db import initialize_db
 from rest import initialize_api
 from jobs import celery_init_app
 from flask_cors import CORS
-from db.models import Assembly,GenomeAnnotation
+from db.models import Assembly,GenomeAnnotation,Chromosome
+
 app = Flask(__name__)
 
 app.config.from_object(BaseConfig)
@@ -23,7 +24,7 @@ celery_app = celery_init_app(app)
 
 initialize_api(app)
 
-# Assembly.drop_collection()
-# GenomeAnnotation.drop_collection()
-
+Assembly.drop_collection()
+GenomeAnnotation.drop_collection()
+Chromosome.drop_collection()
 CORS(app)

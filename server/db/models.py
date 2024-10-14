@@ -35,10 +35,10 @@ class Assembly(db.DynamicDocument):
 class Chromosome(db.DynamicDocument):
     accession_version = db.StringField(required=True,unique=True)
     assembly_accession = db.StringField()
-    name=db.StringField(required=True)
+    chr_name=db.StringField(required=True)
     length=db.IntField(required=True)
     meta = {
-        'indexes': ['accession_version','name']
+        'indexes': ['accession_version','chr_name']
     }
 
 class TaxonNode(db.Document):

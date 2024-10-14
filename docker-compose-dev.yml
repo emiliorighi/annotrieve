@@ -37,6 +37,7 @@ services:
     volumes:
       - ./server:/server
       - ${EXTERNAL_ANNOTATION_PATH}:${LOCAL_ANNOTATION_PATH}
+      - ${GFF_PROCESS_ERRORS}:/server/errors
 
     env_file:
       - .env
@@ -52,6 +53,7 @@ services:
     volumes:
       - ./server:/server
       - ${EXTERNAL_ANNOTATION_PATH}:${LOCAL_ANNOTATION_PATH}
+      - ${GFF_PROCESS_ERRORS}:/server/errors
     env_file:
       - .env
     depends_on:
