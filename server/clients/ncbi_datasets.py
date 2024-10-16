@@ -1,5 +1,12 @@
 import subprocess
 import json
+import requests
+
+
+def get_sequence_report(accession):
+    response = requests.get(f"https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/{accession}/sequence_reports?role_filters=assembled-molecule&page_size=1000")
+    response.raise_for_status()
+    return response.json().get('reports', [])
 
 def get_data_from_ncbi(command):
 
