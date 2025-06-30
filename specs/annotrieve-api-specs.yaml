@@ -59,48 +59,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ERROR_RESPONSE"
 
-  /annotations/logs:
-    get:
-      tags:
-        - "annotations"
-      operationId: "getAnnotationsLogs"
-      summary: "Endpoint to retrieve a paginated list of genomic annotations logs"
-      parameters:
-        - $ref: "#/components/parameters/format"
-        - $ref: "#/components/parameters/limit"
-        - $ref: "#/components/parameters/offset"
-        - $ref: "#/components/parameters/assembly_accession"
-        - $ref: "#/components/parameters/assembly_name"
-        - $ref: "#/components/parameters/taxon_lineage"
-        - $ref: "#/components/parameters/filter"
-        - $ref: "#/components/parameters/source"
-      responses:
-        "200":
-          description: "successful operation"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnnotationLogsResponse"
-            text/tab-separated-values: 
-              schema: 
-                $ref: "#/components/schemas/TSVResponse"
-            application/jsonl:
-              schema:
-                $ref: "#/components/schemas/JSONLResponse"
-        "400":
-          description: "bad request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
-
-  /annotations/query:   
+  /annotations/search:   
     post:
       tags:
         - "annotations"

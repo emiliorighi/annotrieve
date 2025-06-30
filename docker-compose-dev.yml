@@ -50,9 +50,7 @@ services:
     command: celery --app app.celery_app worker --loglevel=info --autoscale=1,1 --max-tasks-per-child=1
     restart: always
     volumes:
-      - ./server:/server
       - ${EXTERNAL_ANNOTATION_PATH}:${LOCAL_ANNOTATION_PATH}
-      - ${GFF_PROCESS_ERRORS}:/server/errors
     env_file:
       - .env
     depends_on:
@@ -63,8 +61,6 @@ services:
     build: ./server
     command: celery --app app.celery_app beat --loglevel=info
     restart: always
-    volumes:
-      - ./server:/server
     env_file:
       - .env
     depends_on:

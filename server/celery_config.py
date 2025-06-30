@@ -16,6 +16,6 @@ beat_schedule = {
     },
     'clean-zip-folder': {
         'task': 'clean_zip_folder',
-        'schedule': crontab(hour='*/1'),  # Every hour
+        'schedule': crontab(minute=0),  # Every hour
     }
 } 

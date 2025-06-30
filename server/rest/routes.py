@@ -5,6 +5,7 @@ from .genomic_region import genomic_regions_controller
 from .feature_type import  feature_types_controller
 from .download import download_controller
 from .stream import stream_controller
+from .jobs import jobs_controller
 import os
 
 
@@ -74,11 +75,15 @@ def initialize_routes(api):
         (stats_controller.FieldStatsApi, '/stats/<model>/fields/<field>'),
     ]
 
+    jobs_routes = [
+        (jobs_controller.JobsApi, '/jobs'), # launch jobs
+    ]
+
     # Combine all route groups
     all_routes = (
         annotations_routes + annotation_download_routes + annotation_routes +
         file_stream_routes + genomic_regions_routes + feature_type_stats_routes +
-        taxons_routes + db_stats_routes + tasks_routes
+        taxons_routes + db_stats_routes + tasks_routes + jobs_routes
     )
 
     # Register all routes with prefix

@@ -13,6 +13,7 @@ def retrieve_annotations():
     new_annotations = 0
     existing_annotations = 0
     
+    print(f"Retrieving annotations from {URL}")
     # Send the request to retrieve the TSV file with streaming
     with requests.get(URL, stream=True) as response:
         # Ensure the request was successful
@@ -24,9 +25,7 @@ def retrieve_annotations():
                 continue
             # Skip the header (first line)
             if line_num == 1:
-                print(line)
                 continue
-            break
             # Split the line by tab to process the data
             row = line.split('\t')
             if len(row) < 6:

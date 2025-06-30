@@ -1,9 +1,9 @@
 from db.models import  TaxonNode
 from helpers import data as data_helper, taxonomy as taxonomy_helper
 from werkzeug.exceptions import NotFound
+from jobs.taxonomy import compute_tree
 import os
 import time
-from jobs import taxonomy
 from flask import send_file, Response
 import json
 
@@ -63,7 +63,7 @@ def get_taxonomy_tree():
 
     # Freshness threshold
     now = time.time()
-    one_day_seconds = 24 * 60 * 60
+    one_day_seconds = 24 * 60 * 60 # 1 day
 
     if os.path.exists(file_path):
         # Check if file is fresh
@@ -72,7 +72,7 @@ def get_taxonomy_tree():
             return send_file(file_path, mimetype='application/json')
 
     # File missing or stale → regenerate
-    taxonomy.compute_tree()  # This function must write tree.json synchronously
+    compute_tree()  # This function must write tree.json synchronously
     if os.path.exists(file_path):
         return send_file(file_path, mimetype='application/json')
     else:
