@@ -1,12 +1,5 @@
 import subprocess
 import json
-import requests
-
-
-def get_sequence_report(accession):
-    response = requests.get(f"https://api.ncbi.nlm.nih.gov/datasets/v2alpha/genome/accession/{accession}/sequence_reports?role_filters=assembled-molecule&page_size=1000")
-    response.raise_for_status()
-    return response.json().get('reports', [])
 
 def get_data_from_ncbi(command):
 
@@ -29,3 +22,26 @@ def get_data_from_ncbi(command):
         print("Error executing script:", result.stderr)
         return None
     
+def stream_jsonlines_from_ncbi(command):
+    CMD = ["datasets", "summary"]
+    CMD.extend(command)
+    CMD.append('--as-json-lines')
+    try:
+        process = subprocess.Popen(CMD, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        for line in process.stdout:
+            try:
+                yield json.loads(line.strip())
+            except json.JSONDecodeError as e:
+                print("Invalid JSON line:", line.strip(), "\nError:", e)
+                continue
+
+        process.stdout.close()
+        return_code = process.wait()
+
+        if return_code != 0:
+            stderr = process.stderr.read()
+            print("Command failed:", stderr)
+
+    except Exception as e:
+        print("Error during streaming:", e)

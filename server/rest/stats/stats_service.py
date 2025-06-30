@@ -1,21 +1,26 @@
-from db.models import Assembly,GenomeAnnotation,Organism,TaxonNode
 from helpers import data as data_helper
+from db.models import FeatureTypeStatsNode
 
-MODEL_LIST = {
-    'assemblies':Assembly,
-    'annotations':GenomeAnnotation,
-    'organisms':Organism,
-    'taxons':TaxonNode
-    }
+def get_instance_stats():
+    response = {}
+    for k,v in data_helper.MODEL_LIST.items():
+        counts = v.objects().count()
+        response[k] = counts
+    return data_helper.dump_json(response)
 
+def get_model_fields(model):
+    if model not in data_helper.MODEL_LIST:
+        return {"message": "model not found"}, 404
+    fields = data_helper.MODEL_LIST[model]['tsv_fields']
+    return data_helper.dump_json(fields)
 
 def get_stats(model, field, query):
-    # Check if the model exists in MODEL_LIST
+    print(FeatureTypeStatsNode.objects(feature_type='transcript').to_json())
 
-    if model not in MODEL_LIST:
+    if model not in data_helper.MODEL_LIST:
         return {"message": "model not found"}, 404
 
-    db_model = MODEL_LIST[model]
+    db_model = data_helper.MODEL_LIST[model]
     parsed_query, q_query = data_helper.create_query(query, None)
     items = db_model.objects(**parsed_query)
     if q_query:

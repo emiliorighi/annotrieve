@@ -1,0 +1,831 @@
+openapi: 3.1.1
+
+info:
+  version: "1.0.0"
+  title: "Annotrieve API"
+  contact:
+    email: "emilio.righi@crg.eu"
+
+servers:
+  - url: https://genome.crg.es/annotrieve/api
+
+tags:
+- name: "annotations"
+- name: "regions"
+- name: "stats"
+- name: "taxa"
+- name: "feature-types"
+
+paths:
+
+  /annotations:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotations"
+      summary: "Endpoint to retrieve a paginated list of genomic annotations"
+      parameters:
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/assembly_accession"
+        - $ref: "#/components/parameters/assembly_name"
+        - $ref: "#/components/parameters/taxon_lineage"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/source"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationsJSONResponse"
+            text/tab-separated-values: 
+              schema: 
+                $ref: "#/components/schemas/TSVResponse"
+            application/jsonl:
+              schema:
+                $ref: "#/components/schemas/JSONLResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+  /annotations/logs:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsLogs"
+      summary: "Endpoint to retrieve a paginated list of genomic annotations logs"
+      parameters:
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/assembly_accession"
+        - $ref: "#/components/parameters/assembly_name"
+        - $ref: "#/components/parameters/taxon_lineage"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/source"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationLogsResponse"
+            text/tab-separated-values: 
+              schema: 
+                $ref: "#/components/schemas/TSVResponse"
+            application/jsonl:
+              schema:
+                $ref: "#/components/schemas/JSONLResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+  /annotations/query:   
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotations"
+      summary: "Endpoint to retrieve a set annotations"
+      requestBody:
+        $ref: "#/components/requestBodies/AnnotationPostPayload"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationsJSONResponse"
+            text/tab-separated-values: 
+              schema: 
+                $ref: "#/components/schemas/TSVResponse"
+            application/jsonl:
+              schema:
+                $ref: "#/components/schemas/JSONLResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+  
+  /annotations/download:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsDownload"
+      summary: "Endpoint to download a set of annotations"
+      parameters:
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/assembly_accession"
+        - $ref: "#/components/parameters/assembly_name"
+        - $ref: "#/components/parameters/taxon_lineage"
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/source"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/zip:
+              schema:
+                $ref: "#/components/schemas/ZIPResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationsDownload"
+      summary: "Endpoint to download a set of annotations"
+      requestBody:
+        $ref: "#/components/requestBodies/AnnotationPostPayload"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/zip:
+              schema:
+                $ref: "#/components/schemas/ZIPResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+  /annotations/download/preview:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsDownloadPreview"
+      summary: "Endpoint to get a preview of a set of annotations to be downloaded"
+      parameters:
+        - $ref: "#/components/parameters/taxon_lineage"
+        - $ref: "#/components/parameters/assembly_accession"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/file_name"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationDownloadPreviewResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationsDownloadPreview"
+      summary: "Endpoint to get a preview of a set of annotations to be downloaded"
+      requestBody:
+        $ref: "#/components/requestBodies/AnnotationPostPayload"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+             application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationDownloadPreviewResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+  /regions:
+    get:
+      tags:
+        - "regions"
+      operationId: "getGenomicRegions"
+      summary: "Endpoint to retrieve a list of genomic regions"
+      parameters:
+        - $ref: "#/components/parameters/assembly_accession"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/source"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/taxon_lineage"
+        - $ref: "#/components/parameters/filter" #filter by name or insdc_accession
+        - $ref: "#/components/parameters/annotation_name" #filter by annotation name
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenomicRegionsResponse"
+            text/tab-separated-values: 
+              schema: 
+                $ref: "#/components/schemas/TSVResponse"
+            application/jsonl:
+              schema:
+                $ref: "#/components/schemas/JSONLResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+  /stats:
+    get:
+      tags:
+        - "stats"
+      operationId: "getStats"
+      summary: "Endpoint to retrieve stats about the regions"
+      parameters:
+        - $ref: "#/components/parameters/assembly_accession"
+        - $ref: "#/components/parameters/taxon_lineage"
+        - $ref: "#/components/parameters/annotation_name"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/filter" #filter by name or insdc_accession
+        - $ref: "#/components/parameters/biological_type" #filter by biological type
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionFeaturesStatsResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+  
+  /stats/query:
+    post:
+      tags:
+        - "stats"
+      operationId: "postStats"
+      summary: "Endpoint to retrieve stats about annotated regions"
+      requestBody:
+        $ref: "#/components/requestBodies/StatsPostPayload"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionFeaturesStatsResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+  /stats/annotation/<annotation_name>:
+    get:
+      tags:
+        - "stats"
+      operationId: "getStatsByAnnotationName"
+      summary: "Endpoint to retrieve stats about a specific annotation"
+      parameters:
+        - name: "annotation_name"
+          in: "path"
+          required: true
+          description: "annotation name to filter by"
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegionFeaturesStatsResponse"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+  /stats/annotation/<annotation_name>/region/<region_accession>:
+    get:
+      tags:
+        - "stats"
+      operationId: "getStatsByAnnotationNameAndRegionAccession"
+      summary: "Endpoint to retrieve stats about a specific annotation and region"
+      parameters:
+        - name: "annotation_name"
+          in: "path"
+          required: true
+          description: "annotation name to filter by"
+          schema:
+            type: "string"
+        - name: "region_accession"
+          in: "path"
+          required: true
+          description: "region accession to filter by"
+          schema:
+            type: "string"
+      responses:
+        "200":
+          description: "successful operation"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenomicRegionStat"
+        "404":
+          description: "not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        "400":
+          description: "bad request"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+        default:  
+          description: "unexpected error"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ERROR_RESPONSE"
+
+components:
+  parameters:
+    file_name:
+      name: "file_name"
+      in: "query"
+      description: "file name to filter by"
+      schema:
+        type: "string"
+    assembly_name:
+      name: "assembly_name"
+      in: "query"
+      description: "assembly name to filter by"
+      schema:
+        type: "string"
+    format:
+      name: "format"
+      in: "query"
+      description: "format of the response"
+      required: true
+      schema:
+        type: "string"
+        enum:
+          - "tsv"
+          - "json"
+          - "jsonl"
+        default: "json"
+
+    limit:
+      name: "limit"
+      in: "query"
+      description: "limit the number of annotations to retrieve"
+      schema:
+        type: "number"
+        default: 20
+
+    offset:
+      name: "offset"
+      in: "query"
+      description: "offset the number of annotations to retrieve"
+      schema:
+        type: "number"
+        default: 0
+
+    taxon_lineage:
+      name: "taxon_lineage"
+      in: "query"
+      description: "taxon lineage to filter by"
+      schema:
+        type: "string"
+    source:
+      name: "source"
+      in: "query"
+      description: "source to filter by"
+      schema:
+        type: "string"
+        enum:
+          - "ncbi"
+          - "ensembl"
+    assembly_accession:
+      name: "assembly_accession"
+      in: "query"
+      description: "assembly accession to filter by"
+      schema:
+        type: "string"
+
+    biological_type:
+      name: "biological_type"
+      in: "query"
+      description: "biological type to filter by"
+      schema:
+        type: "string"
+
+    annotation_name:
+      name: "annotation_name"
+      in: "query"
+      description: "annotation name to filter by"
+      schema:
+        type: "string"
+
+    filter:
+      name: "filter"
+      in: "query"
+      description: "filter the annotations by name"
+      schema:
+        type: "string"
+
+  # Schemas
+  schemas:
+    # Request/Response schemas
+    StatsPostParams:
+      type: "object"
+      properties:
+        assembly_accession__in:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+        taxon_lineage:
+          type: "string"
+        annotation_name__in:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+        limit:
+          type: "number"
+        offset:
+          type: "number"
+        format:
+          type: "string"
+          enum:
+            - "tsv"
+            - "json"
+            - "jsonl"
+        filter:
+          type: "string"
+        biological_type:
+          type: "string"
+    AnnotationsJSONResponse:
+      type: "object"
+      additionalProperties: false
+      properties:
+        data:
+          type: "array"
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/Annotation"
+        total:
+          type: "number"
+
+    AnnotationLogsResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/AnnotationLog"
+        total:
+          type: "number"
+
+    AnnotationLog:
+      type: "object"
+      allOf:
+        - $ref: "#/components/schemas/Annotation"
+        - type: "object"
+          properties:
+            status:
+              type: "string"
+              enum:
+                - "pending"
+                - "completed"
+                - "error"
+            errors:
+              type: "array"
+              maxItems: 10000
+              items:
+                type: "string"
+
+    AnnotationDownloadPreviewResponse:
+      type: "object"
+      properties:
+        total_bytes:
+          type: "number"
+        file_count:
+          type: "number"
+        estimated_total_size_mb:
+          type: "number"
+    TSVResponse:
+      type: "string"
+
+      example: "key1\tkey2\nexample\t123"
+
+    ZIPResponse:
+      type: "string"
+      example: "zip file"
+
+    JSONLResponse:
+      type: "string"
+      example: "{\"key1\": \"value1\", \"key2\": \"value2\"}\n{\"key1\": \"value3\", \"key2\": \"value4\"}"
+
+    ERROR_RESPONSE:
+      type: "object"
+      properties:
+        error:
+          type: "string"
+          description: "error message"
+    RegionFeaturesStatsResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/GenomicRegionStat"
+        total:
+          type: "number"
+
+    GenomicRegionStat:
+      type: "object"  
+      properties:
+        annotation_name:
+          type: "string"
+        taxid:
+          type: "string"
+        assembly_accession:
+          type: "string"
+        genomic_region_accession:
+          type: "string"
+        genomic_region_name:
+          type: "string"
+        assembly_name:
+          type: "string"
+        taxon_lineage:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+        biological_type:
+          type: "string"
+        count:
+          type: "number"
+        average_length:
+          type: "number"
+        total_length:
+          type: "number"
+        min_length:
+          type: "number"
+        max_length:
+          type: "number"
+      additionalProperties: false
+    GenomicRegionsResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/GenomicRegion"
+        total:
+          type: "number"
+
+    GenomicRegion:
+      type: "object"  
+      properties:
+        name:
+          type: "string"
+        insdc_accession:
+          type: "string"
+        assembly_accession:
+          type: "string"
+        length:
+          type: "number"
+        role:
+          type: "string"
+        gc_percentage:
+          type: "number"
+        gc_count:
+          type: "number"
+      additionalProperties: false
+
+    # Data models
+    AnnotationPostParams:
+      type: "object"
+      properties:
+        taxon_lineage:
+          type: "string"
+          description: "taxon lineage to filter by"
+        assembly_accession__in:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+          description: "assembly accessions to filter by"
+        source:
+          type: "string"
+          enum:
+            - "ncbi"
+            - "ensembl"
+        file_name:
+          type: "string"
+          description: "file name to filter by"
+        name__in:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+          description: "annotation names to filter by"
+        limit:
+          type: "number"
+          default: 20
+          description: "limit the number of annotations to retrieve"
+        offset:
+          type: "number"
+          default: 0
+        format:
+          type: "string"
+          enum:
+            - "tsv"
+            - "json"
+            - "jsonl"
+          default: "json"
+
+    Annotation:
+      type: "object"
+      description: "object containing the urls to download the gzipped gff3 file"
+      properties:
+        name:
+          type: "string"
+          description: "annotation name"
+        taxid:
+          type: "string"
+        assembly_accession:
+          type: "string"
+        assembly_name:
+          type: "string"
+        processing_status:
+          type: "string"
+          enum:
+            - "pending"
+            - "processing"
+            - "complete"
+            - "error"
+        source_db:
+          type: "string"
+          enum:
+            - "ncbi"
+            - "ensembl"
+        taxon_lineage:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+        source_link:
+          type: "string"
+          description: "Link to ncbi or ensembl annotation"
+        bgzipped_path:
+          type: "string"
+          description: "Path to local sorted bgzipped annotation"
+        tabix_path: 
+          type: "string"
+          description: "Path to local sorted tabindexed annotation"
+      additionalProperties:
+        type: "string"
+        description: "Additional properties that are not explicitly defined in the model."
+
+    TreeNode:
+      type: "object"
+      properties:
+        taxid: 
+          type: "string"
+        name:
+          type: "string"
+        rank:
+          type: "string"
+        leaves:
+          type: "number"
+        children:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/TreeNode"
+
+    TaxonNode:
+      type: "object"
+      properties:
+        children:
+          type: "array"
+          maxItems: 10000
+          items:
+            type: "string"
+          description: "list of taxid of the taxon node childrens"
+        name:
+          type: "string"
+        rank: 
+          type: "string"
+        leaves:
+          type: "number"
+        taxid:
+          type: "string"
+
+  # Request bodies
+  requestBodies:
+    StatsPostPayload:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/StatsPostParams"
+    AnnotationPostPayload:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AnnotationPostParams" 

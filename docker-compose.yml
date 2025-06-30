@@ -63,6 +63,21 @@ services:
     networks:
       - monstre
 
+  rnaget-celery-beat:
+    image: gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/rnaget-server
+    command: celery --app app.celery_app beat --loglevel=info
+    restart: always
+    volumes:
+      - ./server:/server
+    env_file:
+      - .env
+    depends_on:
+      - rnaget-server
+      - rnaget-mongo
+      - rnaget-redis
+    networks:
+      - monstre
+
   rnaget-redis:
     image: "redis:alpine"
     expose:

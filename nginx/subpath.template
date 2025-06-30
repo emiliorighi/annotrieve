@@ -5,9 +5,10 @@ server {
     gzip             on;
     gzip_types      text/tab-separated-values application/json;
 
-    listen ${API_PORT};
+    listen 80;
 
-    location ${BASE_PATH}/api {
+    # Versioned API routes with base path
+    location ~ ^${BASE_PATH}/api/v[0-9]+ {
         rewrite ${BASE_PATH}/(.*) /$1 break;
 
         # Define cache parameters
@@ -17,8 +18,9 @@ server {
         proxy_cache_key $scheme$proxy_host$request_uri;
 
         include uwsgi_params;
-        uwsgi_pass ${API_HOST}:${API_PORT};
+        uwsgi_pass ${API_HOST}:80;
         client_max_body_size 1000M;
         uwsgi_read_timeout 600s;
     }
+
 }

@@ -6,28 +6,35 @@ from werkzeug.datastructures import MultiDict
 from db import models
 from . import query_visitors
 
+
+MODEL_LIST = {
+    'genome_annotation': models.GenomeAnnotation,
+    'genomic_region': models.GenomicRegion,
+    'taxon': models.TaxonNode,
+    'feature_types': models.FeatureTypeStatsNode,
+}
+
 MODEL_MAPPER = {
     'annotations':{
         'model': models.GenomeAnnotation,
         'query': query_visitors.annotation_query,
-        'tsv_fields': ['name', 'scientific_name', 'taxid', 'assembly_accession']
+        'tsv_fields': [k for k in models.GenomeAnnotation._fields if k != 'id' or k != 'created' ]
     },
-    'assemblies':{
-        'model': models.Assembly,
-        'query': query_visitors.assembly_query,
-        'tsv_fields': ['accession','assembly_name','scientific_name', 'taxid']
-    },
-    'organisms':{
-        'model': models.Organism,
-        'query': query_visitors.organism_query,
-        'tsv_fields': ['scientific_name', 'taxid', "insdc_common_name"]
+    'regions':{
+        'model': models.GenomicRegion,
+        'query': query_visitors.region_query,
+        'tsv_fields': [k for k in models.GenomicRegion._fields if k != 'id' or k != 'created']
     },
     'taxons':{
         'model': models.TaxonNode,
         'query': query_visitors.taxon_query,
-        'tsv_fields':  ['taxid', 'name', 'rank']
+        'tsv_fields': [k for k in models.TaxonNode._fields if k != 'id' or k != 'created']
+    },
+    'feature_types':{
+        'model': models.FeatureTypeStatsNode,
+        'query': query_visitors.feature_type_stats_query,
+        'tsv_fields': [k for k in models.FeatureTypeStatsNode._fields if k != 'id' or k != 'created']
     }
-
 }
 
 def dump_json(response_dict):
@@ -48,12 +55,12 @@ def create_tsv(items, fields):
     return writer_file.getvalue()
 
 def get_pagination(args):
-    return int(args.pop('limit', 10)),  int(args.pop('offset', 0))
+    return int(args.pop('limit', 100)),  int(args.pop('offset', 0))
 
 def get_sort(args):
     return args.pop('sort_column', None), args.pop('sort_order', None)
 
-def get_items(model, immutable_dict):
+def get_items(model, immutable_dict, exclude_fields=[]):
 
     mapper = MODEL_MAPPER.get(model)
 
@@ -69,30 +76,35 @@ def get_items(model, immutable_dict):
     
     format = args.pop('format', 'json')
     
-    selected_fields = args.poplist('fields[]')
-    
+   
     query, q_query = create_query(args, q_query)
-
-    items = mapper.get('model').objects(**query)
+    if exclude_fields:
+        items = mapper.get('model').objects(**query).exclude(*exclude_fields)
+    else:
+        items = mapper.get('model').objects(**query)
 
     if q_query:
         items = items.filter(q_query)
 
-    if sort_column and sort_order:
-        sort = '-' + sort_column if sort_order == 'desc' else sort_column
-        items = items.order_by(sort)
-
-    if selected_fields:
-        items = items.only(*selected_fields)
+    sort_items(items, sort_column, sort_order)
 
     total = items.count()
 
     if format == 'tsv':
-        fields = selected_fields if selected_fields else mapper.get('tsv_fields')
+        fields = mapper.get('tsv_fields')
         return create_tsv(items.as_pymongo(), fields).encode('utf-8'), "text/tab-separated-values", 200
 
-    response = dict(total=total, data=list(items.skip(offset).limit(limit).as_pymongo()))
+    items = get_pymongo_paginated_items(items, limit, offset)
+    response = dict(total=total, data=items)
     return dump_json(response), "application/json", 200
+
+def sort_items(items, sort_column, sort_order):
+    if sort_column and sort_order:
+        sort = '-' + sort_column if sort_order == 'desc' else sort_column
+        items = items.order_by(sort)
+
+def get_pymongo_paginated_items(items, limit, offset):
+    return list(items.skip(offset).limit(limit).as_pymongo())
 
 def create_query(args, q_query):
     query = {}
@@ -102,13 +114,13 @@ def create_query(args, q_query):
         if not value:
             continue
         
-        if value == 'false':
+        if value.lower() == 'false':
             value = False
 
-        if value == 'true':
+        if value.lower() == 'true':
             value = True
 
-        if value == 'No Value' or ( '__exists' in key and value == False):
+        if value.lower() == 'no value' or ( '__exists' in key and value == False):
             value = None
 
         # Handle greater than/less than conditions

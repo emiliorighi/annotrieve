@@ -1,49 +1,89 @@
-from .organism import organisms_controller
 from .annotation import annotations_controller
-from .assembly import assemblies_controller
 from .taxon import taxons_controller
-from .taxonomy import taxonomy_controller
 from .stats import stats_controller
-from .lookup import lookup_controller
-from .job import jobs_controller
+from .genomic_region import genomic_regions_controller
+from .feature_type import  feature_types_controller
+from .download import download_controller
+from .stream import stream_controller
+import os
+
 
 def initialize_routes(api):
+    
+    # API version prefix - can be set via environment variable
+    API_VERSION = os.getenv('API_VERSION', '/v1')
+    
+    # If API_VERSION doesn't start with '/', add it
+    if not API_VERSION.startswith('/'):
+        API_VERSION = f'/{API_VERSION}'
+    
+    annotations_routes = [
+        (annotations_controller.AnnotationsApi, '/annotations'), # list all annotations
+        (annotations_controller.AnnotationLogsApi, '/annotations/logs'), # list annotation logs
+        (annotations_controller.AnnotationQueryApi, '/annotations/search'), # post query annotations
+    ]
 
-    #SPECIES
-    api.add_resource(organisms_controller.OrganismsApi, '/api/species')
-    api.add_resource(organisms_controller.OrganismApi, '/api/species/<taxid>')
-    api.add_resource(organisms_controller.OrganismLineageApi, '/api/species/<taxid>/lineage')
-    api.add_resource(organisms_controller.OrganismRelatedDataApi, '/api/species/<taxid>/<model>')
+    annotation_download_routes = [
+        (download_controller.AnnotationsDownloadApi, '/annotations/download'), # download all annotations
+        (download_controller.AnnotationDownloadPreviewApi, '/annotations/download/preview'), # preview a specific annotation
+        (download_controller.AnnotationsDownloadBulkApi, '/annotations/download/bulk'), # bulk download annotations
+    ]
 
-	##ASSEMBLY
-    api.add_resource(assemblies_controller.AssembliesApi, '/api/assemblies')
-    api.add_resource(assemblies_controller.AssemblyApi,  '/api/assemblies/<accession>')
-    api.add_resource(lookup_controller.AssemblyRelatedDataLookup,  '/api/assemblies/<accession>/lookup')
-    api.add_resource(assemblies_controller.AssemblyRelatedAnnotationsApi, '/api/assemblies/<accession>/annotations')
-    api.add_resource(assemblies_controller.AssembliesRelatedChromosomesApi, '/api/assemblies/<accession>/chromosomes')
-    api.add_resource(assemblies_controller.AssemblyChrAliasesApi, '/api/assemblies/<accession>/chr_aliases')
+    tasks_routes = [
+        (download_controller.AnnotationsDownloadBulkStatusApi, '/download-tasks/<task_id>'), # get a specific download task status
+        (download_controller.AnnotationsDownloadBulkFileApi, '/download-tasks/<task_id>/download'), # download a specific task
+    ]
 
-	##ANNOTATIONS TODO: Add regions query
-    api.add_resource(annotations_controller.AnnotationsApi, '/api/annotations')
-    api.add_resource(annotations_controller.AnnotationApi,  '/api/annotations/<name>')
-    api.add_resource(annotations_controller.StreamAnnotations, '/api/files/<filename>')
+    annotation_routes = [
+        (annotations_controller.AnnotationApi, '/annotations/<annotation_name>'), # get a specific annotation
+        (annotations_controller.AnnotationRegionsApi, '/annotations/<annotation_name>/regions'), # get the regions of an annotation
+        
+        (feature_types_controller.FeatureTypeStatsAnnotationRegionApi, '/annotations/<annotation_name>/feature-types', '/annotations/<annotation_name>/regions/<region_name>/feature-types'), # get the feature type stats for an annotation
+        (feature_types_controller.FeatureTypeStatsAnnotationHierarchyApi, '/annotations/<annotation_name>/feature-types/tree', '/annotations/<annotation_name>/regions/<region_name>/feature-types/tree'), # get the hierarchy stats for an annotation and a specific region
+        (download_controller.AnnotationDownloadApi, '/annotations/<annotation_name>/download'), # download a specific annotation
+    ]
 
-	##TAXONS
-    api.add_resource(taxons_controller.TaxonsApi, '/api/taxons')
-    api.add_resource(taxons_controller.TaxonApi, '/api/taxons/<taxid>')
-    api.add_resource(lookup_controller.TaxonRelatedDataLookup, '/api/taxons/<taxid>/stats')
-    api.add_resource(taxons_controller.TaxonChildrenApi, '/api/taxons/<taxid>/children')
+    file_stream_routes = [
+        (stream_controller.AnnotationRegionsAliasesTabixApi, '/annotations/<annotation_name>/regions/aliases'), # get the region aliases of an annotation
+        (stream_controller.AnnotationRegionTabixStreamApi, '/annotations/<annotation_name>/regions/stream', '/annotations/<annotation_name>/regions/<region_name>/stream'), # stream all regions of an annotation
+    ]
 
-    ##DATA LOOKUP
-    api.add_resource(lookup_controller.LookupApi, '/api/lookup')
+    genomic_regions_routes = [
+        (genomic_regions_controller.GenomicRegionsApi, '/regions'), # list all genomic regions
+        (genomic_regions_controller.GenomicRegionsQueryApi, '/regions/search'), # query genomic regions
+        (genomic_regions_controller.GenomicRegionApi, '/regions/<accession>'), # get a specific genomic region
+        (genomic_regions_controller.GenomicRegionRelatedStatsApi,  '/regions/<accession>/feature-types') # get the feature type stats for a genomic region
+    ]
 
-    ##STATS
-    api.add_resource(stats_controller.FieldStatsApi, '/api/stats/<model>/<field>')
+    feature_type_stats_routes = [
+        (feature_types_controller.FeatureTypeStatsApi, '/feature-types'), # get the feature type stats
+        (feature_types_controller.FeatureTypeStatsQueryApi, '/feature-types/search'), # query the feature type stats
+    ]
 
-    ##TAXONOMY
-    api.add_resource(taxonomy_controller.RootTreeApi, '/api/tree')
+    taxons_routes = [
+        (taxons_controller.TaxonsApi, '/taxa'),
+        (taxons_controller.TaxonomyTreeApi, '/taxa/tree'),
+        (taxons_controller.TaxonAncestorsApi, '/taxa/<taxid>/ancestors'),
+        (taxons_controller.TaxonChildrenApi, '/taxa/<taxid>/children'),
+        (taxons_controller.TaxonClosestApi, '/taxa/<taxid>/closest'),
+    ]
 
-    #JOBS
-    api.add_resource(jobs_controller.UploadAnnotationsAPI, '/api/jobs/import_annotations')
-    api.add_resource(jobs_controller.ProcessAnnotations, '/api/jobs/process_gffs')
-    api.add_resource(jobs_controller.ComputeTree, '/api/jobs/compute_tree')
+    db_stats_routes = [
+        (stats_controller.InstanceStatsApi, '/stats'),
+        (stats_controller.ModelFieldsApi, '/stats/<model>/fields'),
+        (stats_controller.FieldStatsApi, '/stats/<model>/fields/<field>'),
+    ]
+
+    # Combine all route groups
+    all_routes = (
+        annotations_routes + annotation_download_routes + annotation_routes +
+        file_stream_routes + genomic_regions_routes + feature_type_stats_routes +
+        taxons_routes + db_stats_routes + tasks_routes
+    )
+
+    # Register all routes with prefix
+    for resource, *paths in all_routes:
+        api.add_resource(resource, *('/api' + API_VERSION + path for path in paths))
+
+
+

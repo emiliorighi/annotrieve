@@ -16,3 +16,17 @@ class TaxonChildrenApi(Resource):
     def get(self, taxid):
         items = taxons_service.get_taxon_children(taxid)
         return Response(items.to_json(), mimetype="application/json", status=200)
+
+class TaxonAncestorsApi(Resource):
+    def get(self, taxid):
+        items = taxons_service.get_taxon_ancestors(taxid)
+        return Response(items, mimetype="application/json", status=200)
+
+class TaxonClosestApi(Resource):
+    def get(self, taxid):
+        taxon = taxons_service.get_closest_taxon(taxid)
+        return Response(taxon, mimetype="application/json", status=200)
+
+class TaxonomyTreeApi(Resource):
+    def get(self):
+        return taxons_service.get_taxonomy_tree()

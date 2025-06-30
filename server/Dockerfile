@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     libhts-dev
 
 # Download and make NCBI datasets executable
-RUN curl -o datasets 'https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/LATEST/linux-amd64/datasets' && \
+RUN curl -o datasets 'https://ftp.ncbi.nlm.nih.gov/pub/datasets/command-line/v2/linux-amd64/datasets' && \
     chmod +x datasets && \
     mv datasets /usr/local/bin
 
@@ -38,7 +38,7 @@ RUN pip install -r requirements.txt
 COPY . /server
 
 # Expose API port
-EXPOSE ${API_PORT}
+EXPOSE 80
 
 # Start the application
 CMD ["uwsgi", "app.ini"]
