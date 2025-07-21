@@ -27,14 +27,14 @@ def import_and_process_annotations():
     print(f"New annotations to process: {len(annotations)}")
     annotations_with_errors = AnnotationError.objects().scalar('annotation_name')
     #process and save annotations
-    if GenomeAnnotation.objects().count() > 10:
-        print(f"Reached import limit of {10}")
-        return
+    #if GenomeAnnotation.objects().count() > 10:
+    #    print(f"Reached import limit of {10}")
+    #    return
     saved_annotations = 0
     for annotation in annotations:
-        if saved_annotations >= 10:
-            print(f"Reached import limit of {10}")
-            break
+    #    if saved_annotations >= 10:
+    #        print(f"Reached import limit of {10}")
+    #        break
         saved = process_and_save_annotation(annotation, annotations_with_errors)
         if saved:
             print(f"Saved annotation {annotation.name} of {annotation.scientific_name}")
