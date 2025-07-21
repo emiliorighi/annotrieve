@@ -31,3 +31,6 @@ def region_feature_query(filter):
 
 def feature_type_stats_query(filter):
     return (Q(assembly_accession__iexact=filter) | Q(assembly_accession__icontains=filter)) | (Q(annotation_name__iexact=filter) | Q(annotation_name__icontains=filter)) | (Q(region_accession__iexact=filter) | Q(region_accession__icontains=filter)) | (Q(region_name__iexact=filter) | Q(region_name__icontains=filter))
+
+def gff_region_query(query_name, assembly_accession):
+    return (Q(name=query_name) | Q(insdc_accession=query_name)) & (Q(assembly_accession=assembly_accession))

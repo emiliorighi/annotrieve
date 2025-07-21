@@ -4,3 +4,5 @@ __pycache__
 venv
 .env
 docker-compose-dev.yml
+celerybeat-schedule
+/server/static/tree.json

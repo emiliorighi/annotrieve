@@ -1,5 +1,5 @@
 from db.models import  TaxonNode
-from helpers import data as data_helper, taxonomy as taxonomy_helper
+from helpers import query as query_helper, taxonomy as taxonomy_helper, response as response_helper
 from werkzeug.exceptions import NotFound
 from jobs.taxonomy import compute_tree
 import os
@@ -10,7 +10,7 @@ import json
 STATIC_DIR = os.getenv('STATIC_DIR')
 
 def get_taxons(args):
-    return data_helper.get_items('taxons', args)
+    return query_helper.get_items('taxons', args)
 
 def get_taxon(taxid):
     taxid = str(taxid)
@@ -36,7 +36,7 @@ def get_taxon_ancestors(taxid):
     ancestors.reverse()
     # Filter out the root node (taxid = 1)
     ancestors = [ancestor for ancestor in ancestors]
-    return data_helper.dump_json(ancestors)
+    return response_helper.dump_json(ancestors)
     
 def get_closest_taxon(taxid):
     taxid = str(taxid)
@@ -59,11 +59,14 @@ def get_taxon_lineage(taxid):
         raise NotFound(description=f"Taxon {taxid} not found!")
 
 def get_taxonomy_tree():
+    if STATIC_DIR is None:
+        raise ValueError("STATIC_DIR environment variable is not set")
+        
     file_path = os.path.join(STATIC_DIR, 'tree.json')
 
     # Freshness threshold
     now = time.time()
-    one_day_seconds = 24 * 60 * 60 # 1 day
+    one_day_seconds = 24 * 60 * 60  # 1 day
 
     if os.path.exists(file_path):
         # Check if file is fresh

@@ -1,63 +1,75 @@
 from flask_restful import Resource
 from flask import Response, request, stream_with_context
 from . import annotations_service
+from helpers import response as response_helper
+import json
 
 class AnnotationsApi(Resource):
     def get(self):
-        response, mimetype, status = annotations_service.get_annotations(request.args)
-        return Response(response, mimetype=mimetype, status=status)
+        """GET /annotations - List/search annotations with query parameters"""
+        try:
+            response, mimetype, status = annotations_service.get_annotations(**request.args)
+            return response_helper.create_streaming_response(response, mimetype, status)
+                
+        except Exception as e:
+            error_response = {
+                "error": {
+                    "code": "QUERY_ERROR",
+                    "message": str(e)
+                },
+                "meta": {
+                    "timestamp": "2024-01-15T10:30:00Z"
+                }
+            }
+            return Response(json.dumps(error_response), mimetype="application/json", status=500)
 
-class AnnotationLogsApi(Resource):
-    def get(self):
-        response, mimetype, status = annotations_service.get_annotations(request.args, hide_status=False)
-        return Response(response, mimetype=mimetype, status=status)
-
-class AnnotationQueryApi(Resource):
     def post(self):
-        payload = request.json if request.is_json else request.data
-        response, mimetype, status = annotations_service.get_annotations(payload)
-        return Response(response, mimetype=mimetype, status=status)
+        """POST /annotations - Query annotations with JSON payload"""
+        try:
+            # Get payload from request
+            payload = {}
+            if request.is_json:
+                payload = request.get_json()
+            else:
+                payload = request.get_data()
+                if payload:
+                    payload = json.loads(payload)
+            
+            response, mimetype, status = annotations_service.get_annotations(**payload)
+            return response_helper.create_streaming_response(response, mimetype, status)
+                
+        except Exception as e:
+            error_response = {
+                "error": {
+                    "code": "QUERY_ERROR",
+                    "message": str(e)
+                },
+                "meta": {
+                    "timestamp": "2024-01-15T10:30:00Z"
+                }
+            }
+            return Response(json.dumps(error_response), mimetype="application/json", status=500)
+
+class AnnotationErrorsApi(Resource):
+    def get(self):
+        response = annotations_service.get_annotation_errors(**request.args)
+        return Response(response, mimetype="application/json", status=200)
 
 class AnnotationApi(Resource):
     def get(self, annotation_name):
         ann_obj = annotations_service.get_annotation(annotation_name)
         return Response(ann_obj.to_json(),mimetype="application/json", status=200)
 
-class AnnotationRegionsTabixApi(Resource):
+class AnnotationGffApi(Resource):
     def get(self, annotation_name):
-        response = annotations_service.get_annotation_regions_tabix(annotation_name)
-        return Response(response, mimetype="application/json", status=200)
-
-class AnnotationRegionTabixStreamApi(Resource):
-    def get(self, annotation_name, region_name):
-        args = request.args
-        try:
-            region_name = str(region_name)
-            start = (int(args.get('start'))) if args.get('start') else 0
-            end = (int(args.get('end'))) if args.get('end') else None
-            stream = annotations_service.get_annotation_region_tabix_stream(annotation_name, region_name, start, end)
-            
-            def generate():
-                try:
-                    for line in stream:
-                        yield line + '\n'
-                except Exception as e:
-                    yield f"Error: {str(e)}\n"
-            
-            return Response(
-                stream_with_context(generate()), 
-                mimetype="text/plain", 
-                status=200,
-                headers={
-                    'Cache-Control': 'no-cache',
-                    'X-Accel-Buffering': 'no'
-                }
-            )
-        except Exception as e:
-            return Response(f"Error: {str(e)}", mimetype="text/plain", status=500)
-
+        return annotations_service.get_annotation_gff(annotation_name, **request.args)
 
 class AnnotationRegionsApi(Resource):
     def get(self, annotation_name):
-        response, mimetype, status = annotations_service.get_annotation_regions(annotation_name, request.args)
-        return Response(response, mimetype=mimetype, status=status)
+        response = annotations_service.get_annotation_regions(annotation_name)
+        return Response(response, mimetype='application/json', status=200)
+
+class AnnotationInconsistentFeaturesApi(Resource):
+    def get(self, annotation_name):
+        response = annotations_service.get_annotation_inconsistent_features(annotation_name)
+        return Response(response, mimetype='application/json', status=200)

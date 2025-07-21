@@ -1,5 +1,6 @@
-from db.models import GenomeAnnotation
+from db.models import GenomeAnnotation, InconsistentFeature
 import re
+from helpers.mappers import ANNOTATION_SOURCES
 
 def parse_genome_annotation_from_row(row):
     annotation_name=row[0]
@@ -8,8 +9,10 @@ def parse_genome_annotation_from_row(row):
     organism_name=row[3]
     organism_tax_id=row[4]
     full_path=row[5]
-    source = 'ensembl' if 'ensembl' in full_path else 'ncbi'
-
+    
+    # Improved source detection with better pattern matching
+    source = detect_source_from_path(full_path)
+        
     return GenomeAnnotation(
         name=annotation_name,
         assembly_accession=accession,
@@ -18,9 +21,23 @@ def parse_genome_annotation_from_row(row):
         taxid=organism_tax_id,
         original_url=full_path,
         source=source,
-        status='pending'
     )
 
+def detect_source_from_path(full_path):
+    """
+    Detect the source database from a file path using improved pattern matching.
+    
+    Args:
+        full_path (str): The full file path or URL
+        
+    Returns:
+        str: 'ensembl', 'ncbi', or 'other'
+    """
+    for base_url, source in ANNOTATION_SOURCES.items():
+        if base_url in full_path:
+            return source
+    return 'unknown'
+    
 
 def parse_gff_line(line):
     """
@@ -50,6 +67,34 @@ def parse_gff_line(line):
         'id': id,
         'parent': parent,
     }
+
+def parse_inconsistent_feature(line, annotation_name):
+    parts = line.strip().split('\t')
+    if len(parts) < 9:
+        return None
+    return InconsistentFeature(
+            annotation_name=annotation_name,
+            seqid=parts[0],
+            source=parts[1],
+            type=parts[2],
+            start=int(parts[3]),    
+            end=int(parts[4]),
+            score=None if parts[5] == '.' else float(parts[5]),
+            strand=parts[6],
+            phase=None if parts[7] == '.' else parts[7],
+            attributes=parse_gff_attributes(parts[8])
+        )
+
+def parse_gff_attributes(attr_str):
+    """
+    Parse the 9th column of GFF into a dictionary.
+    """
+    attributes = {}
+    for field in attr_str.strip().split(';'):
+        if '=' in field:
+            key, value = field.split('=', 1)
+            attributes[key.strip()] = value.strip()
+    return attributes
 
 def get_id_and_parent(attributes_str):
     """

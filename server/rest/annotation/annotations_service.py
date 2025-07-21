@@ -1,32 +1,86 @@
-from db.models import GenomeAnnotation, GenomicRegion
-from helpers import data as data_helper, file as file_helper
+from db.models import GenomeAnnotation, GenomicRegion, AnnotationError, InconsistentFeature
+from helpers import file as file_helper, genome_annotation as genome_annotation_helper, query_visitors as query_visitors, response as response_helper, mappers as mappers
 from werkzeug.exceptions import NotFound, BadRequest
-import os
 import pysam
-import re
-from collections import defaultdict
+from flask import send_from_directory, Response, stream_with_context
+import os
 
-ANNOTATIONS_PATH= os.getenv('LOCAL_ANNOTATION_PATH')
-ZIP_FOLDER_PATH= os.getenv('ZIP_FOLDER_PATH')
+ANNOTATIONS_PATH= os.getenv('LOCAL_ANNOTATIONS_DIR')
 
-def get_annotations(args, hide_status=True):
-    query = {**args}
-    print(query)
-    if hide_status:
-        add_completed_status(query)
-        exclude_fields = ['id', 'status', 'errors', 'created_at']
+def get_annotations(filter=None, assembly_accessions=None, 
+                    taxids=None, names=None, offset=0,
+                    sources=None, limit=20, format='json', 
+                    sort_order='asc', sort_by=None):
+
+    annotations = genome_annotation_helper.get_annotations_from_db({
+        'filter': filter,
+        'assembly_accessions': assembly_accessions,
+        'taxids': taxids,
+        'names': names,
+        'sources': sources,
+        'sort_by': sort_by,
+        'sort_order': sort_order
+    })
+    if format.lower() == 'tsv':
+        annotation_mapper = mappers.get_model_mapper('annotations')
+        return response_helper.format_tsv_response(annotations, annotation_mapper)
+    elif format.lower() == 'jsonl':
+        return response_helper.format_jsonl_response(annotations, offset, limit)
     else:
-        exclude_fields = []
-    return data_helper.get_items('annotations', query, exclude_fields)
+        count = annotations.count()
+        return response_helper.format_json_response(annotations, count, offset, limit)
 
 def get_annotation(name):
-    ann_obj = GenomeAnnotation.objects(name=name).exclude('id', 'status', 'errors', 'created_at').first()
+    ann_obj = GenomeAnnotation.objects(name=name).first()
     if not ann_obj:
         raise NotFound(description=f"Annotation {name} not found")
     return ann_obj
 
-def get_annotation_regions_tabix(name):
-    ann = get_annotation(name)
+def get_annotation_gff(name, region=None, start=0, end=None, download=False):
+    ann = genome_annotation_helper.get_annotation(name)
+    file_path = file_helper.get_annotation_file_path(ann)
+    if download and download.lower() == 'true':
+        return download_annotation(ann, file_path)
+    else:
+        return get_annotation_gff_stream_no_download(ann, file_path, region, start, end)
+
+def get_annotation_gff_stream_no_download(ann, file_path, region=None, start=0, end=None):
+    # get region alias if region is not a gff region
+    try:
+        if end and type(end) == str:
+            end = int(end)
+        if start and type(start) == str:
+            start = int(start)
+        file = pysam.TabixFile(file_path)
+        contigs = file.contigs
+        if region:
+            #get region by name or insdc accession
+            region_obj = GenomicRegion.objects(query_visitors.gff_region_query(region, ann.assembly_accession)).first()
+            if not region_obj:
+                raise NotFound(description=f"Region {region} not found in annotation {ann.name}")
+            gff_region = region_obj.name if region_obj.name in contigs else region_obj.insdc_accession
+            return Response(stream_with_context(file.fetch(gff_region, start, end)), mimetype='text/plain', status=200)
+        else:
+            return Response(stream_with_context(file.fetch()), mimetype='text/plain', status=200)
+    except ValueError as e:
+        raise BadRequest(description=f"Error fetching annotation {ann.name}: {e}")
+    except Exception as e:
+        raise BadRequest(description=f"Error fetching annotation {ann.name}: {e}")
+
+def download_annotation(ann, file_path):
+    if not os.path.exists(file_path):
+        raise NotFound(description=f"Annotation {ann.name} not found")
+    bgzipped_path = ann.bgzipped_path.lstrip('/') if ann.bgzipped_path.startswith('/') else ann.bgzipped_path
+    mime_type = 'binary/octet-stream'
+    return send_from_directory(ANNOTATIONS_PATH, bgzipped_path, mimetype=mime_type)
+
+def get_annotation_inconsistent_features(name):
+    genome_annotation_helper.get_annotation(name)
+    inconsistent_features = InconsistentFeature.objects(annotation_name=name).as_pymongo()
+    return response_helper.dump_json(inconsistent_features)
+
+def get_annotation_regions(name):
+    ann = genome_annotation_helper.get_annotation(name)
     file_path = file_helper.get_annotation_file_path(ann)
     try:
         file = pysam.TabixFile(file_path)
@@ -35,209 +89,25 @@ def get_annotation_regions_tabix(name):
         #map ref names to regions
         mapped_regions = []
         for existing_region in existing_regions:
-            role = existing_region.role
+            mapped_region = {
+                'role': existing_region.role,
+                'length': existing_region.length,
+                'gc_percentage': existing_region.gc_percentage,
+                'gc_count': existing_region.gc_count,
+            }
             if existing_region.name in reference_names:
-                mapped_regions.append({
-                    'gff_region': existing_region.name,
-                    'region_alias': existing_region.insdc_accession,
-                    'role': role
-                })
+                mapped_region['gff_region'] = existing_region.name
+                mapped_region['region_alias'] = existing_region.insdc_accession
             elif existing_region.insdc_accession in reference_names:
-                mapped_regions.append({
-                    'gff_region': existing_region.insdc_accession,
-                    'region_alias': existing_region.name,
-                    'role': role
-                })
-        return data_helper.dump_json(mapped_regions)
+                mapped_region['gff_region'] = existing_region.insdc_accession
+                mapped_region['region_alias'] = existing_region.name
+            mapped_regions.append(mapped_region)
+        return response_helper.dump_json(mapped_regions)
     except ValueError:
         raise NotFound(description=f"Annotation {name} not found")
     except Exception as e:
         raise BadRequest(description=f"Error fetching annotation {name}: {e}")
-    
 
-def get_annotation_regions(name, args):
-    ann = get_annotation(name)
-    query = {**args}
-    query['assembly_accession'] = ann.assembly_accession
-    return data_helper.get_items('regions', query)
-
-def get_annotation_region_tabix_stream(name, region_name, start=0, end=None):
-    ann = get_annotation(name)
-    file_path = file_helper.get_annotation_file_path(ann)
-    try:
-        file = pysam.TabixFile(file_path)
-        return file.fetch(region_name, start, end)
-    except ValueError:
-        raise NotFound(description=f"Annotation {name} not found")
-    except Exception as e:
-        raise BadRequest(description=f"Error fetching annotation {name}: {e}")
-    
-def add_completed_status(query):
-    return query.update(status='completed')
-
-    """
-    Parse GFF attributes string into a dictionary.
-    
-    Args:
-        attributes_str (str): GFF attributes string (9th column)
-        
-    Returns:
-        dict: Parsed attributes
-    """
-    attributes = {}
-    if not attributes_str or attributes_str == '.':
-        return attributes
-    
-    # Split by semicolon and handle quoted values
-    parts = re.split(r';(?=(?:[^"]*"[^"]*")*[^"]*$)', attributes_str)
-    
-    for part in parts:
-        part = part.strip()
-        if '=' in part:
-            key, value = part.split('=', 1)
-            key = key.strip()
-            value = value.strip()
-            
-            # Remove quotes if present
-            if value.startswith('"') and value.endswith('"'):
-                value = value[1:-1]
-            
-            attributes[key] = value
-    
-    return attributes
-
-    """
-    Build a hierarchical tree with count statistics for each feature type.
-    Merges features of the same type together and sums their counts.
-    Children follow the same structure (merged by type).
-    
-    Args:
-        features (list): List of parsed GFF features
-        
-    Returns:
-        dict: Hierarchical tree with counts
-    """
-    if not features:
-        return {
-            'type': 'empty',
-            'count': 0,
-            'children': []
-        }
-    
-    # Create lookup dictionaries
-    feature_by_id = {}
-    children_by_parent = defaultdict(list)
-    
-    # Index features by ID and group by parent
-    for feature in features:
-        if feature and feature['id']:
-            feature_by_id[feature['id']] = feature
-            if feature['parent']:
-                children_by_parent[feature['parent']].append(feature)
-        elif feature:  # Handle features without ID but with parent
-            # Generate a temporary ID for features without one
-            temp_id = f"temp_{len(feature_by_id)}"
-            feature['id'] = temp_id
-            feature_by_id[temp_id] = feature
-            if feature['parent']:
-                children_by_parent[feature['parent']].append(feature)
-    
-    # Find root features (those without parents or with parents not in our dataset)
-    root_features = []
-    for feature in features:
-        if feature and feature['id']:
-            if not feature['parent'] or feature['parent'] not in feature_by_id:
-                root_features.append(feature)
-    
-    # If no root features found, try to infer hierarchy by position
-    if not root_features and features:
-        # Sort features by start position and try to infer parent-child relationships
-        sorted_features = sorted(features, key=lambda x: (x['start'], -x['end']))
-        
-        # Find features that contain others (potential parents)
-        for i, feature in enumerate(sorted_features):
-            if not feature['parent']:
-                # Look for features that are contained within this feature
-                for j, other_feature in enumerate(sorted_features):
-                    if i != j and not other_feature['parent']:
-                        if (other_feature['start'] >= feature['start'] and 
-                            other_feature['end'] <= feature['end'] and
-                            other_feature['type'] != feature['type']):
-                            # Infer parent-child relationship
-                            other_feature['parent'] = feature['id']
-                            children_by_parent[feature['id']].append(other_feature)
-        
-        # Re-find root features after inference
-        root_features = []
-        for feature in features:
-            if feature and feature['id']:
-                if not feature['parent'] or feature['parent'] not in feature_by_id:
-                    root_features.append(feature)
-    
-    # Build merged tree structure
-    def build_merged_tree(feature_ids):
-        if not feature_ids:
-            return None
-        
-        # Get the first feature to determine type
-        first_feature = feature_by_id.get(feature_ids[0])
-        if not first_feature:
-            return None
-        
-        feature_type = first_feature['type']
-        
-        # Collect all children of all features of this type
-        all_children = []
-        for feature_id in feature_ids:
-            children = children_by_parent.get(feature_id, [])
-            all_children.extend(children)
-        
-        # Group children by type
-        children_by_type = defaultdict(list)
-        for child in all_children:
-            children_by_type[child['type']].append(child['id'])
-        
-        # Recursively build children nodes (merged by type)
-        children_nodes = []
-        for child_type, child_ids in children_by_type.items():
-            # Recursively build the subtree for this child type
-            child_node = build_merged_tree(child_ids)
-            if child_node:
-                children_nodes.append(child_node)
-        
-        # Create the node for this type
-        node = {
-            'type': feature_type,
-            'count': len(feature_ids),
-            'children': children_nodes
-        }
-        
-        return node
-    
-    # Group root features by type
-    root_features_by_type = defaultdict(list)
-    for root_feature in root_features:
-        root_features_by_type[root_feature['type']].append(root_feature['id'])
-    
-    # Build the merged tree structure
-    tree_nodes = []
-    for feature_type, feature_ids in root_features_by_type.items():
-        tree_node = build_merged_tree(feature_ids)
-        if tree_node:
-            tree_nodes.append(tree_node)
-    
-    # If we have multiple root types, create a root node
-    if len(tree_nodes) > 1:
-        return {
-            'type': 'root',
-            'count': len(features),
-            'children': tree_nodes
-        }
-    elif len(tree_nodes) == 1:
-        return tree_nodes[0]
-    else:
-        return {
-            'type': 'empty',
-            'count': 0,
-            'children': []
-        }
+def get_annotation_errors(offset=0, limit=20):
+    errors = AnnotationError.objects().skip(offset).limit(limit).as_pymongo()
+    return response_helper.dump_json(errors)

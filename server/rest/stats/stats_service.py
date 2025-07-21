@@ -1,27 +1,27 @@
-from helpers import data as data_helper
+from helpers import mappers as mappers_helper, query as query_helper, response as response_helper
 from db.models import FeatureTypeStatsNode
 
 def get_instance_stats():
     response = {}
-    for k,v in data_helper.MODEL_LIST.items():
-        counts = v.objects().count()
+    for k,v in mappers_helper.MODEL_MAPPERS.items():
+        counts = v['model'].objects().count()
         response[k] = counts
-    return data_helper.dump_json(response)
+    return response_helper.dump_json(response)
 
 def get_model_fields(model):
-    if model not in data_helper.MODEL_LIST:
+    if model not in mappers_helper.MODEL_MAPPERS:
         return {"message": "model not found"}, 404
-    fields = data_helper.MODEL_LIST[model]['tsv_fields']
-    return data_helper.dump_json(fields)
+    fields = mappers_helper.MODEL_MAPPERS[model]['tsv_fields']
+    return response_helper.dump_json(fields)
 
 def get_stats(model, field, query):
     print(FeatureTypeStatsNode.objects(feature_type='transcript').to_json())
 
-    if model not in data_helper.MODEL_LIST:
+    if model not in mappers_helper.MODEL_MAPPERS:
         return {"message": "model not found"}, 404
 
-    db_model = data_helper.MODEL_LIST[model]
-    parsed_query, q_query = data_helper.create_query(query, None)
+    db_model = mappers_helper.MODEL_MAPPERS[model]['model']
+    parsed_query, q_query = query_helper.create_query(query, None)
     items = db_model.objects(**parsed_query)
     if q_query:
         items = items.filter(q_query)
@@ -49,7 +49,7 @@ def get_stats(model, field, query):
         }
         # Sort the response dictionary
         sorted_response = {key : response[key] for key in sorted(response)}
-        return data_helper.dump_json(sorted_response), 200
+        return response_helper.dump_json(sorted_response), 200
 
     except Exception as e:
         print(e)

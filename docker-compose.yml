@@ -2,83 +2,84 @@ version: '3'
 
 services:
     
-  rnaget-mongo:
-    image: mongo:6.0
+  annotrieve-mongo:
+    image: mongo:7.0
     container_name: "${DB_HOST}"
     env_file:
       - .env
     restart: always
     volumes:
      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
-     - /data/rnaget-data:/data/db
+     - /data/annotrieve/mongo:/data/db
     ports:
-      - "${DB_PORT}:27017"
+      - "27030:27017"
     networks:
       - monstre
 
-  rnaget-nginx:
-    image: gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/rnaget-nginx
-    container_name: ${NGINX_HOST}
+  annotrieve-nginx:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-nginx
     restart: always
     environment:
-      - API_PORT=${API_PORT}
-      - API_HOST=${API_HOST}
-      - BASE_PATH=${BASE_PATH}
+      - API_PORT=80
+      - API_HOST=annotrieve-server
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.rnaget-nginx.rule=(Host(`genome.crg.es`) || Host(`genome.crg.cat`) || Host(`genome.crg.eu`)) && PathPrefix(`/rnaget-beacon`)"
-      - "traefik.http.routers.rnaget-nginx.tls=true"
-      - "traefik.http.routers.rnaget-nginx.entrypoints=web_https"
-      - "traefik.http.services.rnaget-nginx.loadBalancer.server.port=80"
-    ports:
-        - "94:${API_PORT}"
+      - "traefik.http.routers.annotrieve-nginx.rule=(Host(`genome.crg.es`) || Host(`genome.crg.cat`) || Host(`genome.crg.eu`)) && PathPrefix(`/annotrieve`)"
+      - "traefik.http.routers.annotrieve-nginx.tls=true"
+      - "traefik.http.routers.annotrieve-nginx.entrypoints=web_https"
+      - "traefik.http.services.annotrieve-nginx.loadBalancer.server.port=80"
     networks:
       - monstre
 
-  rnaget-server:
-    image: gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/rnaget-server
-    container_name: ${API_HOST}
+  annotrieve-server:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-server
     restart: always
     volumes:
       - ./server:/server
+      - /data/annotrieve/annotations:${LOCAL_ANNOTATIONS_DIR}
+      - /data/annotrieve/zip:${ZIP_FOLDER_PATH}
     env_file:
       - .env
     depends_on:
-      - rnaget-redis
+      - annotrieve-redis
     networks:
       - monstre
 
-  rnaget-celery:
-    image: gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/rnaget-server
+  annotrieve-celery:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-server
     command: celery --app app.celery_app worker --loglevel=info --autoscale=1,1 --max-tasks-per-child=1
     restart: always
     volumes:
       - ./server:/server
+      - /data/annotrieve/annotations:${LOCAL_ANNOTATIONS_DIR}
+      - /data/annotrieve/zip:${ZIP_FOLDER_PATH}
     env_file:
       - .env
     depends_on:
-      - rnaget-server
-      - rnaget-mongo
-      - rnaget-redis
+      - annotrieve-server
+      - annotrieve-mongo
+      - annotrieve-redis
     networks:
       - monstre
 
-  rnaget-celery-beat:
-    image: gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/rnaget-server
+  annotrieve-celery-beat:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-server
     command: celery --app app.celery_app beat --loglevel=info
     restart: always
     volumes:
       - ./server:/server
+      - /data/annotrieve/annotations:${LOCAL_ANNOTATIONS_DIR}
+      - /data/annotrieve/zip:${ZIP_FOLDER_PATH}
     env_file:
       - .env
     depends_on:
-      - rnaget-server
-      - rnaget-mongo
-      - rnaget-redis
+      - annotrieve-server
+      - annotrieve-mongo
+      - annotrieve-redis
     networks:
       - monstre
 
-  rnaget-redis:
+  annotrieve-redis:
     image: "redis:alpine"
     expose:
       - "6378"

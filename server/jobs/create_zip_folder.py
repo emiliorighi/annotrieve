@@ -2,7 +2,7 @@ from celery import shared_task
 import zipfile
 import os
 import logging
-import hashlib
+
 logger = logging.getLogger(__name__)
 
 @shared_task(name='create_zip_folder', bind=True)
@@ -22,14 +22,11 @@ def create_zip_folder(self, file_paths, zip_dir, query):
         if not file_paths:
             raise ValueError("No file paths provided")
         
-        if not zip_dir:
-            raise ValueError("No zip directory provided")
-        
         # Make zip dir if it doesn't exist
         os.makedirs(zip_dir, exist_ok=True)
         #uniquely identify the query
-        query_hash = hashlib.md5(str(query).encode()).hexdigest()
-        zip_name = f"{query_hash}.zip"
+        request_id = self.request.id
+        zip_name = f"{request_id}.zip"
         logger.info(f"Creating zip file: {zip_name} in directory: {zip_dir}")
         
         zip_path = os.path.join(zip_dir, zip_name)
@@ -39,7 +36,7 @@ def create_zip_folder(self, file_paths, zip_dir, query):
             
             result = {
                 "zip_file": zip_name,
-                "download_url": f"/download-tasks/{self.request.id}/download",
+                "download_url": f"/downloads/annotations/jobs/{request_id}/file",
                 "file_count": len(file_paths),
                 "query": query,
                 "total_files_requested": len(file_paths)
@@ -76,7 +73,7 @@ def create_zip_folder(self, file_paths, zip_dir, query):
         
         result = {
             "zip_file": zip_name,
-            "download_url": f"/download-tasks/{self.request.id}/download",
+            "download_url": f"/downloads/annotations/jobs/{request_id}/file",
             "file_count": files_added,
             "query": query,
             "total_files_requested": len(file_paths)

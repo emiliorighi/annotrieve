@@ -1,7 +1,7 @@
 variables:
-  APP_NAME_FRONT: rnaget-nginx
-  APP_NAME_BACK: rnaget-server
-  BASE_PATH: /rnaget-beacon
+    APP_NAME_FRONT: annotrieve-nginx
+    APP_NAME_BACK: annotrieve-server
+    BASE_PATH: /annotrieve
 
 stages: 
   - build
@@ -9,7 +9,7 @@ stages:
 
 build_containers:
   only:
-    - master
+    - main
 
   tags:
     - docker
@@ -22,10 +22,10 @@ build_containers:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
 
   script:
-    - docker build --build-arg BASE_PATH="$BASE_PATH" -t gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_FRONT ./nginx
-    - docker push gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_FRONT
-    - docker build -t gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_BACK ./server
-    - docker push gitlab.linux.crg.es:5005/monstre/rnaget-beacon-demo/$APP_NAME_BACK
+    - docker build --build-arg BASE_PATH="$BASE_PATH" -t gitlab.linux.crg.es:5005/monstre/annotrieve/$APP_NAME_FRONT ./nginx
+    - docker push gitlab.linux.crg.es:5005/monstre/annotrieve/$APP_NAME_FRONT
+    - docker build -t gitlab.linux.crg.es:5005/monstre/annotrieve/$APP_NAME_BACK ./server
+    - docker push gitlab.linux.crg.es:5005/monstre/annotrieve/$APP_NAME_BACK
 
 deploy_containers:
   stage: deploy

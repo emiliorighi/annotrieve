@@ -18,14 +18,14 @@ services:
     
 
   annotrieve-mongo:
-    image: mongo:7.0
+    image: mongo:6.0
     container_name: "${DB_HOST}"
     env_file:
       - .env
     restart: always
     volumes:
      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
-     - mongodb-data:${MONGODB_DATA_DIR}
+     - mongodb-data:/data/db
     ports:
       - "27021:27017"
 
@@ -35,9 +35,7 @@ services:
     restart: always
     volumes:
       - ./server:/server
-      - ${EXTERNAL_ANNOTATION_PATH}:${LOCAL_ANNOTATION_PATH}
-      - ${GFF_PROCESS_ERRORS}:/server/errors
-
+      - ${ANNOTATIONS_DIR}:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
     depends_on:
@@ -50,7 +48,8 @@ services:
     command: celery --app app.celery_app worker --loglevel=info --autoscale=1,1 --max-tasks-per-child=1
     restart: always
     volumes:
-      - ${EXTERNAL_ANNOTATION_PATH}:${LOCAL_ANNOTATION_PATH}
+      - ./server:/server
+      - ${ANNOTATIONS_DIR}:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
     depends_on:
@@ -61,6 +60,9 @@ services:
     build: ./server
     command: celery --app app.celery_app beat --loglevel=info
     restart: always
+    volumes:
+      - ./server:/server
+      - ${ANNOTATIONS_DIR}:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
     depends_on:

@@ -1,11 +1,12 @@
 import os
 from celery import shared_task
-from db.models import GenomeAnnotation,  GenomicRegion, FeatureTypeStatsNode
+from db.models import GenomeAnnotation,  GenomicRegion, RegionFeatureTypeStats, ParentFeatureTypeStats
 from helpers.file import get_annotation_file_path
-from helpers.genome_annotation import map_id_to_type, build_stats_and_type_relationships, insert_feature_type_stats, get_region_name
+from helpers.genomic_regions import get_region_name
+from helpers.feature_type_stats import map_id_to_type_and_global_stats, build_type_stats_by_parent, calculate_stats_by_parent
 import pysam
 
-ANNOTATIONS_PATH= os.getenv('LOCAL_ANNOTATION_PATH')
+ANNOTATIONS_PATH= os.getenv('LOCAL_ANNOTATIONS_DIR')
 
 @shared_task(name='process_stats', ignore_result=False)
 def process_stats():
@@ -15,14 +16,10 @@ def process_stats():
     2. For each annotation, get all genomic regions that are in the GFF file
     3. For each genomic region, get the feature stats and save to the database
     """
-    ## get parents
-    existing_genomic_feature_counts = FeatureTypeStatsNode.objects.scalar('annotation_name')
-    #get annotations that are completed and not in the existing annotation hierarchy stats
-    annotations = GenomeAnnotation.objects(status='completed', name__nin=existing_genomic_feature_counts)
+    #get annotations that are bgzip_tabix
+    annotations = GenomeAnnotation.objects(status='bgzip_tabix')
     
     print(f"Processing stats for a total of {annotations.count()} annotations")
-    saved_regions = 0
-    saved_feature_counts = 0
 
     if not annotations:
         print("No annotations to process")
@@ -44,12 +41,7 @@ def process_stats():
 
         print(f"Processing stats for a total of {len(gff_regions)} genomic regions")
         for genomic_region in genomic_regions:
-            saved_nodes = process_region_stats(pysam_file, gff_regions, genomic_region, ann_to_process)
-            if saved_nodes:
-                saved_feature_counts += saved_nodes
-                saved_regions += 1
-
-    print(f"Saved stats for {saved_regions} genomic regions and {saved_feature_counts} genomic feature counts")
+            process_region_stats(pysam_file, gff_regions, genomic_region, ann_to_process)
 
 def process_region_stats(pysam_file, gff_regions, genomic_region, ann_to_process):
     """
@@ -62,19 +54,22 @@ def process_region_stats(pysam_file, gff_regions, genomic_region, ann_to_process
     
     print(f"Processing stats for {region_name} of {ann_to_process.scientific_name}")
     try:
-
-    # Pass 1: build id → type map
-        id_to_type = map_id_to_type(pysam_file, region_name)
-
-        print(f"Building stats and type relationships for {region_name} of {ann_to_process.scientific_name}")
+        # Pass 1: build id → type map
+        print(f"Building global type stats for {region_name} of {ann_to_process.scientific_name}")
+        id_to_type, global_type_stats = map_id_to_type_and_global_stats(pysam_file, region_name)
+        print(f"Global type stats to save: {len(global_type_stats)}")
+        RegionFeatureTypeStats.objects.insert(global_type_stats)
+        ann_to_process.update(status='global_stats')
+        print(f"Saved {len(global_type_stats)} global type stats for {region_name} of {ann_to_process.scientific_name}")
         # Pass 2: build stats and type relationships
-        type_stats, parent_types, child_types = build_stats_and_type_relationships(pysam_file, region_name, id_to_type)
-        
-        print(f"Inserting feature type stats for {region_name} of {ann_to_process.scientific_name}")
-        # Save to Mongo
-        saved_nodes = insert_feature_type_stats(type_stats, parent_types, child_types, ann_to_process, region_name, genomic_region.insdc_accession)
-        print(f"Saved {saved_nodes} feature type stats for {region_name} of {ann_to_process.scientific_name}")
-        return saved_nodes
+        print(f"Building type stats by parent for {region_name} of {ann_to_process.scientific_name}")
+        type_stats_by_parent = build_type_stats_by_parent(pysam_file, region_name, id_to_type)
+
+        # Pass 3: calculate stats by parent
+        stats_by_parent = calculate_stats_by_parent(type_stats_by_parent, ann_to_process.name, region_name, genomic_region.insdc_accession)
+        print(f"Stats by parent to save: {len(stats_by_parent)}")
+        ParentFeatureTypeStats.objects.insert(stats_by_parent)
+        ann_to_process.update(status='feature_stats')
+        print(f"Saved {len(stats_by_parent)} stats by parent for {region_name} of {ann_to_process.scientific_name}")
     except Exception as e:
         print(f"Error processing stats for {region_name} of {ann_to_process.scientific_name}: {e}")
-        return 0

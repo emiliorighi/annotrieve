@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 ZIP_FOLDER_PATH = os.getenv('ZIP_FOLDER_PATH')
 TIME_TO_KEEP = os.getenv('TIME_TO_KEEP', 60 * 60)
+
 @shared_task(name='clean_zip_folder', bind=True)
 def clean_zip_folder(self):
     """
@@ -21,6 +22,9 @@ def clean_zip_folder(self):
         # Validate inputs
         if not ZIP_FOLDER_PATH:
             raise ValueError("No zip directory provided")
+        
+        if not os.path.exists(ZIP_FOLDER_PATH):
+            raise ValueError("Zip directory does not exist")
         
         # Get all zip files in the directory
         zip_files = [f for f in os.listdir(ZIP_FOLDER_PATH) if f.endswith('.zip')]

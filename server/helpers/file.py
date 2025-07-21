@@ -6,7 +6,7 @@ import subprocess
 import zipfile
 import zipstream
 
-ANNOTATIONS_PATH = os.getenv('LOCAL_ANNOTATION_PATH')
+ANNOTATIONS_PATH = os.getenv('LOCAL_ANNOTATIONS_DIR')
 
 def get_annotation_file_path(annotation):
     """
@@ -14,7 +14,7 @@ def get_annotation_file_path(annotation):
     Handles cleaning the bgzipped_path by removing leading slash if present.
     """
     if not ANNOTATIONS_PATH:
-        raise ValueError("LOCAL_ANNOTATION_PATH environment variable is not set")
+        raise ValueError("LOCAL_ANNOTATIONS_DIR environment variable is not set")
     
     bgzipped_path = annotation.bgzipped_path.lstrip('/') if annotation.bgzipped_path.startswith('/') else annotation.bgzipped_path
     return os.path.join(ANNOTATIONS_PATH, bgzipped_path)
@@ -162,17 +162,89 @@ def region_exists_in_tabix(file_path, region):
         print(f"Error: {e}")
         return False
 
-def sort_and_bgzip_gff(input_file, output_file):
-    errors = []  # To store error messages
-
+def get_gff_statistics_streaming(input_file):
+    """
+    Get statistics about a GFF file using streaming to avoid memory issues.
+    
+    Args:
+        input_file: Path to the GFF file
+        
+    Returns:
+        dict: Statistics about the file
+    """
     try:
+        # Use awk to count lines and inconsistent regions in a single pass
+        # This streams the file without loading it into memory
+        awk_script = '''BEGIN {total=0; inconsistent=0; headers=0} 
+/^#/ {headers++; next} 
+{total++; if ($5 < $4) inconsistent++} 
+END {print total, inconsistent, headers}'''
+        
+        result = subprocess.run([
+            'awk', '-F', '\t', awk_script, input_file
+        ], capture_output=True, text=True, check=True)
+        
+        if result.stdout.strip():
+            total, inconsistent, headers = map(int, result.stdout.strip().split())
+            return {
+                'total_data_lines': total,
+                'inconsistent_regions': inconsistent,
+                'header_lines': headers,
+                'valid_regions': total - inconsistent
+            }
+        else:
+            return {'error': 'No output from statistics command'}
+            
+    except subprocess.CalledProcessError as e:
+        return {'error': f'Error getting statistics: {e}'}
+    except Exception as e:
+        return {'error': f'Unexpected error: {e}'}
+
+def sort_and_bgzip_gff(input_file, output_file):
+    """
+    Sort and bgzip a GFF file, filtering out inconsistent features.
+    
+    Args:
+        input_file: Path to input GFF file
+        output_file: Path to output bgzipped file
+        
+    Returns:
+        tuple: (list of error messages, list of inconsistent features)
+    """
+    errors = []  # To store error messages
+    inconsistent_lines = []
+    inconsistent_cmd = f"awk -F'\\t' '!/^#/ && $5 < $4' {input_file}"
+    sort_bgzip_cmd = ['bash', '-c', f"""
+                    (
+                        # Keep header lines
+                        grep '^#' {input_file}
+                        # Filter non-header lines: keep only lines where $5 >= $4 (end >= start)
+                        # This streams data without loading into memory
+                        grep -v '^#' {input_file} | awk -F'\t' '$5 >= $4' | sort -t"`printf '\\t'`" -k1,1 -k4,4n
+                    ) | bgzip
+                """]
+    try:
+
+#        stats = get_gff_statistics_streaming(input_file)
+#        if 'error' not in stats:
+#            print(f"GFF file statistics: {stats['total_data_lines']} data lines, "
+#                    f"{stats['inconsistent_regions']} inconsistent regions will be filtered out")
+#        else:
+#            errors.append(f"Could not get statistics: {stats['error']}")
+        
         # Open the output file for bgzip (sorted.gff.gz)
         with open(output_file, 'wb') as out_f:
             
-            # Use a single command to handle headers, sorting, and bgzipping
+            # Use a single command to handle headers, filtering, sorting, and bgzipping
+            # This approach streams the data without loading it all into memory
             combined_process = subprocess.Popen(
-                # Step 1: Handle the header lines first (grep "^#"), then sort non-header lines
-                ['bash', '-c', f"(grep '^#' {input_file}; grep -v '^#' {input_file} | sort -t\"`printf '\\t'`\" -k1,1 -k4,4n) | bgzip"], stdout=out_f,
+                # Step 1: Handle header lines first (grep "^#")
+                # Step 2: Filter non-header lines to remove inconsistent regions (end < start)
+                # Step 3: Sort the filtered lines
+                # Step 4: bgzip the result
+                # All operations are streamed, no memory loading
+                sort_bgzip_cmd, 
+                stdout=out_f,
                 stderr=subprocess.PIPE
             )
             
@@ -183,6 +255,12 @@ def sort_and_bgzip_gff(input_file, output_file):
             if combined_process.returncode != 0 and combined_err:
                 errors.append(combined_err.decode('utf-8'))
 
+        awk_proc = subprocess.run(['bash', '-c', inconsistent_cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if awk_proc.returncode == 0:
+            inconsistent_lines = awk_proc.stdout.strip().split('\n') if awk_proc.stdout.strip() else []
+        else:
+            errors.append(f"Error extracting inconsistent lines: {awk_proc.stderr.strip()}")
+
         # Step 3: Index the bgzipped file using tabix and capture stderr
         tabix_process = subprocess.run(['tabix', '-p', 'gff', output_file], stderr=subprocess.PIPE)
         if tabix_process.returncode != 0 and tabix_process.stderr:
@@ -191,4 +269,4 @@ def sort_and_bgzip_gff(input_file, output_file):
     except subprocess.CalledProcessError as e:
         errors.append(f"An error occurred: {e}")
 
-    return errors
+    return errors, inconsistent_lines
