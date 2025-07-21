@@ -12,7 +12,7 @@ build_containers:
     - main
 
   tags:
-    - docker
+    - shell
     - monstre
 
   stage: build
