@@ -1,7 +1,4 @@
-FROM python:3.7.11-stretch
-
-# Update package repositories to use buster release
-RUN sed -i 's/stretch/buster/g' /etc/apt/sources.list
+FROM python:3.7-slim-bullseye
 
 # Install dependencies for gt (GenomeTools), bgzip, and tabix
 RUN apt-get update && apt-get install -y \
