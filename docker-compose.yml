@@ -22,6 +22,8 @@ services:
     environment:
       - API_PORT=80
       - API_HOST=annotrieve-server
+      - BASE_PATH=${BASE_PATH}
+
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.annotrieve-nginx.rule=(Host(`genome.crg.es`) || Host(`genome.crg.cat`) || Host(`genome.crg.eu`)) && PathPrefix(`/annotrieve`)"
