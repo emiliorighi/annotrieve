@@ -23,6 +23,40 @@ def parse_genome_annotation_from_row(row):
         source=source,
     )
 
+def parse_row_to_dict(row):
+    return {
+        'annotation_name': row[0],
+        'assembly_accession': row[1],
+        'assembly_name': row[2],
+        'scientific_name': row[3],
+        'taxid': row[4],  
+        'original_url': row[5],
+        'source': detect_source_from_path(row[5]),
+        'gff_version': detect_gff_version(row[5])
+    }
+
+
+def parse_dict_to_genome_annotation(annotation):
+    return GenomeAnnotation(
+        name=annotation['annotation_name'],
+        assembly_accession=annotation['assembly_accession'],
+        assembly_name=annotation['assembly_name'],
+        scientific_name=annotation['scientific_name'],
+        taxid=annotation['taxid'],
+        original_url=annotation['original_url'],
+        source=annotation['source'],
+        gff_version=annotation['gff_version']
+    )
+
+
+def detect_gff_version(full_path):
+    """
+    Detect the GFF version from a file path using improved pattern matching.
+    """
+    if 'gff3' in full_path.lower():
+        return 'gff3'
+    return 'gff'
+
 def detect_source_from_path(full_path):
     """
     Detect the source database from a file path using improved pattern matching.

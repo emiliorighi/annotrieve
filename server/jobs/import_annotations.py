@@ -1,18 +1,19 @@
-from parsers.genome_annotation import parse_genome_annotation_from_row, parse_inconsistent_feature
-from helpers.genome_annotation import save_annotation_errors, update_annotation_errors
+from parsers.genome_annotation import parse_row_to_dict, parse_dict_to_genome_annotation
 from helpers import file as file_helper
-from helpers import genomic_regions as genomic_regions_helper
-from db.models import GenomeAnnotation, AnnotationError, InconsistentFeature
+from helpers import stream as stream_helper, download as download_helper, shell_commands as shell_commands
+from db.models import GenomeAnnotation, AnnotationError, Chromosome
 from helpers import taxonomy as taxonomy_helper
+from clients import ncbi_datasets
 from celery import shared_task
 import requests
 import os
-import time
-
+import json
+from parsers.chromosome import parse_chromosome
 
 # URL for the TSV file from GitHub
 URL = os.getenv('ANNOTATION_METADATA_URL', 'https://raw.githubusercontent.com/guigolab/genome-annotation-tracker/refs/heads/main/mapped_annotations.tsv')
 ANNOTATIONS_PATH= os.getenv('LOCAL_ANNOTATION_PATH', '/server/annotations_data')
+TMP_DIR = os.getenv('TMP_DIR', '/server/tmp')
 
 class AnnotationProcessingError(Exception):
     """Custom exception for annotation processing errors."""
@@ -21,291 +22,254 @@ class AnnotationProcessingError(Exception):
 @shared_task(name='import_and_process_annotations', ignore_result=False)
 def import_and_process_annotations():
     """
-    Import annotations from the TSV file, download, sort and bgzip the gff files
+    Import annotations from a TSV file, download, sort, filter and bgzip the gff files
+    GFF file must have a region feature for top level sequences.
+    GFF file and annotation metadata are processed in 10 steps:
+    1. download gff file
+    2. launch awk script to process file
+    3. write and bgzip header and filtered file
+    4. index filtered file
+    5. bgzip inconsistent and skipped files
+    6. count lines in inconsistent and skipped files
+    7. retrieve chromosomes from ncbi
+    8. save chromosomes to db
+    9. retrieve taxonomy
+    10. save metadata to db
     """
-    annotations = get_annotations_from_tsv()
-    print(f"New annotations to process: {len(annotations)}")
-    annotations_with_errors = AnnotationError.objects().scalar('annotation_name')
-    #process and save annotations
-    #if GenomeAnnotation.objects().count() > 10:
-    #    print(f"Reached import limit of {10}")
-    #    return
-    saved_annotations = 0
-    for annotation in annotations:
-    #    if saved_annotations >= 10:
-    #        print(f"Reached import limit of {10}")
-    #        break
-        saved = process_and_save_annotation(annotation, annotations_with_errors)
-        if saved:
-            print(f"Saved annotation {annotation.name} of {annotation.scientific_name}")
-            saved_annotations += 1
-    print(f"Processed and saved: {saved_annotations} / {len(annotations)}")
 
-def get_annotations_from_tsv():
+    annotations_file = os.path.join(TMP_DIR, 'annotations.jsonl')
+    os.makedirs(TMP_DIR, exist_ok=True)
+
+    new_annotations_count = get_annotations_from_tsv(annotations_file)
+    if new_annotations_count == 0:
+        print("No annotations to process")
+        return
+
+    print(f"New annotations to process: {new_annotations_count}")
+    
+    saved_annotations = 0
+    annotations_with_errors = 0
+    #stream annotations jsonlines from file and process them
+    for annotation in stream_helper.stream_jsonl_file(annotations_file):
+        print(f"Processing annotation: {annotation['name']}")
+
+        #parse annotation to mongo db object
+        annotation_to_save = parse_dict_to_genome_annotation(annotation)
+
+        saved = process_annotation_pipeline(annotation_to_save)
+
+        if saved:
+            print(f"Annotation {annotation['name']} saved")
+            saved_annotations += 1
+
+        else:   
+            print(f"Annotation {annotation['name']} not saved")
+            annotations_with_errors += 1
+
+    print(f"Saved a total of {saved_annotations} annotations")
+    print(f"Failed to save {annotations_with_errors} annotations")
+    
+def process_annotation_pipeline(annotation_to_save):
+    """
+    Process an annotation through the complete pipeline: 
+    download, filter, sort, bgzip, index, process inconsistent and skipped files, process genomic regions and save.
+    """
+    files_to_remove = []
+    saved = False
+    try:
+
+        #create output directory
+        output_dir = file_helper.create_dir_path(
+            annotation_to_save.taxid, 
+            annotation_to_save.assembly_accession, 
+            annotation_to_save.name, 
+            ANNOTATIONS_PATH
+        )
+        #init temp files
+        temp_files = file_helper.init_gff_processing_temp_files()
+        files_to_remove.extend(temp_files.values())
+
+        #init bgzipped output files
+        bgzipped_output_files = file_helper.init_bgzipped_output_files(output_dir, annotation_to_save)
+
+        #step 1: process gff file
+        process_gff_file(annotation_to_save, bgzipped_output_files, temp_files, files_to_remove)
+
+        #step 2: process inconsistent and skipped files
+        process_inconsistent_and_skipped_files(temp_files, bgzipped_output_files)
+
+        process_reference_names(annotation_to_save, bgzipped_output_files['filtered'])
+        #step 3: retrieve and save chromosomes
+        process_chromosomes_and_aliases(annotation_to_save, temp_files['region_out'])
+
+        #step 4: process metadata and retrieve taxon lineage
+        saved = process_annotation_metadata(annotation_to_save, bgzipped_output_files['filtered'])
+
+    except AnnotationProcessingError as e:
+        handle_annotation_errors(annotation_to_save, e)
+        files_to_remove.extend(bgzipped_output_files.values()) #remove bgzipped output files if error
+    except Exception as e:
+        handle_annotation_errors(annotation_to_save, e)
+        files_to_remove.extend(bgzipped_output_files.values()) #remove bgzipped output files if error
+    finally:
+        file_helper.remove_files(files_to_remove)
+    return saved
+
+def process_gff_file(annotation_to_process, bgzipped_output_files, temp_files, files_to_remove):
+    """
+    Process the GFF file: download, filter, sort, bgzip, index.
+    """
+    #step 1: download gff file
+    downloaded_gff = f"{TMP_DIR}/{annotation_to_process.name}.gff.gz"
+    print(f"Downloading from {annotation_to_process.original_url}")
+    download_helper.download_gff_via_http_stream(
+        annotation_to_process.original_url, 
+        downloaded_gff
+    )
+    print(f"Downloaded to {downloaded_gff}")
+    files_to_remove.append(downloaded_gff)
+
+    #step 2: launch awk script to process file
+    awk_cmd = shell_commands.awk_gff_process(temp_files['filtered'], temp_files['inconsistent'], temp_files['skipped'], temp_files['headers'], temp_files['region_out'])
+    print(f"Launching awk script to process file: {downloaded_gff}")
+    errors = shell_commands.run_command_with_error_handling(awk_cmd, "Filtering GFF file", executable="/bin/bash")
+    if errors:
+        raise AnnotationProcessingError(f"Failed to filter GFF file: {errors}")
+    print(f"Finished awk script to process file: {downloaded_gff}")
+
+    #step 3: write and bgzip header and filtered file
+    print(f"Writing and bgzipping headers and filtered file: {bgzipped_output_files['filtered']}")
+    bgzip_cmd = shell_commands.write_and_bgzip_headers_and_filtered_file(temp_files['headers'], temp_files['filtered'], bgzipped_output_files['filtered'])
+    errors = shell_commands.run_command_with_error_handling(bgzip_cmd, "Writing and bgzipping headers and filtered file", executable="/bin/bash")
+    if errors:
+        raise AnnotationProcessingError(f"Failed to write and bgzipping headers and filtered file: {errors}")
+    print(f"Finished writing and bgzipping headers and filtered file: {bgzipped_output_files['filtered']}")
+    
+    #step 4: index filtered file
+    tabix_cmd = shell_commands.tabix_index(bgzipped_output_files['filtered'])
+    print(f"Indexing filtered file: {bgzipped_output_files['filtered']}")
+    errors = shell_commands.run_command_with_error_handling(tabix_cmd, "Indexing filtered file", executable="/bin/bash")
+    if errors:
+        raise AnnotationProcessingError(f"Failed to index filtered file: {errors}")
+    print(f"Finished indexing filtered file: {bgzipped_output_files['filtered']}")
+        
+def process_inconsistent_and_skipped_files(temp_files, bgzipped_output_files, annotation_to_process):
+    """
+    Process inconsistent and skipped files.
+    """
+
+    for name in ['skipped', 'inconsistent']:
+        if os.path.getsize(temp_files[name]) ==  0:
+            continue
+        #count the number of lines in the fil
+        print(f"Processing {name} file: {temp_files[name]}")
+        bgzip_cmd = shell_commands.bgzip_file_into_output_file(temp_files[name], bgzipped_output_files[name])
+        shell_commands.run_command_with_error_handling(bgzip_cmd, f"Processing {name} file", executable="/bin/bash")
+
+        count = 0
+        with open(temp_files[name], 'r') as f:
+            count = sum(1 for _ in f)
+        print(f"Counted {count} lines in {name} file")
+        if name == 'skipped':
+            annotation_to_process.skipped_regions_count = count
+            annotation_to_process.skipped_regions_path = bgzipped_output_files[name]
+        else:
+            annotation_to_process.inconsistent_features_count = count
+            annotation_to_process.inconsistent_features_path = bgzipped_output_files[name]
+
+
+def process_chromosomes(annotation):
+    """Retrieve and process chromosomes for the annotation."""
+    # retrieve chromosome metadata from ncbi
+    ncbi_chromosomes = ncbi_datasets.get_chromosomes_from_ncbi(annotation.assembly_accession)
+    if not ncbi_chromosomes:
+        raise AnnotationProcessingError(
+            f"No chromosomes found for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}"
+        )
+    ncbi_chr_length = len(ncbi_chromosomes)
+
+    #check if chromosomes are present in the db
+    existing_chromosomes = Chromosome.objects(assembly_accession=annotation.assembly_accession).scalar('insdc_accession')
+    if len(existing_chromosomes) == ncbi_chr_length:
+        print(f"All chromosomes already present for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}")
+        return
+    
+    parsed_chromosomes = [parse_chromosome(chromosome) for chromosome in ncbi_chromosomes]
+    new_chromosomes = [chromosome for chromosome in parsed_chromosomes if chromosome.insdc_accession not in existing_chromosomes]
+    print(f"Found {len(new_chromosomes)} new chromosomes for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}")
+    
+    try:
+        print(f"Saving {len(new_chromosomes)} new chromosomes for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}")
+        Chromosome.objects.insert(new_chromosomes)
+    except Exception as e:
+        print(f"Error saving chromosomes for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}: {e}")
+        raise AnnotationProcessingError(
+            f"Error saving chromosomes for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}: {e}"
+        )
+
+
+def process_annotation_metadata(annotation, bgzipped_file):
+    """Save the annotation with its metadata."""
+    relative_path = bgzipped_file.replace(ANNOTATIONS_PATH, '')
+    annotation.bgzipped_path = relative_path
+    annotation.tabix_path = f"{relative_path}.tbi"
+
+    #retrieve taxonomy
+    ordered_taxons = taxonomy_helper.retrieve_taxons_and_save(annotation.taxid)
+    if not ordered_taxons:
+        raise AnnotationProcessingError(
+            f"Taxon {annotation.scientific_name} with taxid {annotation.taxid} not found in INSDC"
+        )
+    annotation.taxon_lineage = [taxon.taxid for taxon in ordered_taxons]
+    try:
+        annotation.save()
+        return True
+    except Exception as e:
+        print(f"Error saving annotation metadata for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}: {e}")
+        raise AnnotationProcessingError(
+            f"Error saving annotation metadata for {annotation.assembly_name} ({annotation.assembly_accession}) of annotation {annotation.name} of species {annotation.scientific_name}: {e}"
+        )
+
+def handle_annotation_errors(annotation, error):
+    """Handle annotation processing errors."""
+    if isinstance(error, list):
+        error = ', '.join(error)
+
+    existing_error = AnnotationError.objects(annotation_name=annotation.name).first()
+    if existing_error:
+        existing_error.error_message = str(error)
+        existing_error.save()
+
+    else:
+        AnnotationError(
+            annotation_name=annotation.name,
+            assembly_accession=annotation.assembly_accession,
+            taxid=annotation.taxid,
+            scientific_name=annotation.scientific_name,
+            error_message=error
+        ).save()
+
+def get_annotations_from_tsv(input_file):
     """
     Get annotations from the TSV file in a mongo db list of objects
     """
-    annotations = []
+    new_annotations = 0
     existing_annotations = GenomeAnnotation.objects().scalar('name')
     try:
         with requests.get(URL, stream=True) as response:
             response.raise_for_status()
-            for row in iterate_tsv_file(response):
-                annotation = parse_genome_annotation_from_row(row)
-                #skip if annotation already exists or if it is a GCF assembly (for the moment we only want to process GCA assemblies)
+            with open(input_file, 'w') as f:
+                for row in stream_helper.stream_tsv_file(response):
+                    annotation = parse_row_to_dict(row)
+                    f.write(json.dumps(annotation) + '\n')
+
+                    #skip if annotation already exists or if it is a GCF assembly (for the moment we only want to process INSDC assemblies)
                 if annotation.name in existing_annotations or 'GCF_' in annotation.assembly_accession:
                     continue
 
-                annotations.append(annotation)
+                    new_annotations += 1
     
     except Exception as e:
         print(f"Unexpected error occurred while fetching TSV file: {e}")
 
-    return annotations
-
-def process_and_save_annotation(annotation_to_process, annotations_with_errors):
-    """
-    Process and save an annotation with comprehensive error handling.
-    
-    Args:
-        annotation_to_process: The annotation object to process
-        annotations_with_errors: Set of annotation names that have errors
-        
-    Returns:
-        bool: True if annotation was successfully saved, False otherwise
-    """
-    print(f"Processing and saving annotation {annotation_to_process.name} of {annotation_to_process.scientific_name}")
-    
-    # Initialize file variables
-    file_vars = init_file_variables(annotation_to_process)
-    saved = False
-    
-    try:
-        # Process the annotation through all stages
-        saved = _process_annotation_pipeline(annotation_to_process, file_vars)
-        
-    except AnnotationProcessingError as e:
-        _handle_annotation_errors(annotation_to_process, annotations_with_errors, e)
-    except Exception as e:
-        _handle_annotation_errors(annotation_to_process, annotations_with_errors, e)
-    finally:
-        # Clean up files
-        file_helper.remove_files(file_vars['files_to_remove'])
-        
-        # Remove from errors if successfully saved
-        if saved and annotation_to_process.name in annotations_with_errors:
-            AnnotationError.objects(annotation_name=annotation_to_process.name).delete()
-    
-    return saved
-
-def _process_annotation_pipeline(annotation_to_process, file_vars):
-    """
-    Process annotation through the complete pipeline: download, extract, process, and save.
-    
-    Args:
-        annotation_to_process: The annotation object to process
-        file_vars: Dictionary containing file paths and cleanup list
-        
-    Returns:
-        bool: True if processing was successful
-        
-    Raises:
-        AnnotationProcessingError: If any step in the pipeline fails
-    """
-    # Step 1: Download annotation file
-    file_vars['file_to_process_path'] = _download_annotation_file(annotation_to_process, file_vars)
-    
-    # Step 2: Extract and prepare annotation
-    checksum, bgzipped_file, inconsistent_count = _extract_and_prepare_annotation(annotation_to_process, file_vars)
-    
-    # Step 3: Process genomic regions
-    _process_genomic_regions(annotation_to_process, bgzipped_file, file_vars)
-    
-    # Step 4: Save annotation with metadata
-    _save_annotation_metadata(annotation_to_process, bgzipped_file, checksum, inconsistent_count)
-    
-    print(f"Annotation {annotation_to_process.name} of {annotation_to_process.scientific_name} saved!")
-    return True
-
-def _download_annotation_file(annotation_to_process, file_vars):
-    """Download the annotation file from the source URL."""
-    print(f"Downloading from {annotation_to_process.source}")
-    file_path = file_helper.download_file_via_http_stream(
-        annotation_to_process.original_url, 
-        file_vars['file_name']
-    )
-    file_vars['files_to_remove'].extend([file_path])
-    return file_path
-
-def _extract_and_prepare_annotation(annotation_to_process, file_vars):
-    """
-    Extract, sort, and bgzip the annotation file with inconsistent feature tracking.
-    
-    Args:
-        annotation_to_process: The annotation object to process
-        file_vars: Dictionary containing file paths and cleanup list
-        
-    Returns:
-        tuple: (checksum, bgzipped_file_path)
-        
-    Raises:
-        AnnotationProcessingError: If processing fails
-    """
-    annotation_name = annotation_to_process.name
-    scientific_name = annotation_to_process.scientific_name
-    start_time = time.time()
-    
-    try:
-        # Step 1: Extract annotation from compressed file
-        print(f"Extracting annotation for {annotation_name}")
-        extract_start = time.time()
-        extracted_file = f"{file_vars['file_name']}.extracted.gff"
-        checksum = file_helper.write_content_to_file(file_vars['file_to_process_path'], extracted_file)
-        file_vars['files_to_remove'].extend([extracted_file])
-        extract_time = time.time() - extract_start
-        print(f"Extraction completed in {extract_time:.2f}s")
-        
-        # Step 2: Sort, filter, and bgzip the annotation
-        print(f"Processing GFF file for {annotation_name}")
-        process_start = time.time()
-        bgzipped_file = f"{file_vars['file_name']}.gff.gz"
-        errors, inconsistent_lines = file_helper.sort_and_bgzip_gff(extracted_file, bgzipped_file)
-        process_time = time.time() - process_start
-        print(f"GFF processing completed in {process_time:.2f}s")
-        
-        # Step 3: Handle processing errors
-        if errors:
-            file_vars['files_to_remove'].extend([bgzipped_file, f"{bgzipped_file}.tbi"])
-            raise AnnotationProcessingError(
-                f"GFF processing errors in {annotation_name} of {scientific_name}: {', '.join(errors)}"
-            )
-        
-        # Step 4: Process inconsistent features
-        inconsistent_start = time.time()
-        inconsistent_count = _process_inconsistent_features(inconsistent_lines, annotation_name)
-        inconsistent_time = time.time() - inconsistent_start
-        
-        # Step 5: Log processing summary
-        total_time = time.time() - start_time
-        if inconsistent_count > 0:
-            print(f"Processed {annotation_name}: {inconsistent_count} inconsistent features filtered out in {inconsistent_time:.2f}s")
-        else:
-            print(f"Processed {annotation_name}: No inconsistent features found")
-        
-        print(f"Total processing time for {annotation_name}: {total_time:.2f}s")
-        return checksum, bgzipped_file, inconsistent_count
-        
-    except Exception as e:
-        # Clean up any created files on error
-        if 'bgzipped_file' in locals():
-            file_vars['files_to_remove'].extend([bgzipped_file, f"{bgzipped_file}.tbi"])
-        raise AnnotationProcessingError(
-            f"Failed to process annotation {annotation_name}: {str(e)}"
-        )
-
-def _process_inconsistent_features(inconsistent_lines, annotation_name):
-    """
-    Process and store inconsistent features from GFF lines.
-    
-    Args:
-        inconsistent_lines: List of GFF lines with inconsistent regions
-        annotation_name: Name of the annotation
-        
-    Returns:
-        int: Number of inconsistent features processed
-    """
-    if not inconsistent_lines:
-        return 0
-    
-    try:
-        # Parse and validate inconsistent features
-        inconsistent_features = []
-        for line in inconsistent_lines:
-            if line.strip():  # Skip empty lines
-                try:
-                    parsed_feature = parse_inconsistent_feature(line, annotation_name)
-                    if parsed_feature:
-                        inconsistent_features.append(parsed_feature)
-                except Exception as e:
-                    print(f"Warning: Failed to parse inconsistent feature line: {line[:100]}... Error: {e}")
-                    continue
-        
-        # Bulk insert inconsistent features if any found
-        if inconsistent_features:
-            try:
-                InconsistentFeature.objects.insert(inconsistent_features)
-                print(f"Stored {len(inconsistent_features)} inconsistent features for {annotation_name}")
-            except Exception as e:
-                print(f"Warning: Failed to store inconsistent features for {annotation_name}: {e}")
-        
-        return len(inconsistent_features)
-        
-    except Exception as e:
-        print(f"Error processing inconsistent features for {annotation_name}: {e}")
-        return 0
-
-def _process_genomic_regions(annotation_to_process, bgzipped_file, file_vars):
-    """Process and save genomic regions for the annotation."""
-    # Get reference names
-    reference_names = file_helper.get_tabix_reference_names(bgzipped_file)
-    if not reference_names:
-        file_vars['files_to_remove'].extend([bgzipped_file, f"{bgzipped_file}.tbi"])
-        raise AnnotationProcessingError(
-            f"No reference names found for {annotation_to_process.name} of {annotation_to_process.scientific_name}"
-        )
-    
-    # Save genomic regions
-    print(f"Retrieving genomic regions for {annotation_to_process.name} of {annotation_to_process.scientific_name}")
-    saved_regions = genomic_regions_helper.handle_genomic_regions(annotation_to_process, reference_names)
-    if not saved_regions:
-        file_vars['files_to_remove'].extend([bgzipped_file, f"{bgzipped_file}.tbi"])
-        raise AnnotationProcessingError(
-            f"No genomic regions found for {annotation_to_process.name} of {annotation_to_process.scientific_name}"
-        )
-
-def _save_annotation_metadata(annotation_to_process, bgzipped_file, checksum, inconsistent_count):
-    """Save the annotation with its metadata."""
-    relative_path = bgzipped_file.replace(ANNOTATIONS_PATH, '')
-    set_annotations_fields(annotation_to_process, relative_path, checksum)
-    #retrieve taxonomy
-    ordered_taxons = taxonomy_helper.retrieve_taxons_and_save(annotation_to_process.taxid)
-    if not ordered_taxons:
-        raise AnnotationProcessingError(
-            f"Taxon {annotation_to_process.scientific_name} with taxid {annotation_to_process.taxid} not found in INSDC"
-        )
-    annotation_to_process.taxon_lineage = [taxon.taxid for taxon in ordered_taxons]
-    annotation_to_process.inconsistent_features = inconsistent_count
-    annotation_to_process.save()
-
-def _handle_annotation_errors(annotation_to_process, annotations_with_errors, error):
-    """Handle annotation processing errors."""
-    if annotation_to_process.name not in annotations_with_errors:
-        save_annotation_errors(annotation_to_process, str(error))
-    else:
-        update_annotation_errors(annotation_to_process, str(error))
-
-def iterate_tsv_file(response):
-    for line_num, line in enumerate(response.iter_lines(decode_unicode=True), start=1):
-        if not line.strip() or line_num == 1:
-            continue
-        row = line.split('\t')
-        if len(row) < 6:
-            continue
-        yield row
-
-def init_file_variables(annotation_to_process):
-    """Initialize file variables for annotation processing."""
-    path_dir = file_helper.create_dir_path(annotation_to_process.taxid, annotation_to_process.assembly_accession, ANNOTATIONS_PATH)
-    file_name = f"{path_dir}/{annotation_to_process.name}"
-    
-    return {
-        'file_to_process_path': None,
-        'extracted_file_name': None,
-        'file_name': file_name,
-        'files_to_remove': []
-    }
-
-def set_annotations_fields(annotation_to_process, relative_path, checksum):
-    annotation_to_process.bgzipped_path = relative_path
-    annotation_to_process.tabix_path = f"{relative_path}.tbi"
-    annotation_to_process.md5_checksum = checksum
+    return new_annotations

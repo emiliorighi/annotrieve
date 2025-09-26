@@ -7,20 +7,34 @@ server {
 
     listen 80;
 
-    # Versioned API routes with base path
-    location ${BASE_PATH}/api {
+    # FastAPI service
+    location ${BASE_PATH}/api/v0/ {
         rewrite ${BASE_PATH}/(.*) /$1 break;
 
-        # Define cache parameters
-        proxy_cache my_cache;
-        proxy_cache_valid 200 10m;
-        proxy_cache_methods GET HEAD;
-        proxy_cache_key $scheme$proxy_host$request_uri;
+        proxy_pass http://annotrieve-fastapi:5000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
-        include uwsgi_params;
-        uwsgi_pass ${API_HOST}:80;
+    # Static file download endpoint
+    location ${BASE_PATH}/files/ {
+        alias datasets/;
+
+        autoindex off; # no directory listing
+
+        limit_except GET HEAD { deny all; }
+
+        # Disable gzip for binary files
+        gzip off;
+
+        # Cache static files for 1 day
+        expires 1d;
+
+        # Large files might need higher buffer/timeout
         client_max_body_size 1000M;
-        uwsgi_read_timeout 600s;
+        proxy_read_timeout 600s;
     }
 
 }

@@ -5,6 +5,8 @@ import hashlib
 import subprocess
 import zipfile
 import zipstream
+import json
+import tempfile
 
 ANNOTATIONS_PATH = os.getenv('LOCAL_ANNOTATIONS_DIR')
 
@@ -49,6 +51,89 @@ def write_content_to_file(file_to_process_path, sorted_file_name):
     checksum = md5.hexdigest()
     return checksum
 
+def read_jsonl_file(file_path):
+    with open(file_path, 'r') as f:
+        for line in f:
+            yield json.loads(line)
+
+def write_filtered_gff_content(file_to_process_path, sorted_file_name):
+    """
+    Read a GFF file and filter out:
+    1. Regions without features (lines without proper GFF structure)
+    2. Inconsistent features where start position is less than end position
+    
+    Args:
+        file_to_process_path (str): Path to the input GFF file (gzipped)
+        sorted_file_name (str): Path to the output filtered GFF file
+        
+    Returns:
+        dict: Statistics about the filtering process including:
+            - total_lines: Total lines processed
+            - header_lines: Number of header lines (#)
+            - valid_features: Number of valid features written
+            - skipped_inconsistent: Number of inconsistent features skipped
+            - skipped_invalid: Number of invalid lines skipped
+            - checksum: MD5 hash of the output file
+    """
+    md5 = hashlib.md5()
+    stats = {
+        'total_lines': 0,
+        'header_lines': 0,
+        'valid_features': 0,
+        'skipped_inconsistent': 0,
+        'skipped_invalid': 0
+    }
+    
+    with gzip.open(file_to_process_path, 'rt') as f_in:
+        with open(sorted_file_name, 'w') as f_out:
+            for line in f_in:
+                stats['total_lines'] += 1
+                line = line.strip()
+                
+                # Skip empty lines
+                if not line:
+                    continue
+                
+                # Keep header lines (starting with #)
+                if line.startswith('#'):
+                    f_out.write(line + '\n')
+                    md5.update((line + '\n').encode('utf-8'))
+                    stats['header_lines'] += 1
+                    continue
+                
+                # Parse GFF line
+                parts = line.split('\t')
+                
+                
+                # Skip lines that don't have at least 9 columns (standard GFF format)
+                if len(parts) < 9:
+                    stats['skipped_invalid'] += 1
+                    continue
+                
+                try:
+                    # Extract start and end positions (columns 4 and 5)
+                    start_pos = int(parts[3])
+                    end_pos = int(parts[4])
+                    
+                    # Skip inconsistent features where start >= end
+                    if start_pos >= end_pos:
+                        stats['skipped_inconsistent'] += 1
+                        continue
+                    
+                    # Write valid feature
+                    f_out.write(line + '\n')
+                    md5.update((line + '\n').encode('utf-8'))
+                    stats['valid_features'] += 1
+                    
+                except (ValueError, IndexError):
+                    # Skip lines where start/end positions can't be parsed as integers
+                    stats['skipped_invalid'] += 1
+                    continue
+    
+    stats['checksum'] = md5.hexdigest()
+    return stats
+
+
 def download_file_via_http_stream(url, file_name):
     downloaded_file_name=f"{file_name}.gz"
 
@@ -74,10 +159,13 @@ def create_zip_stream(files):
     for chunk in z:
         yield chunk
 
-def create_dir_path(taxid, assembly_accession, path):
-    
+def create_dir_path(taxid, assembly_accession,annotation_name, path):
+    """
+    Create a directory path for an annotation, with the annotation name as the last part of the path
+    """
+    annotation_name = annotation_name.replace(' ', '_')
     # Define the full parent path
-    parentpath = f"{path}/{taxid}/{assembly_accession}"
+    parentpath = f"{path}/{taxid}/{assembly_accession}/{annotation_name}"
     
     # Use os.makedirs with exist_ok=True to create any missing directories
     if not os.path.exists(parentpath):
@@ -104,6 +192,29 @@ def get_tabix_reference_names(file_path):
         print(f"Error running tabix: {e.stderr.strip()}")
         return []
 
+def get_tabix_reference_names_stream(file_path):
+    try:
+        # Run the `tabix -l` command and yield lines as they come
+        process = subprocess.Popen(
+            ['tabix', '-l', file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if process.stdout is not None:
+            for line in process.stdout:
+                yield line.strip()
+
+        # Ensure the process completed successfully
+        _, stderr = process.communicate()
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, process.args, output=None, stderr=stderr)
+
+    except subprocess.CalledProcessError as e:
+        print(f"Error running tabix: {e.stderr.strip()}")
+        return  # implicit StopIteration
+        
 def get_tabix_region_content_stream(file_path, region):
     process = None
     try:
@@ -162,44 +273,6 @@ def region_exists_in_tabix(file_path, region):
         print(f"Error: {e}")
         return False
 
-def get_gff_statistics_streaming(input_file):
-    """
-    Get statistics about a GFF file using streaming to avoid memory issues.
-    
-    Args:
-        input_file: Path to the GFF file
-        
-    Returns:
-        dict: Statistics about the file
-    """
-    try:
-        # Use awk to count lines and inconsistent regions in a single pass
-        # This streams the file without loading it into memory
-        awk_script = '''BEGIN {total=0; inconsistent=0; headers=0} 
-/^#/ {headers++; next} 
-{total++; if ($5 < $4) inconsistent++} 
-END {print total, inconsistent, headers}'''
-        
-        result = subprocess.run([
-            'awk', '-F', '\t', awk_script, input_file
-        ], capture_output=True, text=True, check=True)
-        
-        if result.stdout.strip():
-            total, inconsistent, headers = map(int, result.stdout.strip().split())
-            return {
-                'total_data_lines': total,
-                'inconsistent_regions': inconsistent,
-                'header_lines': headers,
-                'valid_regions': total - inconsistent
-            }
-        else:
-            return {'error': 'No output from statistics command'}
-            
-    except subprocess.CalledProcessError as e:
-        return {'error': f'Error getting statistics: {e}'}
-    except Exception as e:
-        return {'error': f'Unexpected error: {e}'}
-
 def sort_and_bgzip_gff(input_file, output_file):
     """
     Sort and bgzip a GFF file, filtering out inconsistent features.
@@ -212,25 +285,15 @@ def sort_and_bgzip_gff(input_file, output_file):
         tuple: (list of error messages, list of inconsistent features)
     """
     errors = []  # To store error messages
-    inconsistent_lines = []
-    inconsistent_cmd = f"awk -F'\\t' '!/^#/ && $5 < $4' {input_file}"
     sort_bgzip_cmd = ['bash', '-c', f"""
                     (
                         # Keep header lines
                         grep '^#' {input_file}
-                        # Filter non-header lines: keep only lines where $5 >= $4 (end >= start)
                         # This streams data without loading into memory
-                        grep -v '^#' {input_file} | awk -F'\t' '$5 >= $4' | sort -t"`printf '\\t'`" -k1,1 -k4,4n
+                        grep -v '^#' {input_file} | sort -t"`printf '\\t'`" -k1,1 -k4,4n
                     ) | bgzip
                 """]
     try:
-
-#        stats = get_gff_statistics_streaming(input_file)
-#        if 'error' not in stats:
-#            print(f"GFF file statistics: {stats['total_data_lines']} data lines, "
-#                    f"{stats['inconsistent_regions']} inconsistent regions will be filtered out")
-#        else:
-#            errors.append(f"Could not get statistics: {stats['error']}")
         
         # Open the output file for bgzip (sorted.gff.gz)
         with open(output_file, 'wb') as out_f:
@@ -255,12 +318,6 @@ def sort_and_bgzip_gff(input_file, output_file):
             if combined_process.returncode != 0 and combined_err:
                 errors.append(combined_err.decode('utf-8'))
 
-        awk_proc = subprocess.run(['bash', '-c', inconsistent_cmd], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if awk_proc.returncode == 0:
-            inconsistent_lines = awk_proc.stdout.strip().split('\n') if awk_proc.stdout.strip() else []
-        else:
-            errors.append(f"Error extracting inconsistent lines: {awk_proc.stderr.strip()}")
-
         # Step 3: Index the bgzipped file using tabix and capture stderr
         tabix_process = subprocess.run(['tabix', '-p', 'gff', output_file], stderr=subprocess.PIPE)
         if tabix_process.returncode != 0 and tabix_process.stderr:
@@ -269,4 +326,31 @@ def sort_and_bgzip_gff(input_file, output_file):
     except subprocess.CalledProcessError as e:
         errors.append(f"An error occurred: {e}")
 
-    return errors, inconsistent_lines
+    return errors
+
+
+def init_gff_processing_temp_files():
+    """
+    Initialize temporary files for GFF processing.
+    filtered: filtered gff file
+    inconsistent: inconsistent gff file
+    skipped: skipped gff file
+    headers: headers gff file
+    region_out: region out gff file
+    """
+    temp_files = {}
+    for name in ["filtered", "inconsistent", "skipped", "headers", "region_out"]:
+        temp_file = tempfile.NamedTemporaryFile(mode="w+", delete=False)
+        temp_files[name] = temp_file.name
+        temp_file.close()
+    return 
+    
+def init_bgzipped_output_files(output_dir, annotation_to_process):
+    """
+    Initialize bgzipped output files for GFF processing.
+    """
+    return {
+        'filtered': os.path.join(output_dir, f"{annotation_to_process.name}.{annotation_to_process.gff_version}.gz"),
+        'inconsistent': os.path.join(output_dir, f"{annotation_to_process.name}.{annotation_to_process.gff_version}.inconsistent.gz"),
+        'skipped': os.path.join(output_dir, f"{annotation_to_process.name}.{annotation_to_process.gff_version}.skipped.gz")
+    }

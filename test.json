@@ -1,0 +1,55 @@
+{
+    "genome_stats": {
+        "coding_stats": {
+            "coding_genes": 27370,
+            "average_genomic_span": 17613.83,
+            "average_sequence_length": 2591.48,
+            "average_cds_length": 1826.59,
+            "shortest_gene_length": 159,
+            "longest_gene_length": 649924,
+            "total_transcripts": 61486,
+            "coding_transcripts": 59724,
+            "transcripts_per_gene": 2.25,
+            "coding_transcripts_per_gene": 2.18,
+            "total_exons": 563023,
+            "total_coding_exons": 502035,
+            "average_exon_length": 300.73,
+            "average_coding_exon_length": 217.3,
+            "average_exons_per_transcript": null,
+            "average_coding_exons_per_coding_transcript": null,
+            "total_introns": 501537,
+            "average_intron_length": 2165.13
+        },
+        "non_coding_stats": {
+            "non_coding_genes": 3977,
+            "small_non_coding_genes": 1045,
+            "long_non_coding_genes": 2932,
+            "misc_non_coding_genes": null,
+            "average_genomic_span": 3929.09,
+            "average_sequence_length": 892.45,
+            "shortest_gene_length": 59,
+            "longest_gene_length": 162178,
+            "total_transcripts": 4647,
+            "transcripts_per_gene": 1.17,
+            "total_exons": 11686,
+            "average_exon_length": 390.73,
+            "average_exons_per_transcript": 2.51,
+            "total_introns": 7039,
+            "average_intron_length": 2246.41
+        },
+        "pseudogene_stats": {
+            "pseudogenes": 253,
+            "average_genomic_span": 4406.82,
+            "average_sequence_length": 853.87,
+            "shortest_gene_length": 64,
+            "longest_gene_length": 105844,
+            "total_transcripts": 253,
+            "transcripts_per_gene": 1.0,
+            "total_exons": 713,
+            "average_exon_length": 302.99,
+            "average_exons_per_transcript": 2.82,
+            "total_introns": 460,
+            "average_intron_length": 1954.12
+        }
+    }
+}

@@ -119,9 +119,9 @@ def stream_jsonlines_from_ncbi(command):
         print("Error during streaming:", e)
 
 
-def get_chromosomes_from_ncbi(assembly_accession):
+def get_assembled_molecules_from_ncbi(assembly_accession):
     """
-    Get chromosomes from NCBI.
+    Get assembled molecules from NCBI.
     """
     _apply_rate_limiting()
     api_url = f"https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/{assembly_accession}/sequence_reports?role_filters=assembled-molecule&page_size=1000"
@@ -130,6 +130,6 @@ def get_chromosomes_from_ncbi(assembly_accession):
         response.raise_for_status()
         return response.json().get('reports', [])
     except Exception as e:
-        print(f"Error getting chromosomes from NCBI: {e}")
+        print(f"Error getting assembled molecules from NCBI: {e}")
         return None
 
