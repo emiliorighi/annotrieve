@@ -1,2 +1,7 @@
-/annotations/summary
-/annotations/
+GenomeAnnotation aspects:
+
+taxonomy -> taxid, lineage, name
+assembly -> accession, name
+source_info -> metadata about the original source of the GFF
+features_overview -> types, biotypes, sources, counts
+indexed_info -> bgzipped path, tbi_path, file_size, md5

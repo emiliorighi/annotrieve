@@ -9,6 +9,9 @@ def taxonomic_query(filter):
 def taxon_query(filter):
     return (Q(taxid__iexact=filter) | Q(taxid__icontains=filter)) | (Q(scientific_name__iexact=filter) | Q(scientific_name__icontains=filter))
 
+def organism_query(filter):
+    return taxonomic_query(filter) | (Q(common_name__iexact=filter) | Q(common_name__icontains=filter))
+
 def assembly_query(filter):
     return taxonomic_query(filter) | (
             Q(assembly_name__iexact=filter) | 

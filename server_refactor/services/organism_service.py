@@ -8,9 +8,8 @@ def get_organisms(filter: str = None, offset: int = 0, limit: int = 20, taxids: 
     if taxids:
         organisms = organisms.filter(taxid__in=taxids.split(',') if isinstance(taxids, str) else taxids)
     if filter:
-        q_filter = query_visitors_helper.taxonomic_query(filter) if filter else None
+        q_filter = query_visitors_helper.organism_query(filter) if filter else None
         organisms = organisms.filter(q_filter)
-    organisms = organisms.exclude('id').skip(offset).limit(limit).as_pymongo()
     return response_helper.json_response_with_pagination(organisms, organisms.count(), offset, limit)
 
 def get_organism(taxid: str):

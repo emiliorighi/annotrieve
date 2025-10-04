@@ -1,5 +1,5 @@
 # Use a modern Python base image
-FROM python:3.9-slim-bullseye
+FROM python:3.10-slim-bullseye
 
 # Set environment variables to prevent interactive prompts
 ENV PYTHONUNBUFFERED 1

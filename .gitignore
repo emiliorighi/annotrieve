@@ -2,6 +2,7 @@ __pycache__
 *.db
 .DS_Store
 venv
+files/
 .env
 docker-compose-dev.yml
 celerybeat-schedule

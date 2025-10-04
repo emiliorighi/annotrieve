@@ -1,113 +1,75 @@
-import os
-import pysam
-from db.models import AnnotationSequenceMap, GenomicSequence
-from helpers import file as file_helper
+import re
+from helpers import pysam_helper
+from db.models import AnnotationSequenceMap, GenomicSequence, GenomeAnnotation
 
-def handle_alias_mapping(parsed_annotation, tmp_dir, index, total):
+def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str):
     """
     handle the alias mapping for the annotation and store them in the database
     """
     #CHROMOSOMES STEP
-    print(f"({index}/{total}) Fetching chromosomes")
     chromosomes = GenomicSequence.objects(assembly_accession=parsed_annotation.assembly_accession)
+    
     if chromosomes.count() == 0:
-        print(f"({index}/{total}) Error fetching chromosomes for {parsed_annotation.assembly_accession}, it does not exist in the database")
-        return False
-    print(f"({index}/{total}) Chromosomes fetched")
-    #REF NAMES STEP
-    print(f"({index}/{total}) Fetching ref names")
-    ref_names_path = fetch_and_store_ref_names(parsed_annotation, tmp_dir)
-    if not ref_names_path or file_helper.file_is_empty_or_does_not_exist(ref_names_path):
-        print(f"({index}/{total}) Error fetching ref names for")
-        return False
-    print(f"({index}/{total}) Ref names fetched")
-    print(f"({index}/{total}) Creating sequence mapping")
-    map_created = create_sequence_mapping(parsed_annotation.md5_checksum, chromosomes, ref_names_path)
-    if not map_created:
-        print(f"({index}/{total}) Error creating sequence mapping")
-        return False
-        
-    print(f"({index}/{total}) Sequence mapping created")
-    return map_created
-
-def create_sequence_mapping(md5_checksum, chromosomes, ref_names_path):
-    # Pre-build lookup sets for O(1) lookup instead of O(n) linear search
-    chromosome_lookup = set()
+        raise Exception(f"Error fetching chromosomes for {parsed_annotation.assembly_accession}, it does not exist in the database")
     
-    # Build lookup sets for all possible identifiers
+    chr_aliases_dict = {} #dict with all possible combinations of aliases for the chromosomes
+    chr_map = {} #dict uid to chr
     for chr in chromosomes:
-        # Add all possible identifiers to the lookup set
-        if chr.chr_name:
-            chromosome_lookup.add(chr.chr_name)
-        if chr.ucsc_style_name:
-            chromosome_lookup.add(chr.ucsc_style_name)
-        if chr.genbank_accession:
-            chromosome_lookup.add(chr.genbank_accession)
-        if chr.refseq_accession:
-            chromosome_lookup.add(chr.refseq_accession)
-        if chr.sequence_name:
-            chromosome_lookup.add(chr.sequence_name)
-    
-    # Create a mapping from identifier to chromosome for quick access
-    identifier_to_chromosome = {}
-    for chr in chromosomes:
-        identifiers = get_aliases_list(chromosomes)
-        for identifier in identifiers:
-            if identifier:  # Only add non-empty identifiers
-                identifier_to_chromosome[identifier] = chr
-    
-    sequences_to_save = []
-    
-    with open(ref_names_path, 'r') as f:
-        for line in f:
-            sequence_id = line.strip()
-            
-            if sequence_id in chromosome_lookup:
-                chr = identifier_to_chromosome[sequence_id]
-                sequences_to_save.append(AnnotationSequenceMap(
-                    sequence_id=sequence_id,
-                    md5_checksum=md5_checksum,
-                    aliases=get_aliases_list(chromosomes),
-                ))
-    
+        uid = f"{chr.genbank_accession}_{chr.refseq_accession}" #this is the unique identifier for the chromosome
+        for alias in chr.aliases:
+            chr_aliases_dict[alias] = uid
+        chr_map[uid] = chr
     try:
+        sequences_to_save = []
+        for contig in pysam_helper.stream_contigs(bgzipped_path):
+            seqid = contig.strip()
+            if not seqid:
+                continue
+
+            if not seqid in chr_aliases_dict and is_number(seqid):
+                seqid = int(seqid) #try with int
+            
+            if seqid in chr_aliases_dict:
+                chr = chr_map[chr_aliases_dict[seqid]]
+                sequences_to_save.append(AnnotationSequenceMap(
+                    sequence_id=seqid,
+                    annotation_id=parsed_annotation.annotation_id,
+                    aliases=chr.aliases,
+                ))
+            elif 'chr' in seqid: #check if chr is contained in the seqid and resolve it to the chromosome
+                #get chr and the 2 characters after it
+                chr_name = normalize_chr(seqid)
+                if chr_name and chr_name in chr_aliases_dict:
+                    chr = chr_map[chr_aliases_dict[chr_name]]
+                    sequences_to_save.append(AnnotationSequenceMap(
+                        sequence_id=seqid,
+                        annotation_id=parsed_annotation.annotation_id,
+                        aliases=chr.aliases, 
+                    ))
+        if not sequences_to_save:
+            raise Exception("No sequences to save found")
+        
         AnnotationSequenceMap.objects.insert(sequences_to_save)
     except Exception as e:
-        print(f"Error saving sequence mapping for {md5_checksum}: {e}")
-        return False
-    return True
+        raise e
 
-def get_aliases_list(chromosomes):
-    """
-    Get the aliases list for the chromosomes
-    """
-    aliases_list = []
-    for chr in chromosomes:
-        if chr.chr_name:
-            aliases_list.append(chr.chr_name)
-        if chr.ucsc_style_name:
-            aliases_list.append(chr.ucsc_style_name)
-        if chr.genbank_accession:
-            aliases_list.append(chr.genbank_accession)
-        if chr.refseq_accession:
-            aliases_list.append(chr.refseq_accession)
-        if chr.sequence_name:
-            aliases_list.append(chr.sequence_name)
-    return aliases_list
+def is_number(s: str) -> bool:
+    return re.match(r'^\d+$', s) is not None
 
-def fetch_and_store_ref_names(parsed_annotation, tmp_dir):
-    """
-    Fetch the ref names from the bgzipped path and store them in a temporary file
-    """
-    path = file_helper.get_annotation_file_path(parsed_annotation)
-    ref_names_path = os.path.join(tmp_dir, 'ref_names.txt')
-    try:    
-        file = pysam.TabixFile(path)
-        contigs = file.contigs
-        with open(ref_names_path, 'w') as f:
-            for contig in contigs:
-                f.write(contig + '\n')
-        return ref_names_path
-    except Exception as e:
-        print(f"Error fetching ref names from {path}: {e}")
+def normalize_chr(s: str) -> str | None:
+    # Match "chr" + 1–2 characters (digit/letter/underscore)
+    match = re.search(r'(chr[0-9A-Za-z_]{1,2})', s)
+    if not match:
         return None
+
+    token = match.group(1)
+
+    # Case: chr01 → normalize to chr1
+    if re.match(r'chr0[0-9]$', token):
+        return "chr" + token[-1]
+
+    # Case: chrX_ or chr1_ → normalize to chrX or chr1
+    if token.endswith("_"):
+        return token[:-1]
+
+    return token

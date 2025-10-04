@@ -1,14 +1,18 @@
+from datetime import datetime
 from mongoengine import (
     StringField,
     IntField,
-    DictField,
-    DynamicEmbeddedDocument,
+    BooleanField,
+    EmbeddedDocument,
     EmbeddedDocumentField,
-    FloatField,
-    ListField
+    ListField,
+    DateTimeField,
+    URLField,
+    DictField
 )
 
-class AssemblyStats(DynamicEmbeddedDocument):
+class AssemblyStats(EmbeddedDocument):
+    
     total_number_of_chromosomes = IntField()
     total_sequence_length = StringField()
     total_ungapped_length = StringField()
@@ -26,85 +30,38 @@ class AssemblyStats(DynamicEmbeddedDocument):
     genome_coverage = StringField()
     number_of_organelles = IntField()
 
-class PipelineInfo(DynamicEmbeddedDocument):
+class PipelineInfo(EmbeddedDocument):
     name = StringField()
     version = StringField()
     method = StringField()
 
-class SourceInfo(DynamicEmbeddedDocument):
+class SourceFileInfo(EmbeddedDocument):
     database = StringField(required=True)
     provider = StringField()
-    release_date = StringField(required=True)
-    url_path = StringField(required=True, unique=True)
-    last_modified = StringField(required=True)
-    md5_checksum = StringField(required=True, unique=True) # 32-hex
-    pipeline_metadata = EmbeddedDocumentField(PipelineInfo)
-    
-class FeatureStats(DynamicEmbeddedDocument):
-    feature_type = StringField()
-    count = IntField()
-    average_length = IntField()
+    release_date = DateTimeField(required=True)
+    url_path = URLField(required=True, unique=True)
+    last_modified = DateTimeField(required=True)
+    uncompressed_md5 = StringField(required=True, unique=True) # 32-hex
+    pipeline = EmbeddedDocumentField(PipelineInfo)
 
-class FeatureTypeStats(DynamicEmbeddedDocument):
-    total_count = IntField()
-    average_spliced_exon_length = FloatField()
-    min_length = IntField()
-    max_length = IntField()
-    total_length = IntField()
-    mean_length = FloatField()
+class IndexedFileInfo(EmbeddedDocument):
+    bgzipped_path = StringField(required=True, unique=True)
+    csi_path = StringField(required=True, unique=True)
+    uncompressed_md5 = StringField(required=True, unique=True) # 32-hex
+    file_size = IntField(required=True)
+    processed_at = DateTimeField(default=datetime.now())
+    pipeline = EmbeddedDocumentField(PipelineInfo)
 
-class AnnotationStats(DynamicEmbeddedDocument):
-    feature_sources = ListField(StringField())  # Second column of GFF
-    total_features = IntField()
-    unique_feature_types = ListField(StringField())  # Third column of GFF (e.g., gene, exon, CDS)
-    region_count = IntField()
-    exon_count = IntField()
-    intron_count = IntField()
-    gene_count = IntField()
-    mrna_count = IntField()
-    # Add other stats as needed
+class FeatureOverview(EmbeddedDocument):
 
+    attribute_keys = ListField(StringField()) # Keys of the attributes of the features, e.g. ID, Parent, biotype, gene_biotype, transcript_biotype, gbkey, gene_id, transcript_id, exon_id
+    types = ListField(StringField()) # Third column of GFF, e.g. gene, transcript, exon, etc.
+    sources = ListField(StringField()) # Second column of GFF, e.g. RefSeq, Ensembl, etc.
+    biotypes = ListField(StringField()) # Ninth column of GFF if present, e.g. protein_coding, etc.
+    root_types = ListField(StringField()) # Types of features that are present in features without a parent, e.g. gene, transcript, exon
+    types_missing_id = ListField(StringField()) # Types of features that are present in features without an ID, e.g. gene, transcript, exon
+    root_types_counts = DictField(field=IntField()) # Count of root types, e.g. gene, transcript, exon
+    has_biotype = BooleanField() # Whether the GFF file has a biotype attr
+    has_cds = BooleanField() # Whether the GFF file has a CDS feature
+    has_exon = BooleanField() # Whether the GFF file has an exon feature
 
-class FeatureLengthStats(DynamicEmbeddedDocument):
-    total = IntField()
-    mean = FloatField()
-    median = FloatField()
-    percentile_90 = IntField()
-    max = IntField()
-    min = IntField()
-
-
-class FeatureStats(DynamicEmbeddedDocument):
-    count = IntField()
-    unique_ids = IntField()
-    length_stats = EmbeddedDocumentField(FeatureLengthStats)
-    single_exon_count = IntField()
-    multi_exon_count = IntField()
-    overlapping_count = IntField()
-    intron_count = IntField()
-    exon_count = IntField()
-    biotypes = DictField(field=IntField())  # e.g., {"lncRNA": 120, "protein_coding": 300}
-    attributes_missing = ListField(StringField())  # e.g., ["ID", "Parent"]
-
-
-class GFFStatistics(DynamicEmbeddedDocument):
-    annotation_id = StringField(required=True, unique=True)  # Link to GenomeAnnotation
-    total_features = IntField()
-    feature_types = ListField(StringField())  # e.g., ["gene", "mRNA", "exon", "CDS"]
-
-    # Feature stats map by type: "gene" -> stats, "mRNA" -> stats
-    features = DictField(field=EmbeddedDocumentField(FeatureStats))
-
-    # File-level details
-    num_contigs = IntField()
-    total_region_length = IntField()
-    region_length_stats = EmbeddedDocumentField(FeatureLengthStats)
-
-    # Source column summary
-    sources_used = DictField(field=IntField())  # e.g., {"HAVANA": 1200, "ENSEMBL": 4300}
-
-    # Quality indicators
-    invalid_features_count = IntField()
-    features_missing_parents = IntField()
-    missing_required_attributes = ListField(StringField())
-    genome_coverage_percent = FloatField()

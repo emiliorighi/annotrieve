@@ -10,7 +10,7 @@ services:
     restart: always
     volumes:
      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
-     - /data/annotrieve/mongo:/data/db
+     - /data/annotrieve/db:/data/db
     ports:
       - "27030:27017"
     networks:
@@ -22,7 +22,8 @@ services:
     environment:
       - API_HOST=annotrieve-server
       - BASE_PATH=${BASE_PATH}
-
+    volumes:
+      - /data/annotrieve/files:/data/annotrieve/files:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.annotrieve-nginx.rule=(Host(`genome.crg.es`) || Host(`genome.crg.cat`) || Host(`genome.crg.eu`)) && PathPrefix(`/annotrieve`)"
@@ -38,8 +39,7 @@ services:
     restart: always
     volumes:
       - ./server:/server
-      - /data/annotrieve/annotations:${LOCAL_ANNOTATIONS_DIR}
-      - /data/annotrieve/zip:${ZIP_FOLDER_PATH}
+      - /data/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
     depends_on:
@@ -53,8 +53,7 @@ services:
     restart: always
     volumes:
       - ./server:/server
-      - /data/annotrieve/annotations:${LOCAL_ANNOTATIONS_DIR}
-      - /data/annotrieve/zip:${ZIP_FOLDER_PATH}
+      - /data/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
     depends_on:
@@ -70,8 +69,7 @@ services:
     restart: always
     volumes:
       - ./server:/server
-      - /data/annotrieve/annotations:${LOCAL_ANNOTATIONS_DIR}
-      - /data/annotrieve/zip:${ZIP_FOLDER_PATH}
+      - /data/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
     depends_on:

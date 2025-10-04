@@ -2,15 +2,15 @@ proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=10g
 
 server {
 
-    gzip             on;
+    gzip            on;
     gzip_types      text/tab-separated-values application/json application/jsonl text/plain;
 
     listen 80;
 
     # FastAPI service
     location ${BASE_PATH}/api/v0/ {
-        rewrite ${BASE_PATH}/(.*) /$1 break;
-
+        # strip: /annotrieve/api/v0/ → /
+        rewrite ^${BASE_PATH}/api/v0/(.*)$ /$1 break;
         proxy_pass http://annotrieve-fastapi:5000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -20,7 +20,7 @@ server {
 
     # Static file download endpoint
     location ${BASE_PATH}/files/ {
-        alias datasets/;
+        alias /data/annotrieve/files/;
 
         autoindex off; # no directory listing
 

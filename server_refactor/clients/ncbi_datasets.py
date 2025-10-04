@@ -25,7 +25,6 @@ def _apply_rate_limiting():
     
     if _rate_counter >= RATE_LIMIT_CALLS:
         wait_start = time.time()
-        print(f"Rate limiting: waiting {RATE_LIMIT_WAIT}s after {_rate_counter} API calls (total: {_total_api_calls})")
         time.sleep(RATE_LIMIT_WAIT)
         wait_time = time.time() - wait_start
         _total_wait_time += wait_time
@@ -45,7 +44,6 @@ def reset_rate_limiting_state():
     _total_api_calls = 0
     _total_wait_time = 0
     
-    print("Rate limiting state reset")
 
 def get_rate_limiting_stats():
     """

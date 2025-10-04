@@ -43,6 +43,23 @@ def get_assemblies_metadata_from_ena_browser_and_store_in_file(accessions, path_
         print(e)
         return False
 
+def get_xml_from_ena_browser(accessions, path_to_gzipped_xml_file):
+    """
+    Get XML from ENA browser and store it in a file, via post request up to 10k accessions at a time
+    """
+    payload = {"accessions": accessions, "download": True, "gzip": True}
+    try:
+        with requests.post(f"https://www.ebi.ac.uk/ena/browser/api/xml", json=payload, stream=True) as response:
+            response.raise_for_status()
+            with open(path_to_gzipped_xml_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 1024):
+                    if chunk:
+                        f.write(chunk)
+        return True
+    except Exception as e:
+        print(f"Error occurred while fetching XML from ENA browser")
+        print(e)
+        return None
 
 def search_accessions_with_post_request(result, accessions, fields):
     """

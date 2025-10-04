@@ -15,7 +15,6 @@ def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: 
         q_filter =  query_visitors_helper.assembly_query(filter) if filter else None
         if q_filter:
             assemblies = assemblies.filter(q_filter)
-        assemblies = assemblies.exclude('id').skip(offset).limit(limit).as_pymongo()
         return response_helper.json_response_with_pagination(assemblies, assemblies.count(), offset, limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching assemblies: {e}")

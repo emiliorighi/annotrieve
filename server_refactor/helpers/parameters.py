@@ -1,5 +1,5 @@
 from typing import Optional, Iterable, List
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 def split_string_param(param:str|list):
     if isinstance(param, str):
@@ -67,3 +67,8 @@ def coerce_optional_int(value, name: str):
         return int(value)
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail=f"Invalid numeric parameter '{name}': {value}")
+
+# FastAPI dependency to extract query parameters as a plain dict
+# Use in endpoints as: commons: dict = Depends(common_params)
+def common_params(request: Request) -> dict:
+    return dict(request.query_params)

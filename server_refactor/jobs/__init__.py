@@ -1,4 +1,5 @@
 from celery import Celery, Task
+from jobs.import_annotations import import_annotations
 
 def celery_init_app(app):
     class FlaskTask(Task):

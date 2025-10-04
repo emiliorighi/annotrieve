@@ -9,6 +9,8 @@ server {
 
     # FastAPI service
     location /api/v0/ {
+        # strip /api/v0/ → /
+        rewrite ^/api/v0/(.*)$ /$1 break;
         proxy_pass http://annotrieve-fastapi:5000/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -18,7 +20,7 @@ server {
 
     # Static file download endpoint
     location /files/ {
-        alias datasets/;
+        alias /data/annotrieve/files/;
 
         autoindex off; # no directory listing
 

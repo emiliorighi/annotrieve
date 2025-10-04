@@ -4,12 +4,16 @@ import hashlib
 import zipfile
 import zipstream
 import tarfile
+from db.models import GenomeAnnotation
 
 ANNOTATIONS_PATH = os.getenv('LOCAL_ANNOTATIONS_DIR')
 
 def compute_md5_checksum(file_path):
+    hash_md5 = hashlib.md5()
     with open(file_path, 'rb') as f:
-        return hashlib.md5(f.read()).hexdigest()
+        for chunk in iter(lambda: f.read(1024 * 1024), b''):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
 def file_is_empty_or_does_not_exist(file_path):
     """
@@ -21,7 +25,7 @@ def file_is_empty_or_does_not_exist(file_path):
         return True
     return False
 
-def get_annotation_file_path(annotation):
+def get_annotation_file_path(annotation:GenomeAnnotation):
     """
     Common function to get the full file path for an annotation.
     Handles cleaning the bgzipped_path by removing leading slash if present.
@@ -29,14 +33,21 @@ def get_annotation_file_path(annotation):
     if not ANNOTATIONS_PATH:
         raise ValueError("LOCAL_ANNOTATIONS_DIR environment variable is not set")
     
-    bgzipped_path = annotation.bgzipped_path.lstrip('/') if annotation.bgzipped_path.startswith('/') else annotation.bgzipped_path
+    bgzipped_path = annotation.indexed_file_info.bgzipped_path.lstrip('/') if annotation.indexed_file_info.bgzipped_path.startswith('/') else annotation.indexed_file_info.bgzipped_path
     return os.path.join(ANNOTATIONS_PATH, bgzipped_path)
 
-def remove_files(files):
+def remove_files(files, dir_path) -> list[str]:
+    """
+    Remove the files and any now-empty parent directories up to `dir_path`.
+    return the paths of the files that were deleted
+    """
+    deleted_files = []
     for f in files:
         if not f or not os.path.exists(f):
             continue
-        os.remove(f)
+        remove_file_and_empty_parents(f, dir_path)
+        deleted_files.append(f)
+    return deleted_files
 
 def check_file_exists_and_not_empty(file_path):
     # Check if the file exists
@@ -86,9 +97,11 @@ def create_tar_stream(files):
 def create_dir_path(root_path, sub_path):
     """
     Create a directory path for an annotation, with the annotation name as the last part of the path
+    return the full path
     """
     # Define the full parent path
     parentpath = f"{root_path}/{sub_path}"
+    
     
     # Use os.makedirs with exist_ok=True to create any missing directories
     if not os.path.exists(parentpath):

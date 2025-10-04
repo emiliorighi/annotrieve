@@ -16,7 +16,7 @@ def create_app() -> FastAPI:
         close_db_connection()
 
     app.celery_app = create_celery()
-    app.include_router(api_router, prefix="/api/v2")
+    app.include_router(api_router)
 
     @app.get("/health")
     async def health():

@@ -1,193 +1,185 @@
 from db.models import TaxonNode, Organism
-from clients import ebi_client,ncbi_datasets
+from clients import ebi_client
 from lxml import etree
+from .classes import AnnotationToProcess, OrganismToProcess
+import os
+from .utils import create_batches
+import gzip
+from itertools import chain
 
-def handle_taxonomy(taxids_dict: dict) -> dict:
+def get_existing_lineages_dict(annotations: list[AnnotationToProcess])->dict[str, list[str]]:
     """
-    Fetch the taxonomy from the a dict of taxids (taxid:organism_name) and store the lineages in a dictionary taxid:lineage, return the lineages dict
+    Get the existing lineages for the taxids in the annotations. return a dict of taxid:lineage (from species to root)
     """
-    lineages = dict()
-    organisms_to_save = []
-    taxids = list(taxids_dict.keys())
-    existing_organisms = Organism.objects(taxid__in=taxids).scalar('taxid','taxon_lineage')
-    print(f"Found {len(existing_organisms)} existing organisms")
-    new_taxids = set(taxids) - set([t[0] for t in existing_organisms])
-    
-    #append existing organisms to the lineages
-    for taxid, lineage in existing_organisms:
-        lineages[taxid] = lineage
-
-    for taxid in new_taxids:
-        ordered_taxons = retrieve_taxons_and_save(taxid)
-        if not ordered_taxons:
-            continue
-        lineages[taxid] = [taxon.taxid for taxon in ordered_taxons]
-        organisms_to_save.append(Organism(
-            taxid=taxid,
-            organism_name=taxids_dict[taxid],
-            taxon_lineage=lineages[taxid],
-        ))
-    print(f"Found {len(new_taxids)} new organisms to save")
-    if organisms_to_save:
-    #save new organisms
-        print(f"Saving {len(organisms_to_save)} new organisms")
-        try:
-            Organism.objects.insert(organisms_to_save)
-        except Exception as e:
-            print(f"Error saving organisms: {e}")
-    else:
-        print(f"No new organisms to save")
+    all_taxids = set([annotation.taxon_id for annotation in annotations])
+    existing_organisms = Organism.objects(taxid__in=list(all_taxids)).scalar('taxid','taxon_lineage')
+    lineages = {taxid:lineage for taxid, lineage in existing_organisms}
     return lineages
 
-def retrieve_taxons_and_save(taxid):
+def handle_taxonomy(annotations: list[AnnotationToProcess], tmp_dir: str, batch_size: int=9000) -> dict:
+    """
+    Fetch the taxonomy from the a list of AnnotationToProcess and store the lineages in a dictionary taxid:lineage, return the lineages dict
+    """    
+    lineages = get_existing_lineages_dict(annotations)
+    input_taxids = {annotation.taxon_id for annotation in annotations}
+    new_taxids = input_taxids - set(lineages.keys())
+    if not new_taxids:
+        return lineages
 
-    ordered_taxons = retrieve_taxons(taxid)
-    if ordered_taxons:
-        reloaded_taxons = save_taxons_and_update_hierachy(ordered_taxons)
-        return reloaded_taxons
-    return None
+    print(f"Found {len(new_taxids)} new organisms to fetch")
+    organisms_to_process = fetch_new_organisms(list(new_taxids), tmp_dir, batch_size)
+    # save all the related taxons and return the list of taxids of saved taxons
+    saved_taxids = save_organisms(organisms_to_process, batch_size)
+    if not saved_taxids:
+        return lineages
 
-def retrieve_taxons(taxid):
-    data_sources = [
-        get_info_from_ncbi,
-        get_info_from_ena_browser,
-        get_info_from_ena_portal
-    ]
+    print(f"Saved {len(saved_taxids)} new organisms")
+    successfully_saved_organisms = [organism for organism in organisms_to_process if organism.taxon_id in saved_taxids]
     
-    for source in data_sources:
-        ordered_taxons = source(taxid)
-        if ordered_taxons:
-            return ordered_taxons
+    print("Saving taxonomies")
+    save_taxons(successfully_saved_organisms)
+
+    organisms_to_update = Organism.objects(taxid__in=saved_taxids)
+    for organism in organisms_to_update:
+        ordered_taxons = get_ordered_taxons(organism.taxon_lineage)
+        update_taxon_hierarchy(ordered_taxons)
+
+    lineages = get_existing_lineages_dict(annotations)
+    return lineages #return all the valid lineages
+
+
+def fetch_new_organisms(taxids: list[str], tmp_dir: str, batch_size: int=9000)->list[OrganismToProcess]:
+    """
+    Fetch new organisms from ENA browser in bulk (up to 10k taxids at a time) and parse them into OrganismToProcess objects
+    """
+    batches = create_batches(taxids, batch_size)
+    organisms_to_process = []
+    for idx, batch in enumerate(batches):
+        # Use index in filename to avoid collisions when different batches have same length
+        path_to_gzipped_xml_file = os.path.join(tmp_dir, f'taxons_{idx}_{len(batch)}.xml.gz')
+        fetch_success = ebi_client.get_xml_from_ena_browser(batch, path_to_gzipped_xml_file)
+        if not fetch_success or not os.path.exists(path_to_gzipped_xml_file) or os.path.getsize(path_to_gzipped_xml_file) == 0:
+            continue
+
+        organisms_to_process.extend(
+            parse_taxons_and_organisms_from_ena_browser(path_to_gzipped_xml_file)
+        )
+        # Best-effort cleanup to save disk space
+        try:
+            os.remove(path_to_gzipped_xml_file)
+        except Exception:
+            pass
+    return organisms_to_process
+
+def save_organisms(organisms_to_process: list[OrganismToProcess], batch_size: int=5000)->list[str]:
+    """
+    Save new organisms and return the list of taxids of saved organisms (those with a lineage successfully saved)
+    """
+    organisms_to_save = [organism.to_organism() for organism in organisms_to_process]
+    batches = create_batches(organisms_to_save, batch_size)
+    saved_taxids = []
+    for batch in batches:
+        taxids_in_batch = [organism.taxid for organism in batch]
+        try:
+            Organism.objects.insert(batch)
+            saved_taxids.extend(taxids_in_batch)
+        except Exception as e:
+            print(f"Error saving organisms: {e}")
+            Organism.objects(taxid__in=taxids_in_batch).delete()
+            continue
     
-    return None
+    return saved_taxids
 
-#return ordered taxons from root to target taxid
-def get_info_from_ncbi(taxid):
-    args = ['taxonomy', 'taxon', taxid, '--parents']
-    report = ncbi_datasets.get_data_from_ncbi(args)
-    if report and report.get('reports'):
-        ordered_taxons = parse_taxons_from_ncbi_datasets(report.get('reports'), taxid)
-        return ordered_taxons
-    return None
+def save_taxons(organisms_to_process: list[OrganismToProcess], batch_size: int=5000)->bool | list[str]:
+    """
+    Save new taxons and return the list of taxids of saved taxons
+    """
+    all_taxids = set(chain(*[organism.taxon_lineage for organism in organisms_to_process]))
+    existing_taxids = set(TaxonNode.objects(taxid__in=list(all_taxids)).scalar('taxid'))
+    new_taxids = all_taxids - existing_taxids
 
-#return ordered taxons from root to target taxid
-def get_info_from_ena_browser(taxid):
-    taxon_xml = ebi_client.get_taxon_from_ena_browser(taxid)
-    if taxon_xml:
-        ordered_taxons = parse_taxon_from_ena_browser(taxon_xml)
-        return ordered_taxons    
-    return None
+    # Deduplicate by taxid while keeping the first occurrence
+    unique_taxons_by_taxid = {}
+    for organism in organisms_to_process:
+        for taxon in organism.parsed_taxon_lineage:
+            if taxon.taxid in new_taxids and taxon.taxid not in unique_taxons_by_taxid:
+                unique_taxons_by_taxid[taxon.taxid] = taxon
 
-def get_info_from_ena_portal(taxid):
-    taxon = ebi_client.get_taxon_from_ena_portal(taxid)
-    if taxon:
-        taxon_to_parse = taxon[0]
-        lineage = parse_lineage_from_ena_portal(taxon_to_parse)
-        ordered_taxons = [parse_taxon_from_ena_portal(taxon_to_parse)]
-        for lineage_taxid in lineage:
-            if lineage_taxid != taxid:
-                lineage_taxon = ebi_client.get_taxon_from_ena_portal(lineage_taxid)
-                if lineage_taxon:
-                    ordered_taxons.append(parse_taxon_from_ena_portal(lineage_taxon[0]))
-        return ordered_taxons
+    taxons_to_save = list(unique_taxons_by_taxid.values())
+    batches = create_batches(taxons_to_save, batch_size)
+    saved_taxids = []
+    for batch in batches:
+        taxids_in_batch = [taxon.taxid for taxon in batch]
+        try:
+            TaxonNode.objects.insert(batch)
+            saved_taxids.extend(taxids_in_batch)
+        except Exception as e:
+            print(f"Error saving taxons: {e}")
+            TaxonNode.objects(taxid__in=taxids_in_batch).delete()
+            Organism.objects(taxon_lineage__in=taxids_in_batch).delete()
+            continue
+        
+    print(f"Total taxons saved: {len(saved_taxids)}")
 
-##return ordered taxon ids from root to target taxid
-def parse_lineage_from_ena_portal(organism_data):
-    return [taxon_taxid.strip() for taxon_taxid in organism_data.get('tax_lineage').split(';')]
-
-def save_taxons_and_update_hierachy(ordered_taxons):
-    reloaded_taxons = save_parsed_taxons(ordered_taxons)
-    update_taxon_hierarchy(reloaded_taxons)
-    return reloaded_taxons
-
-def save_parsed_taxons(ordered_taxons):
-    existing_taxids = TaxonNode.objects(taxid__in=[t.taxid for t in ordered_taxons]).scalar('taxid')
-    taxons_to_save = [taxon for taxon in ordered_taxons if taxon.taxid not in existing_taxids]
-    if taxons_to_save:
-        TaxonNode.objects.insert(taxons_to_save)
-    
-    # Reload all taxons from database to ensure they have proper database state
-    taxids = [t.taxid for t in ordered_taxons]
+def get_ordered_taxons(taxids: list[str])->list[TaxonNode]:
+    """
+    Reload taxons from database and return them ordered by lineage from species to root
+    """
     reloaded_taxons = TaxonNode.objects(taxid__in=taxids)
-    
-    # Return the reloaded taxons in the same order as the input
     taxon_map = {t.taxid: t for t in reloaded_taxons}
-    return [taxon_map[t.taxid] for t in ordered_taxons]
+    return [taxon_map[t] for t in taxids]
 
-def update_taxon_hierarchy(ordered_taxons):
-    ordered_taxons.reverse()
+
+def update_taxon_hierarchy(ordered_taxons: list[TaxonNode]):
+    """
+    Update the taxon hierarchy in a best-effort manner, add the children to the father taxon
+    """
     for index in range(len(ordered_taxons) - 1):
         child_taxon = ordered_taxons[index]
         father_taxon = ordered_taxons[index + 1]
         father_taxon.modify(add_to_set__children=child_taxon.taxid)
 
-def get_lineages(annotations):
+
+def parse_taxons_and_organisms_from_ena_browser(xml_path: str)->list[OrganismToProcess]:
     """
-    Fetch the lineages for the annotations and return them as a dict with taxid as key and lineage as value
+    Parse taxons from ENA browser XML file and return a tuple of list of organisms (with ordered taxon lineages from species to root) and dictionary of taxon lineages
     """
-    taxids_to_fetch = {annotation.get('taxon_id'):annotation.get('organism_name') for annotation in annotations}
-    valid_lineages = handle_taxonomy(taxids_to_fetch)
-    return valid_lineages
+    parsed_organisms = []
+    with gzip.open(xml_path, "rb") as f:
+        context = etree.iterparse(f, events=("end",), tag="taxon")
+        for _, elem in context:
+            if elem.getparent().tag == "TAXON_SET":
+                # Top-level taxon
+                organism_taxid = str(elem.get("taxId"))
+                organism_info = OrganismToProcess(
+                    taxid=organism_taxid,
+                    organism_name=elem.get("scientificName"),
+                    common_name=elem.get("commonName"),
+                    taxon_lineage=[],
+                    parsed_taxon_lineage=[]
+                )
+                #add the organism to the taxon node
+                organism_info.taxon_lineage.append(organism_taxid)
+                organism_info.parsed_taxon_lineage.append(TaxonNode(
+                    taxid=organism_taxid,
+                    scientific_name=organism_info.organism_name,
+                    rank="organism"
+                ))
+                # Collect lineage children
+                lineage_elem = elem.find("lineage")
+                if lineage_elem is not None:
+                    for lt in lineage_elem.findall("taxon"):
+                        taxid = str(lt.get("taxId"))
+                        #we suppose this are ordered from species to root
+                        if lt.get("scientificName") == "root":
+                            continue
+                        organism_info.taxon_lineage.append(taxid)
+                        organism_info.parsed_taxon_lineage.append(TaxonNode(
+                            taxid=taxid, 
+                            scientific_name=lt.get("scientificName"), 
+                            rank=lt.get("rank") if lt.get("rank") else "other"
+                        ))
 
+                parsed_organisms.append(organism_info)
 
-
-def parse_taxons_from_ncbi_datasets(taxonomy_nodes, target_taxid):
-    """
-    Parse taxons from NCBI Datasets API response and order them by lineage.
-
-    Args:
-        taxonomy_nodes: List of taxonomy nodes
-        target_taxid: Target taxid to find in the taxonomy
-
-    Returns:
-        - List of TaxonNode objects (in lineage order)
-        - List of taxon IDs in lineage
-    """
-    taxid_to_node = {}
-    target_lineage = []
-
-    for taxonomy_node in taxonomy_nodes:
-        tax_node = taxonomy_node.get('taxonomy')
-        taxid = str(tax_node.get('taxid'))
-        scientific_name = tax_node.get('current_scientific_name').get('name')
-        rank = tax_node.get('rank').lower() if tax_node.get('rank') else 'other'
-
-        taxid_to_node[taxid] = TaxonNode(taxid=taxid, scientific_name=scientific_name, rank=rank)
-
-        if taxid == target_taxid:
-            # Save the parent lineage for ordering
-            target_lineage = [str(tid) for tid in tax_node.get('parents', [])]
-
-    # Include the target taxid itself at the end
-    full_lineage = target_lineage + [target_taxid]
-
-    # Reconstruct ordered taxons
-    ordered_taxons = [taxid_to_node[tid] for tid in full_lineage if tid in taxid_to_node]
-    return ordered_taxons
-
-
-def parse_taxon_from_ena_browser(xml):
-    root = etree.fromstring(xml)
-    organism = root[0].attrib
-    lineage = [organism]
-    for taxon in root[0]:
-        if taxon.tag == 'lineage':
-            for node in taxon:
-                lineage.append(node.attrib)
-    taxon_lineage = []
-    for node in lineage:
-        if node['scientificName'] == 'root':
-            continue
-        rank = node['rank'] if 'rank' in node.keys() else 'other'
-        taxon_node = TaxonNode(taxid=node['taxId'], scientific_name=node['scientificName'], rank=rank)
-        taxon_lineage.append(taxon_node)
-    ## reverse the lineage
-    taxon_lineage.reverse()
-    return taxon_lineage
-
-def parse_taxon_from_ena_portal(taxon):
-    parsed_taxon = {}
-    parsed_taxon['scientific_name'] = taxon.get('scientific_name')
-    parsed_taxon['rank'] = taxon.get('rank')
-    parsed_taxon['taxid'] = taxon.get('taxid')
-    return TaxonNode(**parsed_taxon)
+    return parsed_organisms
