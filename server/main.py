@@ -10,12 +10,6 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         connect_to_db()                                 
-        #drop_all_collections()
-        # Trigger import_annotations task on startup only if empty database
-        if GenomeAnnotation.objects().count() == 0:
-            print("Triggering import_annotations task on startup...")
-
-            import_annotations.delay()
 
     @app.on_event("shutdown")
     async def shutdown_event():

@@ -82,7 +82,7 @@ services:
     command: celery --app celery_app.celery_worker.app beat --loglevel=info
     volumes:
       - ${ANNOTATIONS_DATA_PATH}:${LOCAL_ANNOTATIONS_DIR}
-      - ./celerybeat-schedule:/home/appuser/celerybeat-schedule
+      - celerybeat-schedule:/home/appuser/app
     env_file:
       - .env
     depends_on:
@@ -100,4 +100,5 @@ networks:
 volumes:
   mongodb-data:
   annotations-data:
+  celerybeat-schedule:
 
