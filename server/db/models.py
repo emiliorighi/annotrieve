@@ -9,7 +9,6 @@ from mongoengine import (
     EmbeddedDocumentField,
     URLField,
     DateTimeField,
-    BooleanField,
 )
 
 def drop_all_collections():

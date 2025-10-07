@@ -21,7 +21,7 @@ export function AssemblyDetailView({ assemblyDetails }: AssemblyDetailViewProps)
       <div>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-3xl font-bold mb-2">{assemblyDetails.assembly_name}</h3>
+            <h1 className="text-3xl font-bold mb-2">{assemblyDetails.assembly_name}</h1>
             <p className="text-lg text-muted-foreground">{assemblyDetails.organism_name}</p>
             <Badge variant="outline" className="text-sm">
               {assemblyDetails.assembly_accession}

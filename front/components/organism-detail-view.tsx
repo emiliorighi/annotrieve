@@ -47,7 +47,7 @@ export function OrganismDetailView({ organismDetails }: OrganismDetailViewProps)
       <div>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h3 className="text-3xl font-bold mb-2">{(organismDetails as any).common_name || (organismDetails as any).organism_name}</h3>
+            <h1 className="text-3xl font-bold mb-2">{(organismDetails as any).common_name || (organismDetails as any).organism_name}</h1>
             <p className="text-lg text-muted-foreground italic">{(organismDetails as any).organism_name}</p>
           </div>
           <Badge variant="outline" className="text-sm">

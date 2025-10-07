@@ -12,7 +12,6 @@ from .services import stats as stats_service
 from .services import feature_summary as feature_summary_service
 from db.models import GenomeAnnotation
 from .services.utils import create_batches
-from itertools import chain
 
 TMP_DIR = "/tmp"
 ANNOTATIONS_PATH = os.getenv('LOCAL_ANNOTATIONS_DIR')
@@ -22,7 +21,7 @@ URLS_TO_FETCH = [
     GH_PATH + 'genbank_annotations.tsv',
     GH_PATH + 'refseq_annotations.tsv'
 ]
-
+DEV= os.getenv('DEV')
 BATCH_SIZE = 10
 
 @shared_task(name='import_annotations', ignore_result=False)
@@ -33,8 +32,11 @@ def import_annotations():
     os.makedirs(TMP_DIR, exist_ok=True)
 
     print("Starting import annotations job...")
-
     annotations_to_process = annotation_service.fetch_annotations(URLS_TO_FETCH)
+    #dev step
+    if DEV:
+        annotations_to_process = random.sample(annotations_to_process, 10)
+
     new_annotations_to_process = annotation_service.filter_annotations_by_md5_checksum_and_url_path(annotations_to_process)
     if not new_annotations_to_process:
         print("No new annotations to process after filtering by md5 checksum and url path, exiting...")
@@ -56,7 +58,7 @@ def import_annotations():
     if not new_annotations_to_process:
         print("No new annotations to process after filtering by assembly, exiting...")
         return
-    #dev step 
+
     print(f"Found {len(new_annotations_to_process)} new annotations to process")
     
     existing_annotation_md5s = GenomeAnnotation.objects().scalar('annotation_id') #the annotation id is the md5 of the uncompressed sorted file

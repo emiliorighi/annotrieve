@@ -23,7 +23,6 @@ export function FilterDetails({ filterType, filterObject, onClearFilter }: Filte
           <Badge variant="outline" className="capitalize">
             {filterType}
           </Badge>
-          <h2 className="text-2xl font-bold">Filter Details</h2>
         </div>
         <Button variant="ghost" size="icon" onClick={onClearFilter}>
           <X className="h-4 w-4" />

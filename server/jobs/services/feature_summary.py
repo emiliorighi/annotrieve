@@ -12,8 +12,7 @@ def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
         'types': set(),
         'sources': set(),
         'biotypes': set(),
-        'root_types': set(),
-        'root_types_counts': {},
+        'root_type_counts': {},
         'types_missing_id': set(),
         'has_biotype': False,
         'has_cds': False,
@@ -46,8 +45,7 @@ def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
         if not has_id:
             feature_summary['types_missing_id'].add(feature_type)
         if not has_parent:
-            feature_summary['root_types'].add(feature_type)
-            feature_summary['root_types_counts'][feature_type] = feature_summary['root_types_counts'].get(feature_type, 0) + 1
+            feature_summary['root_type_counts'][feature_type] = feature_summary['root_type_counts'].get(feature_type, 0) + 1
 
         feature_summary['types'].add(feature_type)
         feature_summary['sources'].add(source)
@@ -63,7 +61,6 @@ def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
     feature_summary['types'] = list(feature_summary['types'])
     feature_summary['sources'] = list(feature_summary['sources'])
     feature_summary['biotypes'] = list(feature_summary['biotypes'])
-    feature_summary['root_types'] = list(feature_summary['root_types'])
     feature_summary['types_missing_id'] = list(feature_summary['types_missing_id'])
     return FeatureOverview(**feature_summary)
 

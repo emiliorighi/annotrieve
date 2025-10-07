@@ -51,7 +51,7 @@ export function AnnotationsList({ filterType, filterObject }: AnnotationsListPro
       {/* Header with filters */}
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-xl font-semibold">
-          Annotations <span className="text-muted-foreground">({annotations.length})</span>
+          Related Annotations <span className="text-muted-foreground">({annotations.length})</span>
         </h3>
         <div className="flex items-center gap-3">
           <div className="relative w-64">

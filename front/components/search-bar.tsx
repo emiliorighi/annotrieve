@@ -91,8 +91,8 @@ export function SearchBar({ onFilterSelect }: SearchBarProps) {
           })
         }
 
-        // Taxons (first 3)
-        for (const t of taxRes.results.slice(0, 3) || []) {
+        // Taxons (first 3) filter out taxons with no children (leaves are the organisms)
+        for (const t of taxRes.results.filter((t: any) => t.children.length > 0).slice(0, 3) || []) {
           const taxid = String((t as any).taxid ?? "")
           const scientific = String((t as any).scientific_name ?? (t as any).scientificName ?? "")
           const common = (t as any).common_name ?? (t as any).commonName

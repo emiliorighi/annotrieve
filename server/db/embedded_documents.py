@@ -58,9 +58,8 @@ class FeatureOverview(EmbeddedDocument):
     types = ListField(StringField()) # Third column of GFF, e.g. gene, transcript, exon, etc.
     sources = ListField(StringField()) # Second column of GFF, e.g. RefSeq, Ensembl, etc.
     biotypes = ListField(StringField()) # Ninth column of GFF if present, e.g. protein_coding, etc.
-    root_types = ListField(StringField()) # Types of features that are present in features without a parent, e.g. gene, transcript, exon
     types_missing_id = ListField(StringField()) # Types of features that are present in features without an ID, e.g. gene, transcript, exon
-    root_types_counts = DictField(field=IntField()) # Count of root types, e.g. gene, transcript, exon
+    root_type_counts = DictField(field=IntField()) # Count of root-level feature types (features without Parent), e.g. {"gene": 1234, "lnc_RNA": 567}
     has_biotype = BooleanField() # Whether the GFF file has a biotype attr
     has_cds = BooleanField() # Whether the GFF file has a CDS feature
     has_exon = BooleanField() # Whether the GFF file has an exon feature

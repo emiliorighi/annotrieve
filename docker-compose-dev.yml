@@ -1,5 +1,3 @@
-version: '3'
-
 services:
 
   annotrieve-nginx:
@@ -8,10 +6,8 @@ services:
       dockerfile: Dockerfile
       args:
         - BASE_PATH=$BASE_PATH
-    container_name: ${NGINX_HOST}
     restart: always
     environment:
-      - API_HOST=${API_HOST}
       - BASE_PATH=${BASE_PATH}
     volumes:
       - /home/emilior/annotrieve/files:/data/annotrieve/files:ro
@@ -20,7 +16,6 @@ services:
 
   annotrieve-mongo:
     image: mongo:8.0
-    container_name: "${DB_HOST}"
     env_file:
       - .env
     restart: always
@@ -37,13 +32,13 @@ services:
       - "6378"
 
   annotrieve-fastapi:
-    build: ./server_refactor
+    build: ./server
     container_name: annotrieve-fastapi
     restart: always
     command: uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 
     volumes:
-      - ./server_refactor:/home/appuser/app
+      - ./server:/home/appuser/app
       - /home/emilior/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
@@ -54,10 +49,10 @@ services:
       - "5002:5000"  # Exposing on a different port to avoid conflicts
 
   annotrieve-fastapi-celery:
-    build: ./server_refactor
+    build: ./server
     command: celery --app celery_app.celery_worker.app worker --loglevel=info --autoscale=1,1 --max-tasks-per-child=1
     volumes:
-      - ./server_refactor:/home/appuser/app
+      - ./server:/home/appuser/app
       - /home/emilior/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env
@@ -67,10 +62,10 @@ services:
       - annotrieve-redis
 
   annotrieve-fastapi-celery-beat:
-    build: ./server_refactor
+    build: ./server
     command: celery --app celery_app.celery_worker.app beat --loglevel=info
     volumes:
-      - ./server_refactor:/home/appuser/app
+      - ./server:/home/appuser/app
       - /home/emilior/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
     env_file:
       - .env

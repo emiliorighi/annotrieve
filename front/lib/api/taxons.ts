@@ -17,9 +17,9 @@ export function getTaxon(taxid: string) {
 }
 
 export function getTaxonChildren(taxid: string) {
-  return apiGet<TaxonRecord[]>(`/taxons/${encodeURIComponent(taxid)}/children`)
+  return apiGet<Pagination<TaxonRecord>>(`/taxons/${encodeURIComponent(taxid)}/children`)
 }
 
 export function getTaxonAncestors(taxid: string) {
-  return apiGet<TaxonRecord[]>(`/taxons/${encodeURIComponent(taxid)}/ancestors`)
+  return apiGet<Pagination<TaxonRecord>>(`/taxons/${encodeURIComponent(taxid)}/ancestors`)
 }

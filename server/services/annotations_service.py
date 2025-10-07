@@ -69,7 +69,7 @@ def get_annotations(
     try:
         # trigger import annotations asynchronously (fire-and-forget)
         #drop_all_collections()   
-        import_annotations.delay()
+        #import_annotations.delay()
         if latest_release_by and latest_release_by not in ['organism', 'assembly']:
             raise HTTPException(status_code=400, detail=f"Invalid latest_release_by: {latest_release_by}, valid values are: organism, assembly, taxon")
         
