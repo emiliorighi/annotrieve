@@ -79,10 +79,9 @@ services:
   annotrieve-fastapi-celery-beat:
     image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-fastapi
     restart: always
-    command: celery --app celery_app.celery_worker.app beat --loglevel=info
+    command: celery --app celery_app.celery_worker.app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     volumes:
       - ${ANNOTATIONS_DATA_PATH}:${LOCAL_ANNOTATIONS_DIR}
-      - celerybeat-schedule:/home/appuser/app
     env_file:
       - .env
     depends_on:
@@ -100,5 +99,4 @@ networks:
 volumes:
   mongodb-data:
   annotations-data:
-  celerybeat-schedule:
 
