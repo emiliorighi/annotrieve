@@ -34,6 +34,6 @@ deploy_containers:
     - monstre
   script:
     - cat $ENV_FILE > .env
-    - docker compose pull
-    - docker compose down -v
-    - docker compose up -d
+    - docker-compose pull
+    - docker-compose down -v
+    - docker-compose up -d
