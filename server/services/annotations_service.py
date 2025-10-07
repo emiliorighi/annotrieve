@@ -4,7 +4,7 @@ from helpers import response as response_helper
 from helpers import parameters as params_helper
 from helpers import pysam_helper
 from helpers import annotation as annotation_helper
-from db.models import GenomeAnnotation, AnnotationError, AnnotationSequenceMap, drop_all_collections, TaxonNode
+from db.models import GenomeAnnotation, AnnotationError, AnnotationSequenceMap, drop_all_collections, TaxonNode, GenomeAssembly, Organism, GenomicSequence
 from fastapi.responses import StreamingResponse, Response
 from fastapi import HTTPException
 from typing import Optional
@@ -234,3 +234,27 @@ def get_stats(items:QuerySet, field:str):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching stats: {e}")
+
+def trigger_import_annotations(auth_key: str):
+    if auth_key != os.getenv('AUTH_KEY'):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    import_annotations.delay()
+    return {"message": "Import annotations task triggered"}
+
+
+def drop_collections(auth_key: str, model: str):
+    if auth_key != os.getenv('AUTH_KEY'):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if model == 'all':
+        drop_all_collections()
+    elif model == 'annotations':
+        GenomeAnnotation.objects().delete()
+        AnnotationSequenceMap.objects().delete()
+        AnnotationError.objects().delete()
+    elif model == 'taxonomy':
+        TaxonNode.objects().delete()
+        Organism.objects().delete()
+    elif model == 'genomes':
+        GenomeAssembly.objects().delete()
+        GenomicSequence.objects().delete()
+    return {"message": "Collections dropped"}

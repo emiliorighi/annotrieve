@@ -5,6 +5,21 @@ from helpers import parameters as params_helper
 
 router = APIRouter()
 
+@router.get("/annotations/import/{auth_key}")
+async def trigger_import_annotations(auth_key: str):
+    """
+    Import annotations
+    """
+    return annotations_service.trigger_import_annotations(auth_key)
+
+@router.get("/annotations/drop/{auth_key}/{model}")
+async def drop_collections(auth_key: str, model: str):
+    """
+    Drop collections
+    """
+    return annotations_service.drop_collections(auth_key, model)
+
+
 @router.get("/annotations")
 @router.post("/annotations")
 async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):

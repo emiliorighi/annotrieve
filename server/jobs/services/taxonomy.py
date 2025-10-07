@@ -147,6 +147,9 @@ def parse_taxons_and_organisms_from_ena_browser(xml_path: str)->list[OrganismToP
     parsed_organisms = []
     with gzip.open(xml_path, "rb") as f:
         context = etree.iterparse(f, events=("end",), tag="taxon")
+        if not context:
+            return parsed_organisms
+        
         for _, elem in context:
             if elem.getparent().tag == "TAXON_SET":
                 # Top-level taxon
