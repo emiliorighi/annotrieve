@@ -3,14 +3,14 @@ from db.database import connect_to_db, close_db_connection
 from celery_app.celery_utils import create_celery
 from api.router import router as api_router
 from jobs.import_annotations import import_annotations
-from db.models import GenomeAnnotation, drop_all_collections
+
 def create_app() -> FastAPI:
     app = FastAPI(title="Annotrieve API (FastAPI)")
 
     @app.on_event("startup")
     async def startup_event():
-        connect_to_db()                                 
-
+        connect_to_db()
+        
     @app.on_event("shutdown")
     async def shutdown_event():
         close_db_connection()
