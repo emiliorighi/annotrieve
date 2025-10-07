@@ -1,29 +1,12 @@
-version: '3'
-
 services:
-    
-  annotrieve-mongo:
-    image: mongo:7.0
-    container_name: "${DB_HOST}"
-    env_file:
-      - .env
-    restart: always
-    volumes:
-     - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
-     - /data/annotrieve/db:/data/db
-    ports:
-      - "27030:27017"
-    networks:
-      - monstre
 
   annotrieve-nginx:
     image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-nginx
     restart: always
     environment:
-      - API_HOST=annotrieve-server
       - BASE_PATH=${BASE_PATH}
     volumes:
-      - /data/annotrieve/files:/data/annotrieve/files:ro
+      - ${ANNOTATIONS_DATA_PATH}:/data/annotrieve/files:ro
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.annotrieve-nginx.rule=(Host(`genome.crg.es`) || Host(`genome.crg.cat`) || Host(`genome.crg.eu`)) && PathPrefix(`/annotrieve`)"
@@ -33,59 +16,88 @@ services:
     networks:
       - monstre
 
-# DEPRECATED CONVERSION TO FASTAPI
-  annotrieve-server:
-    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-server
-    restart: always
-    volumes:
-      - ./server:/server
-      - /data/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
+  annotrieve-mongodb:
+    image: mongo:8.0
+    container_name: "${DB_HOST}"
     env_file:
       - .env
-    depends_on:
-      - annotrieve-redis
-    networks:
-      - monstre
-
-  annotrieve-celery:
-    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-server
-    command: celery --app app.celery_app worker --loglevel=info --autoscale=1,1 --max-tasks-per-child=1
     restart: always
     volumes:
-      - ./server:/server
-      - /data/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
-    env_file:
-      - .env
-    depends_on:
-      - annotrieve-server
-      - annotrieve-mongo
-      - annotrieve-redis
-    networks:
-      - monstre
-
-  annotrieve-celery-beat:
-    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-server
-    command: celery --app app.celery_app beat --loglevel=info
-    restart: always
-    volumes:
-      - ./server:/server
-      - /data/annotrieve/files:${LOCAL_ANNOTATIONS_DIR}
-    env_file:
-      - .env
-    depends_on:
-      - annotrieve-server
-      - annotrieve-mongo
-      - annotrieve-redis
+      - ./mongo-init.sh:/docker-entrypoint-initdb.d/mongo-init.sh
+      - ${MONGODB_DATA_PATH}:/data/db
+    ports:
+      - "${MONGODB_PORT:-27030}:27017"
     networks:
       - monstre
 
   annotrieve-redis:
     image: "redis:alpine"
+    restart: always
     expose:
-      - "6378"
+      - "6379"
     networks:
       - monstre
+
+  annotrieve-fastapi:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-fastapi
+    container_name: annotrieve-fastapi
+    restart: always
+    # Production uses Gunicorn (CMD in Dockerfile), override only if needed
+    volumes:
+      - ${ANNOTATIONS_DATA_PATH}:${LOCAL_ANNOTATIONS_DIR}
+    env_file:
+      - .env
+    depends_on:
+      - annotrieve-redis
+      - annotrieve-mongodb
+    expose:
+      - "5000"
+    networks:
+      - monstre
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  annotrieve-fastapi-celery:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-fastapi
+    restart: always
+    command: celery --app celery_app.celery_worker.app worker --loglevel=info --autoscale=2,1 --max-tasks-per-child=1
+    volumes:
+      - ${ANNOTATIONS_DATA_PATH}:${LOCAL_ANNOTATIONS_DIR}
+    env_file:
+      - .env
+    depends_on:
+      - annotrieve-fastapi
+      - annotrieve-mongodb
+      - annotrieve-redis
+    networks:
+      - monstre
+
+  annotrieve-fastapi-celery-beat:
+    image: gitlab.linux.crg.es:5005/monstre/annotrieve/annotrieve-fastapi
+    restart: always
+    command: celery --app celery_app.celery_worker.app beat --loglevel=info
+    volumes:
+      - ${ANNOTATIONS_DATA_PATH}:${LOCAL_ANNOTATIONS_DIR}
+      - ./celerybeat-schedule:/home/appuser/celerybeat-schedule
+    env_file:
+      - .env
+    depends_on:
+      - annotrieve-fastapi
+      - annotrieve-mongodb
+      - annotrieve-redis
+    networks:
+      - monstre
+
 networks:
   monstre:
     external:
       name: monstre
+
+volumes:
+  mongodb-data:
+  annotations-data:
+

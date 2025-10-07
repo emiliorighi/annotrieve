@@ -1,6 +1,6 @@
 variables:
     APP_NAME_FRONT: annotrieve-nginx
-    APP_NAME_BACK: annotrieve-server
+    APP_NAME_BACK: annotrieve-fastapi
     BASE_PATH: /annotrieve
 
 stages: 
@@ -34,5 +34,6 @@ deploy_containers:
     - monstre
   script:
     - cat $ENV_FILE > .env
-    - docker-compose -f docker-compose.yml down -v
-    - docker-compose -f docker-compose.yml up -d
+    - docker compose -f docker-compose.prod.yml pull
+    - docker compose -f docker-compose.prod.yml down
+    - docker compose -f docker-compose.prod.yml up -d
