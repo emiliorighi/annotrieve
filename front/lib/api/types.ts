@@ -1,3 +1,25 @@
+export interface AssemblyStats {
+  total_number_of_chromosomes: number
+  total_sequence_length: string
+  total_ungapped_length: string
+  number_of_contigs: number
+  contig_n50: number
+  contig_l50: number
+  number_of_scaffolds: number
+  scaffold_n50: number
+  scaffold_l50: number
+  gaps_between_scaffolds_count: number
+  number_of_component_sequences: number
+  atgc_count: string
+  gc_count: string
+  gc_percent: number
+  genome_coverage: string
+  number_of_organelles: number
+  number_of_plasmids: number
+  number_of_chloroplasts: number
+  number_of_mitochondria: number
+}
+
 export interface Pagination<T> {
   total: number
   offset: number
@@ -31,7 +53,9 @@ export interface AssemblyRecord {
   organism_name: string
   taxid: string
   annotations_count?: number
-  
+  assembly_stats?: AssemblyStats
+  release_date?: string
+  submitter?: string
   [key: string]: unknown
 }
 

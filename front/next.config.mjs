@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+
+
 const FASTAPI_HOST = process.env.NEXT_PUBLIC_FASTAPI_HOST || 'localhost'
 const FASTAPI_PORT = process.env.NEXT_PUBLIC_FASTAPI_PORT || '5002'
 

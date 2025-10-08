@@ -6,8 +6,7 @@ export interface FetchAnnotationsParams extends Query {
   taxids?: string
   sources?: string
   assembly_accessions?: string
-  names?: string
-  sort_by?: 'name' | 'assembly_accession' | 'assembly_name' | 'taxid' | 'source'
+  sort_by?: 'assembly_accession' | 'assembly_name' | 'organism_name' | 'release_date'
   sort_order?: 'asc' | 'desc'
   limit?: number
   offset?: number

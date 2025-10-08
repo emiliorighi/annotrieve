@@ -5,10 +5,12 @@ import { SearchBar } from "@/components/search-bar"
 import { FilterDetails } from "@/components/filter-details"
 import { AnnotationsList } from "@/components/annotations-list"
 import type { FilterType } from "@/lib/types"
+import { getTaxon } from "@/lib/api/taxons"
 
 export default function Home() {
   const [filterType, setFilterType] = useState<FilterType>(null)
   const [filterObject, setFilterObject] = useState<any | null>(null)
+  const [selectedAssemblyAccessions, setSelectedAssemblyAccessions] = useState<string[]>([])
 
   const handleFilterSelect = (type: FilterType, object: any) => {
     setFilterType(type)
@@ -18,6 +20,22 @@ export default function Home() {
   const handleClearFilter = () => {
     setFilterType(null)
     setFilterObject(null)
+    setSelectedAssemblyAccessions([])
+  }
+
+  const handleAssembliesSelectionChange = (accessions: string[]) => {
+    setSelectedAssemblyAccessions(accessions)
+  }
+
+  const handleTaxonChange = async (taxid: string) => {
+    try {
+      const taxon = await getTaxon(taxid)
+      setFilterType("taxon")
+      setFilterObject(taxon)
+      setSelectedAssemblyAccessions([]) // Reset selected assemblies
+    } catch (error) {
+      console.error("Failed to fetch taxon:", error)
+    }
   }
 
   return (
@@ -37,8 +55,18 @@ export default function Home() {
       <main className="flex-1 container mx-auto px-4 py-6">
         {filterType && filterObject ? (
           <div className="space-y-6">
-            <FilterDetails filterType={filterType} filterObject={filterObject} onClearFilter={handleClearFilter} />
-            <AnnotationsList filterType={filterType} filterObject={filterObject} />
+            <FilterDetails 
+              filterType={filterType} 
+              filterObject={filterObject} 
+              onClearFilter={handleClearFilter}
+              onAssembliesSelectionChange={handleAssembliesSelectionChange}
+              onTaxonChange={handleTaxonChange}
+            />
+            <AnnotationsList 
+              filterType={filterType} 
+              filterObject={filterObject}
+              selectedAssemblyAccessions={selectedAssemblyAccessions}
+            />
           </div>
         ) : (
           <div className="flex items-center justify-center min-h-[400px]">

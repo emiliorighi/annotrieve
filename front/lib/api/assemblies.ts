@@ -9,6 +9,9 @@ export interface FetchAssembliesParams extends Query {
   assembly_accessions?: string
   limit?: number
   offset?: number
+  sort_by?: string
+  sort_order?: string
+  submitters?: string
 }
 
 export function listAssemblies(params: FetchAssembliesParams) {
@@ -25,4 +28,8 @@ export function getAssembledMolecules(accession: string, offset = 0, limit = 20)
 
 export function getPairedAssembly(accession: string) {
   return apiGet<AssemblyRecord>(`/assemblies/${encodeURIComponent(accession)}/paired`)
+}
+
+export function getAssembliesStats(params: FetchAssembliesParams, field: string) {
+  return apiGet<Record<string, number>>(`/assemblies/stats/${encodeURIComponent(field)}`, params)
 }

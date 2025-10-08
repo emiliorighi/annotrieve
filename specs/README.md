@@ -5,7 +5,6 @@ This directory contains the OpenAPI 3.0 specification for the Annotrieve API.
 ## Files Structure
 
 ### Main Specification
-- `annotrieve-api-refactored.yaml` - The main, refactored OpenAPI specification file (recommended)
 - `annotrieve-api.yaml` - The original specification file
 
 ### Modular Components (for reference)

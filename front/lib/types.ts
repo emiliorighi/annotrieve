@@ -11,6 +11,15 @@ export interface TaxonNode {
   children?: TaxonNode[]
 }
 
+export interface Chromosome {
+  chr_name: string
+  length: number
+  genbank_accession?: string
+  refseq_accession?: string
+  sequence_name?: string
+  aliases: string[]
+}
+
 export interface Organism {
   id: string
   scientificName: string

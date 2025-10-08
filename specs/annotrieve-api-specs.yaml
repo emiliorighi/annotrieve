@@ -1,574 +1,1109 @@
-openapi: 3.1.1
+openapi: 3.1.0
 
 info:
   version: "1.0.0"
   title: "Annotrieve API"
+  description: "API for retrieving and managing eukaryotic genome annotations"
   contact:
     email: "emilio.righi@crg.eu"
 
 servers:
-  - url: https://genome.crg.es/annotrieve/api/v1
+  - url: https://genome.crg.es/annotrieve/api/v0
+    description: Production server
 
 tags:
-- name: "annotations"
-paths:
+  - name: "annotations"
+    description: "Genome annotation endpoints"
+  - name: "assemblies"
+    description: "Assembly information endpoints"
+  - name: "organisms"
+    description: "Organism information endpoints"
+  - name: "taxons"
+    description: "Taxonomy information endpoints"
 
+paths:
+  # ==================== ANNOTATIONS ====================
   /annotations:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotations"
-      summary: "Endpoint to retrieve a paginated list of genomic annotations"
+      summary: "Get a paginated list of genomic annotations"
       parameters:
-        - $ref: "#/components/parameters/format"
+        - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/offset"
-        - $ref: "#/components/parameters/assembly_accessions"
         - $ref: "#/components/parameters/taxids"
-        - $ref: "#/components/parameters/filter"
-        - $ref: "#/components/parameters/sources"
-        - $ref: "#/components/parameters/names"
-        - $ref: "#/components/parameters/sort_by"
-        - $ref: "#/components/parameters/sort_order"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/latest_release_by"
       responses:
         "200":
-          description: "successful operation"
+          description: "Successful operation"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AnnotationsJSONResponse"
-            text/tab-separated-values: 
-              schema: 
-                $ref: "#/components/schemas/TSVResponse"
-            application/jsonl:
-              schema:
-                $ref: "#/components/schemas/JSONLResponse"
+                $ref: "#/components/schemas/PaginatedAnnotationsResponse"
         "400":
-          description: "bad request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "annotations"
       operationId: "postAnnotations"
-      summary: "Endpoint to retrieve a set of annotations"
+      summary: "Get annotations using POST body parameters"
       requestBody:
-        $ref: "#/components/schemas/AnnotationPostParams"
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
       responses:
         "200":
-          description: "successful operation"
+          description: "Successful operation"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AnnotationsJSONResponse"
-            text/tab-separated-values: 
-              schema: 
-                $ref: "#/components/schemas/TSVResponse"
-            application/jsonl:
-              schema:
-                $ref: "#/components/schemas/JSONLResponse"
+                $ref: "#/components/schemas/PaginatedAnnotationsResponse"
         "400":
-          description: "bad request"
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/stats/{field}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationStats"
+      summary: "Get statistics for a specific field across annotations"
+      parameters:
+        - name: field
+          in: path
+          required: true
+          description: "Field to get statistics for (e.g., 'source', 'taxid', 'assembly_accession')"
+          schema:
+            type: string
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/db_sources"
+      responses:
+        "200":
+          description: "Statistics for the field"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
-        default:
-          description: "unexpected error"
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationStats"
+      summary: "Get field statistics using POST"
+      parameters:
+        - name: field
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Statistics response"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                type: object
+
+  /annotations/download:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsDownload"
+      summary: "Download annotations as a ZIP file"
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/latest_release_by"
+      responses:
+        "200":
+          description: "ZIP file containing annotations"
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationsDownload"
+      summary: "Download annotations using POST"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "ZIP file"
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+
+  /annotations/download/summary:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsDownloadSummary"
+      summary: "Get download summary/preview information"
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+      responses:
+        "200":
+          description: "Download summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadSummaryResponse"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationsDownloadSummary"
+      summary: "Get download summary using POST"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Download summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DownloadSummaryResponse"
 
   /annotations/errors:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotationErrors"
-      summary: "Get a list of annotation errors"
+      summary: "Get a list of annotation import errors"
+      parameters:
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: "successful operation"
+          description: "List of annotation errors"
           content:
             application/json:
               schema:
                 type: object
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AnnotationError"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  total:
+                    type: integer
 
-  /annotations/{annotation_name}:
+  /annotations/{md5_checksum}:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationByName"
-      summary: "Get a specific annotation by name"
+      operationId: "getAnnotationById"
+      summary: "Get a specific annotation by MD5 checksum"
       parameters:
-        - name: annotation_name
+        - name: md5_checksum
           in: path
           required: true
+          description: "MD5 checksum of the annotation"
           schema:
             type: string
+            pattern: '^[a-f0-9]{32}$'
       responses:
         "200":
-          description: "successful operation"
+          description: "Annotation details"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Annotation"
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  /annotations/{annotation_name}/regions:
+  /annotations/{md5_checksum}/contigs:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationRegions"
-      summary: "Get region metadata for an annotation"
+      operationId: "getAnnotationContigs"
+      summary: "Get list of contigs/chromosomes in an annotation"
       parameters:
-        - name: annotation_name
+        - name: md5_checksum
           in: path
           required: true
           schema:
             type: string
       responses:
         "200":
-          description: "successful operation"
+          description: "List of contigs"
           content:
             application/json:
               schema:
                 type: object
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: string
+                  total:
+                    type: integer
 
-  /annotations/{annotation_name}/gff:
+  /annotations/{md5_checksum}/contigs/{region}/gff:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationGff"
-      summary: "Get the GFF stream for an annotation"
+      operationId: "getAnnotationRegionGFF"
+      summary: "Stream GFF data for a specific region"
       parameters:
-        - name: annotation_name
+        - name: md5_checksum
           in: path
           required: true
           schema:
             type: string
+        - name: region
+          in: path
+          required: true
+          description: "Contig/chromosome name or alias"
+          schema:
+            type: string
+        - name: start
+          in: query
+          description: "Start position (0-based)"
+          schema:
+            type: integer
+            minimum: 0
+        - name: end
+          in: query
+          description: "End position"
+          schema:
+            type: integer
+            minimum: 0
+        - name: feature_type
+          in: query
+          description: "Filter by feature type (e.g., 'gene', 'exon')"
+          schema:
+            type: string
+        - name: feature_source
+          in: query
+          description: "Filter by feature source"
+          schema:
+            type: string
       responses:
         "200":
-          description: "successful operation"
+          description: "GFF3 format data stream"
           content:
             text/plain:
               schema:
                 type: string
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  /annotations/{annotation_name}/inconsistent-features:
+  /annotations/{md5_checksum}/contigs/aliases:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationInconsistentFeatures"
-      summary: "Get inconsistent features for an annotation"
+      operationId: "getAnnotationContigAliases"
+      summary: "Get contig name aliases and mappings"
       parameters:
-        - name: annotation_name
+        - name: md5_checksum
           in: path
           required: true
           schema:
             type: string
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: "successful operation"
+          description: "Contig aliases mapping"
           content:
             application/json:
               schema:
                 type: object
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ContigAlias"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  total:
+                    type: integer
 
-  /downloads/annotations:
+  # ==================== ASSEMBLIES ====================
+  /assemblies:
     get:
       tags:
-        - "annotations"
-      operationId: "getAnnotationsDownload"
-      summary: "Endpoint to download a set of annotations, limit is 200, if preview is true, return a preview of the download"
+        - "assemblies"
+      operationId: "getAssemblies"
+      summary: "Get a paginated list of assemblies"
       parameters:
-        - $ref: "#/components/parameters/preview"
-        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/taxids"
-        - $ref: "#/components/parameters/sources"
-        - $ref: "#/components/parameters/names"
-        - $ref: "#/components/parameters/sort_by"
-        - $ref: "#/components/parameters/sort_order"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: "successful operation"
+          description: "List of assemblies"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AnnotationDownloadPreviewResponse"
-            application/zip:
-              schema:
-                $ref: "#/components/schemas/ZIPResponse"
+                $ref: "#/components/schemas/PaginatedAssembliesResponse"
         "400":
-          description: "bad request"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+          $ref: "#/components/responses/BadRequest"
     post:
       tags:
-        - "annotations"
-      operationId: "postAnnotationsDownload"
-      summary: "Endpoint to download a set of annotations"
+        - "assemblies"
+      operationId: "postAssemblies"
+      summary: "Get assemblies using POST"
       requestBody:
-        $ref: "#/components/schemas/AnnotationPostParams"
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssemblyQueryParams"
       responses:
         "200":
-          description: "successful operation"
-          content:
-            application/zip:
-              schema:
-                $ref: "#/components/schemas/ZIPResponse"
-        "400":
-          description: "bad request"
+          description: "List of assemblies"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                $ref: "#/components/schemas/PaginatedAssembliesResponse"
 
-  /downloads/annotations/jobs:
-    post:
+  /assemblies/{assembly_accession}:
+    get:
       tags:
-        - "annotations"
-      operationId: "postAnnotationsDownloadBulk"
-      summary: "Create a bulk annotation download job"
-      requestBody:
-        $ref: "#/components/schemas/AnnotationPostParams"
+        - "assemblies"
+      operationId: "getAssemblyById"
+      summary: "Get a specific assembly by accession"
+      parameters:
+        - name: assembly_accession
+          in: path
+          required: true
+          description: "Assembly accession (e.g., 'GCA_000001405.29')"
+          schema:
+            type: string
       responses:
         "200":
-          description: "successful operation"
+          description: "Assembly details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Assembly"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assemblies/{assembly_accession}/assembled_molecules:
+    get:
+      tags:
+        - "assemblies"
+      operationId: "getAssembledMolecules"
+      summary: "Get assembled molecules (chromosomes/contigs) for an assembly"
+      parameters:
+        - name: assembly_accession
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: "List of assembled molecules"
           content:
             application/json:
               schema:
                 type: object
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AssembledMolecule"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+                  total:
+                    type: integer
 
-  /downloads/annotations/jobs/{job_id}:
+  /assemblies/{assembly_accession}/paired:
     get:
       tags:
-        - "annotations"
-      operationId: "getAnnotationsDownloadBulkStatus"
-      summary: "Get the status of a bulk annotation download job"
+        - "assemblies"
+      operationId: "getPairedAssembly"
+      summary: "Get the paired assembly (RefSeq <-> GenBank)"
       parameters:
-        - name: job_id
+        - name: assembly_accession
           in: path
           required: true
           schema:
             type: string
       responses:
         "200":
-          description: "successful operation"
+          description: "Paired assembly"
           content:
             application/json:
               schema:
-                type: object
-        default:
-          description: "unexpected error"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                $ref: "#/components/schemas/Assembly"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  /downloads/annotations/jobs/{job_id}/file:
+  # ==================== ORGANISMS ====================
+  /organisms:
     get:
       tags:
-        - "annotations"
-      operationId: "getAnnotationsDownloadBulkFile"
-      summary: "Download the file for a bulk annotation download job"
+        - "organisms"
+      operationId: "getOrganisms"
+      summary: "Get a paginated list of organisms"
       parameters:
-        - name: job_id
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: "List of organisms"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrganismsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+        - "organisms"
+      operationId: "postOrganisms"
+      summary: "Get organisms using POST"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganismQueryParams"
+      responses:
+        "200":
+          description: "List of organisms"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrganismsResponse"
+
+  /organisms/{taxid}:
+    get:
+      tags:
+        - "organisms"
+      operationId: "getOrganismById"
+      summary: "Get a specific organism by taxid"
+      parameters:
+        - name: taxid
+          in: path
+          required: true
+          description: "NCBI Taxonomy ID"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Organism details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organism"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ==================== TAXONS ====================
+  /taxons:
+    get:
+      tags:
+        - "taxons"
+      operationId: "getTaxons"
+      summary: "Get a paginated list of taxonomy nodes"
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: "List of taxon nodes"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTaxonsResponse"
+    post:
+      tags:
+        - "taxons"
+      operationId: "postTaxons"
+      summary: "Get taxons using POST"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaxonQueryParams"
+      responses:
+        "200":
+          description: "List of taxon nodes"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedTaxonsResponse"
+
+  /taxons/{taxid}:
+    get:
+      tags:
+        - "taxons"
+      operationId: "getTaxonById"
+      summary: "Get a specific taxon node by taxid"
+      parameters:
+        - name: taxid
           in: path
           required: true
           schema:
             type: string
       responses:
         "200":
-          description: "successful operation"
-          content:
-            application/zip:
-              schema:
-                $ref: "#/components/schemas/ZIPResponse"
-        default:
-          description: "unexpected error"
+          description: "Taxon node details"
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ERROR_RESPONSE"
+                $ref: "#/components/schemas/TaxonNode"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /taxons/{taxid}/children:
+    get:
+      tags:
+        - "taxons"
+      operationId: "getTaxonChildren"
+      summary: "Get child nodes of a taxon"
+      parameters:
+        - name: taxid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "List of child taxon nodes"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaxonNode"
+
+  /taxons/{taxid}/ancestors:
+    get:
+      tags:
+        - "taxons"
+      operationId: "getTaxonAncestors"
+      summary: "Get ancestor lineage of a taxon"
+      parameters:
+        - name: taxid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "List of ancestor taxon nodes"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaxonNode"
 
 components:
   parameters:
     filter:
       name: "filter"
       in: "query"
-      description: "filter the annotations by name, scientific name, assembly accession, assembly name or taxid"
+      description: "Text search filter across multiple fields"
       schema:
         type: "string"
-    preview:
-      name: "preview"
-      in: "query"
-      description: "preview the download"
-      schema:
-        type: "string"
-        default: "false"
-        enum:
-          - "true"
-          - "false"
-    assembly_accessions:
-      name: "assembly_accessions"
-      in: "query"
-      description: "comma separated list of assembly accessions to filter by"
-      schema:
-        type: "string"
-    taxids:
-      name: "taxids"
-      in: "query"
-      description: "comma separated list of taxids to filter by"
-      schema:
-        type: "string"
-    sources:
-      name: "sources"
-      in: "query"
-      description: "comma separated list of sources to filter by"
-      schema:
-        type: "string"
-    names:
-      name: "names"
-      in: "query"
-      description: "comma separated list of names to filter by"
-      schema:
-        type: "string"
-    sort_by:
-      name: "sort_by"
-      in: "query"
-      description: "field to sort by"
-      schema:
-        type: "string"
-        enum:
-          - "name"
-          - "assembly_accession"
-          - "assembly_name"
-          - "taxid"
-          - "source"
-    sort_order:
-      name: "sort_order"
-      in: "query"
-      description: "sort order"
-      schema:
-        type: "string"
-    format:
-      name: "format"
-      in: "query"
-      description: "format of the response"
-      required: true
-      schema:
-        type: "string"
-        enum:
-          - "tsv"
-          - "json"
-          - "jsonl"
-        default: "json"
+    
     limit:
       name: "limit"
       in: "query"
-      description: "limit the number of annotations to retrieve"
+      description: "Maximum number of results to return"
       schema:
-        type: "number"
+        type: "integer"
         default: 20
+        minimum: 1
+        maximum: 1000
+    
     offset:
       name: "offset"
       in: "query"
-      description: "offset the number of annotations to retrieve"
+      description: "Number of results to skip"
       schema:
-        type: "number"
+        type: "integer"
         default: 0
+        minimum: 0
+    
+    taxids:
+      name: "taxids"
+      in: "query"
+      description: "Comma-separated list of taxonomy IDs"
+      schema:
+        type: "string"
+      example: "9606,10090,7227"
+    
+    assembly_accessions:
+      name: "assembly_accessions"
+      in: "query"
+      description: "Comma-separated list of assembly accessions"
+      schema:
+        type: "string"
+      example: "GCA_000001405.29,GCF_000001405.40"
+    
+    db_sources:
+      name: "db_sources"
+      in: "query"
+      description: "Comma-separated list of database sources"
+      schema:
+        type: "string"
+      example: "RefSeq,Ensembl"
+    
+    feature_sources:
+      name: "feature_sources"
+      in: "query"
+      description: "Comma-separated list of feature sources from GFF column 2"
+      schema:
+        type: "string"
+      example: "BestRefSeq,Gnomon"
+    
+    biotypes:
+      name: "biotypes"
+      in: "query"
+      description: "Comma-separated list of biotypes to filter"
+      schema:
+        type: "string"
+      example: "protein_coding,lncRNA"
+    
+    feature_types:
+      name: "feature_types"
+      in: "query"
+      description: "Comma-separated list of feature types (GFF column 3)"
+      schema:
+        type: "string"
+      example: "gene,mRNA,CDS"
+    
+    md5_checksums:
+      name: "md5_checksums"
+      in: "query"
+      description: "Comma-separated list of annotation MD5 checksums"
+      schema:
+        type: "string"
+    
+    latest_release_by:
+      name: "latest_release_by"
+      in: "query"
+      description: "Group by field and return only latest release"
+      schema:
+        type: "string"
+        enum: ["organism", "assembly"]
+
+  responses:
+    BadRequest:
+      description: "Bad request"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    
+    NotFound:
+      description: "Resource not found"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    
+    InternalError:
+      description: "Internal server error"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
-    AnnotationsJSONResponse:
-      type: "object"
-      additionalProperties: false
-      properties:
-        data:
-          type: "array"
-          maxItems: 10000
-          items:
-            $ref: "#/components/schemas/Annotation"
-        pagination:
-          type: "object"
-          properties:
-            offset:
-              type: "number"
-            limit:
-              type: "number"
-        total:
-          type: "number"
-
-    AnnotationDownloadPreviewResponse:
+    ErrorResponse:
       type: "object"
       properties:
-        total_bytes:
-          type: "number"
-        file_count:
-          type: "number"
-        estimated_total_size_mb:
-          type: "number"
-
-    TSVResponse:
-      type: "string"
-      example: "key1\tkey2\nexample\t123"
-
-    ZIPResponse:
-      type: "string"
-      example: "zip file"
-
-    JSONLResponse:
-      type: "string"
-      description: "JSONL response, pagination is supported"
-      example: "{\"key1\": \"value1\", \"key2\": \"value2\"}\n{\"key1\": \"value3\", \"key2\": \"value4\"}"
-
-    ERROR_RESPONSE:
-      type: "object"
-      properties:
-        error:
+        detail:
           type: "string"
-          description: "error message"
+          description: "Error message"
+      required:
+        - detail
 
-    AnnotationPostParams:
+    Pagination:
       type: "object"
       properties:
+        offset:
+          type: "integer"
+        limit:
+          type: "integer"
+
+    # ==================== ANNOTATION SCHEMAS ====================
+    AnnotationQueryParams:
+      type: "object"
+      properties:
+        filter:
+          type: "string"
         taxids:
           type: "string"
-          description: "taxon lineage to filter by"
-          maxItems: 10000
-          items:
-            type: "string"
         assembly_accessions:
-          type: "array"
-          maxItems: 10000
-          items:
-            type: "string"
-          description: "assembly accessions to filter by"
-        sources:
           type: "string"
-          enum:
-            - "ncbi"
-            - "ensembl"
-        names:
-          type: "array"
-          maxItems: 10000
-          items:
-            type: "string"
-          description: "annotation names to filter by"
-        limit:
-          type: "number"
-          default: 20
-          description: "limit the number of annotations to retrieve"
+        db_sources:
+          type: "string"
+        feature_sources:
+          type: "string"
+        biotypes:
+          type: "string"
+        feature_types:
+          type: "string"
+        md5_checksums:
+          type: "string"
         offset:
-          type: "number"
+          type: "integer"
           default: 0
-        format:
+        limit:
+          type: "integer"
+          default: 20
+        latest_release_by:
           type: "string"
-          enum:
-            - "tsv"
-            - "json"
-            - "jsonl"
-          default: "json"
+          enum: ["organism", "assembly"]
 
     Annotation:
       type: "object"
-      description: "object containing the urls to download the gzipped gff3 file"
       properties:
+        annotation_id:
+          type: "string"
+          description: "MD5 checksum of the annotation (unique identifier)"
         name:
           type: "string"
-          description: "annotation name"
-        source:
+          description: "Annotation name"
+        db_source:
           type: "string"
-          description: "source of the annotation, like ncbi or ensembl-rapid-release"
+          description: "Database source (e.g., 'RefSeq', 'Ensembl')"
         scientific_name:
           type: "string"
-          description: "scientific name of the species"
-        taxid:
+          description: "Scientific name of the species"
+        taxon_id:
           type: "string"
-          description: "NCBI taxonomy identifier of the species"
-        assembly_accession:
-          type: "string"
-          description: "assembly accession"
-        assembly_name:
-          type: "string"
-          description: "assembly name"
+          description: "NCBI taxonomy identifier"
         taxon_lineage:
           type: "array"
-          description: "taxonomy lineage of the species, from species to root"
+          description: "Taxonomy lineage from species to root"
           items:
             type: "string"
-        original_url:
+        assembly_accession:
           type: "string"
-          description: "Link to the original annotation"
-        bgzipped_path:
+          description: "Assembly accession"
+        assembly_name:
           type: "string"
-          description: "Path to the bgzipped annotation"
-        tabix_path:
+          description: "Assembly name"
+        source_file_info:
+          type: "object"
+          properties:
+            database:
+              type: "string"
+            provider:
+              type: "string"
+            release_date:
+              type: "string"
+              format: "date-time"
+            url_path:
+              type: "string"
+              format: "uri"
+            last_modified:
+              type: "string"
+              format: "date-time"
+            uncompressed_md5:
+              type: "string"
+        indexed_file_info:
+          type: "object"
+          properties:
+            bgzipped_path:
+              type: "string"
+            csi_path:
+              type: "string"
+            uncompressed_md5:
+              type: "string"
+            file_size:
+              type: "integer"
+            processed_at:
+              type: "string"
+              format: "date-time"
+        features_summary:
+          type: "object"
+          properties:
+            attribute_keys:
+              type: "array"
+              items:
+                type: "string"
+            types:
+              type: "array"
+              items:
+                type: "string"
+            sources:
+              type: "array"
+              items:
+                type: "string"
+            biotypes:
+              type: "array"
+              items:
+                type: "string"
+            types_missing_id:
+              type: "array"
+              items:
+                type: "string"
+            root_type_counts:
+              type: "object"
+              additionalProperties:
+                type: "integer"
+            has_biotype:
+              type: "boolean"
+            has_cds:
+              type: "boolean"
+            has_exon:
+              type: "boolean"
+
+    PaginatedAnnotationsResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Annotation"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        total:
+          type: "integer"
+
+    AnnotationError:
+      type: "object"
+      properties:
+        url_path:
           type: "string"
-          description: "Path to the tabix indexed annotation"
-        md5_checksum:
+        error_message:
           type: "string"
-          description: "md5 checksum of the annotation"
-        inconsistent_features:
+        timestamp:
+          type: "string"
+          format: "date-time"
+
+    DownloadSummaryResponse:
+      type: "object"
+      properties:
+        total_bytes:
+          type: "integer"
+        file_count:
+          type: "integer"
+        estimated_size_mb:
           type: "number"
-          description: "number of inconsistent features in the annotation"  
-      additionalProperties:
-        type: "string"
-        description: "Additional properties that are not explicitly defined in the model."
+
+    ContigAlias:
+      type: "object"
+      properties:
+        sequence_id:
+          type: "string"
+        aliases:
+          type: "array"
+          items:
+            type: "string"
+
+    # ==================== ASSEMBLY SCHEMAS ====================
+    AssemblyQueryParams:
+      type: "object"
+      properties:
+        filter:
+          type: "string"
+        taxids:
+          type: "string"
+        assembly_accessions:
+          type: "string"
+        offset:
+          type: "integer"
+          default: 0
+        limit:
+          type: "integer"
+          default: 20
+
+    Assembly:
+      type: "object"
+      properties:
+        assembly_accession:
+          type: "string"
+        assembly_name:
+          type: "string"
+        organism_name:
+          type: "string"
+        taxid:
+          type: "string"
+        paired_assembly_accession:
+          type: "string"
+        assembly_level:
+          type: "string"
+        genome_representation:
+          type: "string"
+        refseq_category:
+          type: "string"
+        assembly_stats:
+          type: "object"
+          properties:
+            total_sequence_length:
+              type: "string"
+            total_ungapped_length:
+              type: "string"
+            gc_percent:
+              type: "integer"
+            number_of_contigs:
+              type: "integer"
+            contig_n50:
+              type: "integer"
+
+    AssembledMolecule:
+      type: "object"
+      properties:
+        sequence_name:
+          type: "string"
+        genbank_accession:
+          type: "string"
+        refseq_accession:
+          type: "string"
+        assigned_molecule:
+          type: "string"
+        sequence_role:
+          type: "string"
+        sequence_length:
+          type: "integer"
+
+    PaginatedAssembliesResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Assembly"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        total:
+          type: "integer"
+
+    # ==================== ORGANISM SCHEMAS ====================
+    OrganismQueryParams:
+      type: "object"
+      properties:
+        filter:
+          type: "string"
+        taxids:
+          type: "string"
+        offset:
+          type: "integer"
+          default: 0
+        limit:
+          type: "integer"
+          default: 20
+
+    Organism:
+      type: "object"
+      properties:
+        taxid:
+          type: "string"
+        scientific_name:
+          type: "string"
+        common_name:
+          type: "string"
+        lineage:
+          type: "array"
+          items:
+            type: "string"
+        annotation_count:
+          type: "integer"
+        assembly_count:
+          type: "integer"
+
+    PaginatedOrganismsResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/Organism"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        total:
+          type: "integer"
+
+    # ==================== TAXON SCHEMAS ====================
+    TaxonQueryParams:
+      type: "object"
+      properties:
+        filter:
+          type: "string"
+        taxids:
+          type: "string"
+        offset:
+          type: "integer"
+          default: 0
+        limit:
+          type: "integer"
+          default: 20
+
+    TaxonNode:
+      type: "object"
+      properties:
+        taxid:
+          type: "string"
+        scientific_name:
+          type: "string"
+        rank:
+          type: "string"
+        parent_taxid:
+          type: "string"
+        lineage:
+          type: "array"
+          items:
+            type: "string"
+
+    PaginatedTaxonsResponse:
+      type: "object"
+      properties:
+        data:
+          type: "array"
+          items:
+            $ref: "#/components/schemas/TaxonNode"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+        total:
+          type: "integer"

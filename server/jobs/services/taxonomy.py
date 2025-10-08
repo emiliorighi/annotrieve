@@ -39,11 +39,13 @@ def handle_taxonomy(annotations: list[AnnotationToProcess], tmp_dir: str, batch_
     print("Saving taxonomies")
     save_taxons(successfully_saved_organisms)
 
+    print("Updating taxon hierarchy")
     organisms_to_update = Organism.objects(taxid__in=saved_taxids)
     for organism in organisms_to_update:
         ordered_taxons = get_ordered_taxons(organism.taxon_lineage)
         update_taxon_hierarchy(ordered_taxons)
-
+        
+    print("Taxon hierarchy updated")
     lineages = get_existing_lineages_dict(annotations)
     return lineages #return all the valid lineages
 

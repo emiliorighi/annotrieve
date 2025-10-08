@@ -11,6 +11,12 @@ async def get_assemblies(commons: Dict[str, Any] = Depends(params_helper.common_
     params = params_helper.handle_request_params(commons, payload)
     return assemblies_service.get_assemblies(**params)
 
+@router.get("/assemblies/stats/{field}")
+@router.post("/assemblies/stats/{field}")
+async def get_assemblies_stats(field: str, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+    params = params_helper.handle_request_params(commons, payload)
+    return assemblies_service.get_assemblies(**params, field=field, response_type='stats')
+
 @router.get("/assemblies/{assembly_accession}")
 async def get_assembly(assembly_accession: str):
     return assemblies_service.get_assembly(assembly_accession).to_mongo().to_dict()
@@ -22,3 +28,7 @@ async def get_assembled_molecules(assembly_accession: str, offset: int = 0, limi
 @router.get("/assemblies/{assembly_accession}/paired") 
 async def get_paired_assembly(assembly_accession: str):
     return assemblies_service.get_paired_assembly(assembly_accession).to_mongo().to_dict()
+
+@router.get("/assemblies/{auth_key}/update_release_date")
+async def update_release_date(auth_key: str):
+    return assemblies_service.trigger_update_release_date(auth_key)

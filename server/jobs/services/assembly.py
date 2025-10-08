@@ -14,6 +14,7 @@ def get_existing_accessions(accessions: list[str]) -> list[str]:
     return GenomeAssembly.objects(assembly_accession__in=accessions).scalar('assembly_accession')
 
 def get_assembly_report_path(accession: str, assembly_name: str) -> str:
+    assembly_name = assembly_name.replace(' ', '_')
     return f"https://ftp.ncbi.nlm.nih.gov/genomes/all/{accession[0:3]}/{accession[4:7]}/{accession[7:10]}/{accession[10:13]}/{accession}_{assembly_name}/{accession}_{assembly_name}_assembly_report.txt"
 
 def handle_assemblies(annotations: list[AnnotationToProcess], tmp_dir: str, valid_lineages: dict[str, list[str]], batch_size: int=5000) -> list[str]:
@@ -273,6 +274,7 @@ async def get_assembly_report(session: aiohttp.ClientSession, ftp_path: str) -> 
         return None
 
 def create_ftp_path(accession: str, assembly_name: str) -> str:
+    assembly_name = assembly_name.replace(' ', '_')
     return f"https://ftp.ncbi.nlm.nih.gov/genomes/all/{accession[0:3]}/{accession[4:7]}/{accession[7:10]}/{accession[10:13]}/{accession}_{assembly_name}/{accession}_{assembly_name}_genomic.fna.gz"
 
 
@@ -291,4 +293,6 @@ def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list
         assembly_stats=AssemblyStats(**assembly_stats),
         source_database=assembly_dict.get('source_database'),
         taxon_lineage=valid_lineages.get(str(organism_info.get('tax_id')), []),
+        release_date=assembly_info.get('release_date'),
+        submitter=assembly_dict.get('submitter'),
     )

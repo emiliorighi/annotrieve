@@ -13,18 +13,14 @@ import { listAnnotations } from "@/lib/api/annotations"
 interface AnnotationsListProps {
   filterType: FilterType
   filterObject: Record<string, any>
+  selectedAssemblyAccessions?: string[]
 }
 
-export function AnnotationsList({ filterType, filterObject }: AnnotationsListProps) {
+export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions }: AnnotationsListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [sourceFilter, setSourceFilter] = useState<"all" | "GenBank"| "RefSeq" | "Ensembl">("all")
   const [annotations, setAnnotations] = useState<Annotation[]>([])
-
-  function convertToHumanReadableSize(size: number) {
-    const units = ["B", "KB", "MB", "GB", "TB"]
-    const index = Math.floor(Math.log10(size) / 3)
-    return (size / Math.pow(1024, index)).toFixed(2) + " " + units[index]
-  }
+  const [totalAnnotations, setTotalAnnotations] = useState<number>(0)
 
   useEffect(() => {
     async function fetchData() {
@@ -33,25 +29,30 @@ export function AnnotationsList({ filterType, filterObject }: AnnotationsListPro
         if (filterType === "organism" || filterType === "taxon") {
           // Expecting object.taxid when filtering by organism or taxon
           params = { ...params, taxids: filterObject?.taxid }
+          // If specific assemblies are selected, filter by them
+          if (selectedAssemblyAccessions && selectedAssemblyAccessions.length > 0) {
+            params = { ...params, assembly_accessions: selectedAssemblyAccessions.join(',') }
+          }
         } else if (filterType === "assembly") {
           // Expecting object.assembly_accession when filtering by assembly
           params = { ...params, assembly_accessions: filterObject?.assembly_accession || filterObject?.assemblyAccession }
         }
         const res = await listAnnotations(params as any)
         setAnnotations((res as any)?.results as any)
+        setTotalAnnotations((res as any)?.total ?? 0)
       } catch (e) {
         setAnnotations([])
       }
     }
     fetchData()
-  }, [filterType, filterObject])
+  }, [filterType, filterObject, selectedAssemblyAccessions])
 
   return (
     <div className="space-y-4">
       {/* Header with filters */}
       <div className="flex items-center justify-between gap-4">
         <h3 className="text-xl font-semibold">
-          Related Annotations <span className="text-muted-foreground">({annotations.length})</span>
+          Related Annotations <span className="text-muted-foreground">({totalAnnotations})</span>
         </h3>
         <div className="flex items-center gap-3">
           <div className="relative w-64">

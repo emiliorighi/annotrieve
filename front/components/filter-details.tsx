@@ -13,9 +13,11 @@ interface FilterDetailsProps {
   filterType: FilterType
   filterObject: any
   onClearFilter: () => void
+  onAssembliesSelectionChange?: (accessions: string[]) => void
+  onTaxonChange?: (taxid: string) => void
 }
 
-export function FilterDetails({ filterType, filterObject, onClearFilter }: FilterDetailsProps) {
+export function FilterDetails({ filterType, filterObject, onClearFilter, onAssembliesSelectionChange, onTaxonChange }: FilterDetailsProps) {
   return (
     <Card className="p-6">
       <div className="flex items-start justify-between mb-6">
@@ -29,8 +31,8 @@ export function FilterDetails({ filterType, filterObject, onClearFilter }: Filte
         </Button>
       </div>
 
-      {filterType === "taxon" && <TaxonDetailView taxonDetails={filterObject} />}
-      {filterType === "organism" && <OrganismDetailView organismDetails={filterObject} />}
+      {filterType === "taxon" && <TaxonDetailView taxonDetails={filterObject} onAssembliesSelectionChange={onAssembliesSelectionChange} onTaxonChange={onTaxonChange} />}
+      {filterType === "organism" && <OrganismDetailView organismDetails={filterObject} onAssembliesSelectionChange={onAssembliesSelectionChange} />}
       {filterType === "assembly" && <AssemblyDetailView assemblyDetails={filterObject} />}
     </Card>
   )

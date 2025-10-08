@@ -2,41 +2,15 @@
 
 import { Badge } from "@/components/ui/badge"
 import { OrganismRecord } from "@/lib/api/types"
-import { listAssemblies } from "@/lib/api/assemblies"
-import { useEffect, useState } from "react"
+import { AssembliesList } from "./assemblies-list"
+import { Database } from "lucide-react"
 
 interface OrganismDetailViewProps {
   organismDetails: OrganismRecord
+  onAssembliesSelectionChange?: (accessions: string[]) => void
 }
 
-export function OrganismDetailView({ organismDetails }: OrganismDetailViewProps) {
-  const [assemblies, setAssemblies] = useState<string[]>([])
-  const [loading, setLoading] = useState<boolean>(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-
-    async function fetchAssemblies() {
-      if (!organismDetails?.taxid) return
-      setLoading(true)
-      setError(null)
-      try {
-        const res = await listAssemblies({ taxids: organismDetails.taxid, limit: 50, offset: 0 })
-        if (cancelled) return
-        const list = (res.results || []).map((a: any) => String(a.assembly_accession ?? a.assemblyAccession ?? ""))
-        setAssemblies(list.filter(Boolean))
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Failed to load assemblies")
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchAssemblies()
-    return () => { cancelled = true }
-  }, [organismDetails?.taxid])
-
+export function OrganismDetailView({ organismDetails, onAssembliesSelectionChange }: OrganismDetailViewProps) {
   if (!organismDetails) {
     return <div className="text-muted-foreground">Organism not found</div>
   }
@@ -50,46 +24,25 @@ export function OrganismDetailView({ organismDetails }: OrganismDetailViewProps)
             <h1 className="text-3xl font-bold mb-2">{(organismDetails as any).common_name || (organismDetails as any).organism_name}</h1>
             <p className="text-lg text-muted-foreground italic">{(organismDetails as any).organism_name}</p>
           </div>
-          <Badge variant="outline" className="text-sm">
-            {organismDetails.taxid}
-          </Badge>
+          <div className="flex items-end justify-between gap-2">
+            <div className="flex items-start gap-3 p-4 border rounded-lg">
+              <Database className="h-5 w-5 text-primary mt-0.5" />
+              <div className="flex-1">
+                <div className="text-sm font-medium mb-1">NCBI TaxID</div>
+                <div className="font-mono text-sm text-muted-foreground">{organismDetails.taxid}</div>
+              </div>
+            </div>
+          </div>
         </div>
         <p className="text-foreground leading-relaxed">Wiki description not available</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="bg-muted/50 rounded-lg p-4">
-          <div className="text-sm text-muted-foreground mb-1">Total Annotations</div>
-          <div className="text-2xl font-bold text-primary">{(organismDetails as any).annotations_count}</div>
-        </div>
-        <div className="bg-muted/50 rounded-lg p-4">
-          <div className="text-sm text-muted-foreground mb-1">Total Assemblies</div>
-          <div className="text-2xl font-bold">{(organismDetails as any).assemblies_count}</div>
-        </div>
-      </div>
-
       {/* Assemblies */}
-      <div>
-        <h4 className="text-lg font-semibold mb-3">Available Assemblies</h4>
-        {loading && <div className="text-sm text-muted-foreground">Loading assemblies...</div>}
-        {error && <div className="text-sm text-red-500">{error}</div>}
-        {!loading && !error && (
-          <div className="grid gap-2">
-            {assemblies.map((assembly) => (
-              <div key={assembly} className="border rounded-lg px-4 py-3 flex items-center justify-between">
-                <span className="font-mono text-sm font-medium">{assembly}</span>
-                <Badge variant="secondary" className="text-xs">
-                  Assembly
-                </Badge>
-              </div>
-            ))}
-            {assemblies.length === 0 && (
-              <div className="text-sm text-muted-foreground">No assemblies found for this organism.</div>
-            )}
-          </div>
-        )}
-      </div>
+      <AssembliesList
+        taxid={organismDetails.taxid}
+        onAssembliesSelectionChange={onAssembliesSelectionChange}
+        view="organism"
+      />
     </div>
   )
 }

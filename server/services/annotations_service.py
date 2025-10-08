@@ -65,6 +65,8 @@ def get_annotations(
     response_type: str = 'metadata', #metadata, download_info, download_file
     latest_release_by: str = None, #organism, assembly, taxon / None for no grouping
     field: str = None, #field to get stats for
+    sort_by: str = None,
+    sort_order: str = None,
 ):
     try:
         # trigger import annotations asynchronously (fire-and-forget)
@@ -93,7 +95,9 @@ def get_annotations(
                 )
             #query again to get the queryset object
             annotations = GenomeAnnotation.objects(_id__in=[doc['_id'] for doc in pymongo_query]).exclude('id')
-        
+        if sort_by:
+            sort = '-' + sort_by if sort_order == 'desc' else sort_by
+            annotations = annotations.order_by(sort)
         total = annotations.count()
         offset, limit = params_helper.handle_pagination_params(offset, limit, total)
 
@@ -102,7 +106,7 @@ def get_annotations(
         elif response_type == 'download_file':
             return response_helper.download_file_response(annotations)
         elif response_type == 'stats':
-            return get_stats(annotations, field)
+            return query_visitors_helper.get_stats(annotations, field)
         else:
             return response_helper.json_response_with_pagination(annotations, total, offset, limit)
 
@@ -201,39 +205,6 @@ def get_annotation_errors(offset_param=0, limit_param=20):
         return response_helper.json_response_with_pagination(errors, count, offset, limit)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching annotation errors: {e}")
-
-def get_stats(items:QuerySet, field:str):
-    if not field:
-        raise HTTPException(status_code=400, detail="Field parameter is required")
-    
-    try:
-        pipeline = [
-            {
-                "$project": {
-                    "field_value": {
-                        "$ifNull": [f"${field}", f"{NO_VALUE_KEY}"]
-                    }
-                }
-            },
-            {"$unwind": "$field_value"},
-            {
-                "$group": {
-                    "_id": "$field_value",
-                    "count": {"$sum": 1}
-                }
-            },
-        ]
-
-        response = {
-            str(doc["_id"]): int(doc["count"])
-            for doc in items.aggregate(pipeline)
-        }
-
-        sorted_response = {key: value for key, value in sorted(response.items())}
-        return sorted_response
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching stats: {e}")
 
 def trigger_import_annotations(auth_key: str):
     if auth_key != os.getenv('AUTH_KEY'):

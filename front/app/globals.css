@@ -123,3 +123,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Chromosome Viewer Styles */
+.chromosome-viewer {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.scrollable-svg {
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.scrollable-svg svg {
+  display: block;
+}

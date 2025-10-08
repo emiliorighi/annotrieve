@@ -29,6 +29,8 @@ class GenomeAssembly(DynamicDocument):
     organism_name = StringField(required=True)
     taxon_lineage = ListField(StringField())
     assembly_stats = EmbeddedDocumentField(AssemblyStats)
+    release_date = DateTimeField()
+    submitter = StringField()
     annotations_count = IntField()
     download_url = URLField(required=True, unique=True)
     meta = {

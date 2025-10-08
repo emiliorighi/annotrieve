@@ -29,7 +29,7 @@ services:
   annotrieve-redis:
     image: "redis:alpine"
     expose:
-      - "6378"
+      - "6379"
 
   annotrieve-fastapi:
     build: ./server
@@ -77,3 +77,4 @@ services:
 volumes:
   app:
   mongodb-data:
+  celerybeat-schedule:
