@@ -17,23 +17,22 @@ import type { Annotation } from "@/lib/types"
 
 interface AnnotationActionsProps {
   annotation: Annotation
+  onJBrowseChange?: (accession: string, annotationId: string) => void
 }
 
-export function AnnotationActions({ annotation }: AnnotationActionsProps) {
+export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationActionsProps) {
   const [streamDialogOpen, setStreamDialogOpen] = useState(false)
   const [overviewDialogOpen, setOverviewDialogOpen] = useState(false)
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false)
 
   const handleDownload = () => {
     // Mock download action
-    console.log("Downloading:", annotation.fileName)
+    console.log("Downloading:", annotation.annotation_id)
     setDownloadDialogOpen(true)
   }
 
   const handleViewInBrowser = () => {
-    // Mock browser view action
-    console.log("Opening in genome browser:", annotation.fileName)
-    window.open(`https://genome-browser.example.com?file=${annotation.id}`, "_blank")
+    onJBrowseChange?.(annotation.assembly_accession, annotation.annotation_id)
   }
 
   return (
@@ -82,16 +81,12 @@ export function AnnotationActions({ annotation }: AnnotationActionsProps) {
               <div className="text-sm font-medium mb-2">File Details</div>
               <div className="space-y-1 text-sm text-muted-foreground">
                 <div className="flex justify-between">
-                  <span>Filename:</span>
-                  <span className="font-mono text-xs">{annotation.fileName}</span>
+                  <span>Path:</span>
+                  <span className="font-mono text-xs">{annotation.indexed_file_info.bgzipped_path}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Size:</span>
-                  <span>{annotation.fileSize}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Format:</span>
-                  <span>TAR.GZ</span>
+                  <span>Size:</span>  
+                  <span>{annotation.indexed_file_info.file_size}</span>
                 </div>
               </div>
             </div>

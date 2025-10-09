@@ -8,9 +8,11 @@ import { Database } from "lucide-react"
 interface OrganismDetailViewProps {
   organismDetails: OrganismRecord
   onAssembliesSelectionChange?: (accessions: string[]) => void
+  onAssemblySelect?: (accession: string) => void
+  onJBrowseChange?: (accession: string, annotationId?: string) => void
 }
 
-export function OrganismDetailView({ organismDetails, onAssembliesSelectionChange }: OrganismDetailViewProps) {
+export function OrganismDetailView({ organismDetails, onAssembliesSelectionChange, onAssemblySelect, onJBrowseChange }: OrganismDetailViewProps) {
   if (!organismDetails) {
     return <div className="text-muted-foreground">Organism not found</div>
   }
@@ -41,6 +43,8 @@ export function OrganismDetailView({ organismDetails, onAssembliesSelectionChang
       <AssembliesList
         taxid={organismDetails.taxid}
         onAssembliesSelectionChange={onAssembliesSelectionChange}
+        onAssemblySelect={onAssemblySelect}
+        onJBrowseChange={onJBrowseChange}
         view="organism"
       />
     </div>

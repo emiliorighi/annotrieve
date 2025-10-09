@@ -14,9 +14,10 @@ interface AnnotationsListProps {
   filterType: FilterType
   filterObject: Record<string, any>
   selectedAssemblyAccessions?: string[]
+  onJBrowseChange?: (accession: string, annotationId?: string) => void
 }
 
-export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions }: AnnotationsListProps) {
+export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions, onJBrowseChange }: AnnotationsListProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [sourceFilter, setSourceFilter] = useState<"all" | "GenBank"| "RefSeq" | "Ensembl">("all")
   const [annotations, setAnnotations] = useState<Annotation[]>([])
@@ -90,7 +91,7 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
       ) : (
         <div className="grid gap-4">
           {annotations.map((annotation) => (
-            <AnnotationCard key={annotation.annotation_id} annotation={annotation} />
+            <AnnotationCard key={annotation.annotation_id} annotation={annotation} onJBrowseChange={onJBrowseChange} />
           ))}
         </div>
       )}
@@ -98,7 +99,7 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
   )
 }
 
-function AnnotationCard({ annotation }: { annotation: Annotation }) {
+function AnnotationCard({ annotation, onJBrowseChange }: { annotation: Annotation, onJBrowseChange?: (accession: string, annotationId: string) => void }) {
   function convertToHumanReadableSize(file_size: any) {
     const units = ["B", "KB", "MB", "GB", "TB"]
     const index = Math.floor(Math.log10(file_size) / 3)
@@ -158,7 +159,7 @@ const rootCountEntries = Object.entries(rootCounts).sort((a, b) => b[1] - a[1]);
         </div>
 
         {/* Actions */}
-        <AnnotationActions annotation={annotation} />
+        <AnnotationActions annotation={annotation} onJBrowseChange={onJBrowseChange} />
       </div>
     </Card>
   )

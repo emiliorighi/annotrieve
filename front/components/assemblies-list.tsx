@@ -3,18 +3,26 @@
 import { Badge } from "@/components/ui/badge"
 import { listAssemblies } from "@/lib/api/assemblies"
 import { useEffect, useState } from "react"
-import { ArrowDown, ArrowUp, Building2, Calendar, Database, Info, ChevronLeft, ChevronRight, FileText, PawPrint } from "lucide-react"
+import { ArrowDown, ArrowUp, Building2, Calendar, Database, Info, ChevronLeft, ChevronRight, FileText, PawPrint, ExternalLink } from "lucide-react"
 import { Button } from "./ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { getAssembliesStats } from "@/lib/api/assemblies"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 
 interface AssembliesListProps {
   taxid: string
   onAssembliesSelectionChange?: (accessions: string[]) => void
+  onAssemblySelect?: (accession: string) => void
+  onJBrowseChange?: (accession: string, annotationId?: string) => void
   view: 'taxon' | 'organism'
 }
 
-export function AssembliesList({ taxid, onAssembliesSelectionChange, view }: AssembliesListProps) {
+export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblySelect, onJBrowseChange, view }: AssembliesListProps) {
   const [assemblies, setAssemblies] = useState<Record<string, any>[]>([])
   const [totalAssemblies, setTotalAssemblies] = useState<number>(0)
   const [loading, setLoading] = useState<boolean>(false)
@@ -177,7 +185,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, view }: Ass
         <div className="flex items-center align-center gap-2">
           <h4 className="text-lg font-semibold">Available Assemblies ({totalAssemblies})</h4>
           <Button variant="ghost" size="icon" onClick={() => {
-            alert("Select one or more assemblies to see the related annotations")
+            alert("Select one or more assemblies to see the related annotations; use right click to see the context menu")
           }}>
             <Info className="h-4 w-4" />
           </Button>
@@ -223,12 +231,13 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, view }: Ass
           {assemblies.map((assembly: any) => {
             const isSelected = selectedAssemblies.has(assembly.assembly_accession)
             return (
-              <div
-                key={assembly.assembly_accession}
-                className={`border rounded-lg p-4 flex-col gap-4 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'
-                  }`}
-                onClick={() => toggleAssemblySelection(assembly.assembly_accession)}
-              >
+              <ContextMenu key={assembly.assembly_accession}>
+                <ContextMenuTrigger asChild>
+                  <div
+                    className={`border rounded-lg p-4 flex-col gap-4 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'
+                      }`}
+                    onClick={() => toggleAssemblySelection(assembly.assembly_accession)}
+                  >
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-md">{assembly.assembly_name}</span>
                   {isSelected && (
@@ -269,7 +278,31 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, view }: Ass
                     </div>
                   </div>
                 </div>
-              </div>
+                  </div>
+                </ContextMenuTrigger>
+                <ContextMenuContent className="w-56">
+                  <ContextMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onAssemblySelect?.(assembly.assembly_accession)
+                    }}
+                    className="gap-2"
+                  >
+                    <Info className="h-4 w-4" />
+                    <span>View Assembly Details</span>
+                  </ContextMenuItem>
+                  <ContextMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onJBrowseChange?.(assembly.assembly_accession)
+                    }}
+                    className="gap-2"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>View in Genome Browser</span>
+                  </ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
             )
           })}
           {assemblies.length === 0 && (

@@ -14,9 +14,11 @@ interface TaxonDetailViewProps {
   taxonDetails: TaxonRecord
   onAssembliesSelectionChange?: (accessions: string[]) => void
   onTaxonChange?: (taxid: string) => void
+  onAssemblySelect?: (accession: string) => void
+  onJBrowseChange?: (accession: string, annotationId?: string) => void
 }
 
-export function TaxonDetailView({ taxonDetails, onAssembliesSelectionChange, onTaxonChange }: TaxonDetailViewProps) {
+export function TaxonDetailView({ taxonDetails, onAssembliesSelectionChange, onTaxonChange, onAssemblySelect, onJBrowseChange }: TaxonDetailViewProps) {
   const [children, setChildren] = useState<TaxonRecord[]>([])
   const [ancestors, setAncestors] = useState<TaxonRecord[]>([])
   const [isTreeViewOpen, setIsTreeViewOpen] = useState(false)
@@ -91,6 +93,8 @@ export function TaxonDetailView({ taxonDetails, onAssembliesSelectionChange, onT
       <AssembliesList 
         taxid={taxonDetails.taxid} 
         onAssembliesSelectionChange={onAssembliesSelectionChange}
+        onAssemblySelect={onAssemblySelect}
+        onJBrowseChange={onJBrowseChange}
         view="taxon"
       />
     </div>

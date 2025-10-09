@@ -3,7 +3,8 @@ from db.models import GenomeAssembly, GenomicSequence
 from helpers import response as response_helper, query_visitors as query_visitors_helper
 import os
 from jobs.update_assemblies import update_fields
-
+from fastapi.responses import StreamingResponse
+import io
 def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: str = None, offset: int = 0, limit: int = 20, sort_by: str = None, sort_order: str = None, field: str = None, submitters: str = None, response_type: str = 'metadata'):
     try:
         query = {}
@@ -52,3 +53,23 @@ def trigger_update_release_date(auth_key: str):
         raise HTTPException(status_code=401, detail="Invalid auth key")
     update_fields.delay()
     return response_helper.json_response(message="Update release date job triggered")   
+
+
+def get_chr_aliases_file(accession: str):    
+    # Query chromosomes based on accession_version
+    chromosomes = GenomicSequence.objects(assembly_accession=accession)
+    if not chromosomes:
+        raise HTTPException(status_code=404, detail=f"Assembly {accession} lacks chromosomes")
+    
+    #stream a tsv file with aliases fields in each line
+    tsv_data = io.StringIO()
+    for chromosome in chromosomes:
+        aliases = "\t".join(chromosome.aliases)
+        tsv_data.write(f"{chromosome.chr_name}\t{chromosome.sequence_name}\t{chromosome.genbank_accession}\t{chromosome.refseq_accession}\t{chromosome.ucsc_style_name}\t{aliases}\n")
+    tsv_data.seek(0)
+    return StreamingResponse(tsv_data, media_type='text/tab-separated-values', headers={
+        "Content-Disposition": f'attachment; filename="{accession}_chr_aliases.tsv"',
+        "Cache-Control": "public, max-age=86400",
+        "X-Accel-Buffering": "no",
+    })
+

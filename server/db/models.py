@@ -71,7 +71,7 @@ class GenomicSequence(DynamicDocument):
     #SEQUENCE IDENTIFIERS
     ucsc_style_name = StringField()
     genbank_accession = StringField()
-    refseq_accession = StringField() #TODO: add this to the assembly report
+    refseq_accession = StringField()
     
     chr_name = StringField()
     sequence_name = StringField() #assigned_molecule in the assembly report

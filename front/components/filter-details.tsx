@@ -15,9 +15,11 @@ interface FilterDetailsProps {
   onClearFilter: () => void
   onAssembliesSelectionChange?: (accessions: string[]) => void
   onTaxonChange?: (taxid: string) => void
+  onJBrowseChange?: (accession: string, annotationId?: string) => void
+  onAssemblySelect?: (accession: string) => void
 }
 
-export function FilterDetails({ filterType, filterObject, onClearFilter, onAssembliesSelectionChange, onTaxonChange }: FilterDetailsProps) {
+export function FilterDetails({ filterType, filterObject, onClearFilter, onAssembliesSelectionChange, onTaxonChange, onJBrowseChange, onAssemblySelect }: FilterDetailsProps) {
   return (
     <Card className="p-6">
       <div className="flex items-start justify-between mb-6">
@@ -31,9 +33,9 @@ export function FilterDetails({ filterType, filterObject, onClearFilter, onAssem
         </Button>
       </div>
 
-      {filterType === "taxon" && <TaxonDetailView taxonDetails={filterObject} onAssembliesSelectionChange={onAssembliesSelectionChange} onTaxonChange={onTaxonChange} />}
-      {filterType === "organism" && <OrganismDetailView organismDetails={filterObject} onAssembliesSelectionChange={onAssembliesSelectionChange} />}
-      {filterType === "assembly" && <AssemblyDetailView assemblyDetails={filterObject} />}
+      {filterType === "taxon" && <TaxonDetailView taxonDetails={filterObject} onAssembliesSelectionChange={onAssembliesSelectionChange} onTaxonChange={onTaxonChange} onAssemblySelect={onAssemblySelect} onJBrowseChange={onJBrowseChange} />}
+      {filterType === "organism" && <OrganismDetailView organismDetails={filterObject} onAssembliesSelectionChange={onAssembliesSelectionChange} onAssemblySelect={onAssemblySelect} onJBrowseChange={onJBrowseChange} />}
+      {filterType === "assembly" && <AssemblyDetailView assemblyDetails={filterObject} onJBrowseChange={onJBrowseChange} />}
     </Card>
   )
 }

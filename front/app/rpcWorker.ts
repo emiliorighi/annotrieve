@@ -5,19 +5,11 @@ import { enableStaticRendering } from 'mobx-react'
 import corePlugins from '@jbrowse/react-linear-genome-view2/esm/corePlugins'
 // static rendering is used for "SSR" style rendering which is done on the
 // worker
+import RefGetPlugin from 'jbrowse-plugin-refget-api'
+
+
 enableStaticRendering(true)
 
-class MyPlugin {
-  name = 'MyPlugin'
-  install() {
-    console.log('myPlugin')
-  }
-  configure() {}
-}
-initializeWorker([...corePlugins, MyPlugin], {
+initializeWorker([...corePlugins, RefGetPlugin], {
   fetchESM: (url: string) => import(/* webpackIgnore:true */ url),
 })
-
-export default function doNothing() {
-  /* do nothing */
-}

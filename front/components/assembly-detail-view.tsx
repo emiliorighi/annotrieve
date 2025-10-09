@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button"
 
 interface AssemblyDetailViewProps {
   assemblyDetails: AssemblyRecord
+  onJBrowseChange?: (accession: string, annotationId?: string) => void
 }
 
-export function AssemblyDetailView({ assemblyDetails }: AssemblyDetailViewProps) {
+export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: AssemblyDetailViewProps) {
   const [isDownloading, setIsDownloading] = useState(false)
   const [showMoreStatistics, setShowMoreStatistics] = useState(false)
 
@@ -23,7 +24,7 @@ export function AssemblyDetailView({ assemblyDetails }: AssemblyDetailViewProps)
     }, 1500)
   }
   const handleViewInBrowser = () => {
-    console.log("[v0] Opening genome browser for:", assemblyDetails.assembly_name)
+    onJBrowseChange?.(assemblyDetails.assembly_accession)
     // In real implementation, this would open the genome browser
   }
 
