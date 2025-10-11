@@ -12,16 +12,22 @@ interface AssemblyDetailViewProps {
 }
 
 export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: AssemblyDetailViewProps) {
-  const [isDownloading, setIsDownloading] = useState(false)
   const [showMoreStatistics, setShowMoreStatistics] = useState(false)
 
   const handleDownload = () => {
-    setIsDownloading(true)
-    // Simulate download
-    setTimeout(() => {
-      setIsDownloading(false)
-      console.log("[v0] Downloading assembly:", assemblyDetails.assembly_name)
-    }, 1500)
+  // Create a temporary anchor element to trigger download
+  const link = document.createElement('a')
+  link.href = assemblyDetails.download_url as string
+  link.download = '' // optional: set a filename if needed
+  link.target = '_blank' // open in a new tab if preferred
+  link.rel = 'noopener noreferrer'
+
+  // Append to body and simulate click
+  document.body.appendChild(link)
+  link.click()
+
+  // Clean up
+  document.body.removeChild(link)
   }
   const handleViewInBrowser = () => {
     onJBrowseChange?.(assemblyDetails.assembly_accession)
@@ -31,7 +37,7 @@ export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: Assembl
   const formatNumber = (num: string | number) => {
     return Number(num).toLocaleString()
   }
-  
+
   const formatFieldName = (key: string): string => {
     return key
       .split("_")
@@ -111,15 +117,14 @@ export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: Assembl
             </div>
           </div>
         </div>
-
         <div className="flex gap-3">
           <Button onClick={handleViewInBrowser} className="gap-2">
             <ExternalLink className="h-4 w-4" />
             View in Genome Browser
           </Button>
-          <Button onClick={handleDownload} variant="outline" className="gap-2 bg-transparent" disabled={isDownloading}>
+          <Button onClick={handleDownload} variant="outline" className="gap-2 bg-transparent">
             <Download className="h-4 w-4" />
-            {isDownloading ? "Downloading..." : "Download Assembly"}
+            Download Assembly
           </Button>
         </div>
       </div>
@@ -137,9 +142,8 @@ export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: Assembl
           <ChromosomeViewer accession={assemblyDetails.assembly_accession} />
         </div>
       )}
-
       {assemblyDetails.assembly_stats && (
-        <div className="border rounded-lg p-6">
+        <div>
           <h4 className="text-lg font-semibold mb-4">Assembly Statistics</h4>
           <div className="grid lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-3 xs:grid-cols-1 gap-4">
             {Object.entries(assemblyDetails.assembly_stats).slice(0, 4).map(([key, value]) => (
@@ -151,22 +155,22 @@ export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: Assembl
           </div>
 
           {showMoreStatistics && (
-              <div className="grid lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-3 xs:grid-cols-1 gap-4 mt-4 animate-in slide-in-from-top-4 fade-in duration-500">
-                {Object.entries(assemblyDetails.assembly_stats).slice(4).map(([key, value], index) => (
-                  <div 
-                    key={key} 
-                    className="bg-muted/50 rounded-lg p-4 animate-in slide-in-from-bottom-2 fade-in"
-                    style={{
-                      animationDelay: `${index * 50}ms`,
-                      animationDuration: '400ms',
-                      animationFillMode: 'both'
-                    }}
-                  >
-                    <div className="text-xs text-muted-foreground mb-1">{formatFieldName(key)}</div>
-                    <div className="text-xl font-bold">{formatStatValue(key, value)}</div>
-                  </div>
-                ))}
-              </div>
+            <div className="grid lg:grid-cols-4 md:grid-cols-3 sm:grid-cols-3 xs:grid-cols-1 gap-4 mt-4 animate-in slide-in-from-top-4 fade-in duration-500">
+              {Object.entries(assemblyDetails.assembly_stats).slice(4).map(([key, value], index) => (
+                <div
+                  key={key}
+                  className="bg-muted/50 rounded-lg p-4 animate-in slide-in-from-bottom-2 fade-in"
+                  style={{
+                    animationDelay: `${index * 50}ms`,
+                    animationDuration: '400ms',
+                    animationFillMode: 'both'
+                  }}
+                >
+                  <div className="text-xs text-muted-foreground mb-1">{formatFieldName(key)}</div>
+                  <div className="text-xl font-bold">{formatStatValue(key, value)}</div>
+                </div>
+              ))}
+            </div>
           )}
           <div className="flex justify-center mt-4">
             <Button variant="ghost" onClick={() => {
@@ -178,6 +182,7 @@ export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: Assembl
           </div>
         </div>
       )}
+
     </div>
   )
 }

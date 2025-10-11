@@ -11,12 +11,16 @@ class CommonQueryParams:
         offset: int = 0,
         limit: int = 20,
         taxids: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ):
         self.filter = filter
         self.offset = offset
         self.limit = limit
         self.taxids = taxids
-
+        self.sort_by = sort_by
+        self.sort_order = sort_order
+        
 @router.get("/organisms")
 @router.post("/organisms")
 def get_organisms(commons: CommonQueryParams = Depends(), payload: Optional[dict] = Body(None)):

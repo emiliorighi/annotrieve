@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { TaxonRecord } from "@/lib/api/types"
 import { getTaxonAncestors, getTaxonChildren } from "@/lib/api/taxons"
 import { useEffect, useState } from "react"
-import { Network, Star } from "lucide-react"
+import { Database, Network, Star } from "lucide-react"
 import { TaxonomicTreeTable } from "./taxonomic-tree-table"
 import { AssembliesList } from "./assemblies-list"
+import { WikiSummary } from "./wiki-summary"
 
 interface TaxonDetailViewProps {
   taxonDetails: TaxonRecord
@@ -45,33 +46,38 @@ export function TaxonDetailView({ taxonDetails, onAssembliesSelectionChange, onT
     <div className="space-y-6">
       <div>
         {/* Breadcrumb path with tree button */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-start justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">{taxonDetails.scientific_name}</h1>
-            <p className="text-lg text-muted-foreground italic">{taxonDetails.taxid}</p>
+            <h2 className="text-3xl font-bold mb-2">{taxonDetails.scientific_name}</h2>
+            <p className="text-lg text-muted-foreground italic">{taxonDetails.rank}</p>
           </div>
           <div className="flex items-end justify-between gap-2">
             <div className="flex items-start gap-3 p-4 border rounded-lg">
-              <Star className="h-5 w-5 text-primary mt-0.5" />
+              <Database className="h-5 w-5 text-primary mt-0.5" />
               <div className="flex-1">
-                <div className="text-sm font-medium mb-1">Rank</div>
-                <div className="font-mono text-sm text-muted-foreground">{taxonDetails.rank}</div>
+                <div className="text-sm font-medium mb-1">NCBI TaxID</div>
+                <div className="font-mono text-sm text-muted-foreground">{taxonDetails.taxid}</div>
               </div>
             </div>
           </div>
-
         </div>
         <div className="flex gap-3">
           <Button
-            variant={isTreeViewOpen ? "default" : "outline"}
             onClick={() => setIsTreeViewOpen(!isTreeViewOpen)}
-            className="gap-2 bg-transparent"
+            className="gap-2"
           >
             <Network className="h-4 w-4" />
-            {isTreeViewOpen ? "Hide" : "Show"} Tree
+            {isTreeViewOpen ? "Hide" : "Show"} Taxonomic Hierarchy
           </Button>
         </div>
       </div>
+
+      {/* Wikipedia Summary */}
+      <WikiSummary
+        searchTerm={taxonDetails.scientific_name || ""}
+        className="mb-6"
+      />
+
       {/* Tree Table Modal */}
       <Dialog open={isTreeViewOpen} onOpenChange={setIsTreeViewOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -90,8 +96,8 @@ export function TaxonDetailView({ taxonDetails, onAssembliesSelectionChange, onT
         </DialogContent>
       </Dialog>
 
-      <AssembliesList 
-        taxid={taxonDetails.taxid} 
+      <AssembliesList
+        taxid={taxonDetails.taxid}
         onAssembliesSelectionChange={onAssembliesSelectionChange}
         onAssemblySelect={onAssemblySelect}
         onJBrowseChange={onJBrowseChange}

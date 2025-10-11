@@ -51,7 +51,12 @@ class Organism(DynamicDocument):
     annotations_count = IntField()
     assemblies_count = IntField()
     meta = {
-        'indexes': ['taxid', 'organism_name', 'taxon_lineage', 'common_name']
+        'indexes': [
+            'taxid', 
+            'organism_name', 
+            'taxon_lineage', 
+            'common_name'
+            ]
     }
 
 #class to map aliases to the related sequence_id in the gff file

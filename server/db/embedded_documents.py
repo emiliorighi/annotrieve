@@ -8,7 +8,9 @@ from mongoengine import (
     ListField,
     DateTimeField,
     URLField,
-    DictField
+    FloatField,
+    DictField,
+    DynamicEmbeddedDocument
 )
 
 class AssemblyStats(EmbeddedDocument):
@@ -64,3 +66,22 @@ class FeatureOverview(EmbeddedDocument):
     has_cds = BooleanField() # Whether the GFF file has a CDS feature
     has_exon = BooleanField() # Whether the GFF file has an exon feature
 
+#key is the combination of root_type and biotype
+class AnnotationStatistics(DynamicEmbeddedDocument):
+    count = IntField() # Count of the combination of root_type and biotype
+    genomic_span = FloatField() # Sum of the genomic span of the combination of root_type and biotype
+    shortest_feature_length = IntField() # Shortest feature length of the combination of root_type and biotype
+    longest_feature_length = IntField() # Longest feature length of the combination of root_type and biotype
+"""
+dynamically generate keys 
+<child_type>_count
+<child_type>
+
+"""
+
+"""
+dict field protein_coding_genes { 
+
+}
+
+"""

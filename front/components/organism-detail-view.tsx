@@ -3,6 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { OrganismRecord } from "@/lib/api/types"
 import { AssembliesList } from "./assemblies-list"
+import { WikiSummary } from "./wiki-summary"
 import { Database } from "lucide-react"
 
 interface OrganismDetailViewProps {
@@ -19,11 +20,10 @@ export function OrganismDetailView({ organismDetails, onAssembliesSelectionChang
 
   return (
     <div className="space-y-6">
-      {/* Main info */}
       <div>
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold mb-2">{(organismDetails as any).common_name || (organismDetails as any).organism_name}</h1>
+            <h2 className="text-3xl font-bold mb-2">{(organismDetails as any).common_name || (organismDetails as any).organism_name}</h2>
             <p className="text-lg text-muted-foreground italic">{(organismDetails as any).organism_name}</p>
           </div>
           <div className="flex items-end justify-between gap-2">
@@ -36,10 +36,13 @@ export function OrganismDetailView({ organismDetails, onAssembliesSelectionChang
             </div>
           </div>
         </div>
-        <p className="text-foreground leading-relaxed">Wiki description not available</p>
       </div>
-
-      {/* Assemblies */}
+      
+      {/* Wikipedia Summary */}
+      <WikiSummary 
+        searchTerm={(organismDetails as any).organism_name || ""} 
+        className="mb-6"
+      />
       <AssembliesList
         taxid={organismDetails.taxid}
         onAssembliesSelectionChange={onAssembliesSelectionChange}

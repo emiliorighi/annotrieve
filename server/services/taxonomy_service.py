@@ -3,13 +3,20 @@ from db.models import TaxonNode
 from helpers import response as response_helper, query_visitors as query_visitors_helper
 from fastapi import HTTPException
 
-def get_taxon_nodes(filter: str = None, offset: int = 0, limit: int = 20, taxids: Optional[str] = None):
-    taxon_nodes = TaxonNode.objects()
+def get_taxon_nodes(filter: str = None, rank: str = None, offset: int = 0, limit: int = 20, taxids: Optional[str] = None, sort_by: str = None, sort_order: str = 'desc'):
+    query=dict()
+    if rank:
+        query['rank'] = rank
     if taxids:
-        taxon_nodes = taxon_nodes.filter(taxid__in=taxids.split(',') if isinstance(taxids, str) else taxids)
+        query['taxid__in'] = taxids.split(',') if isinstance(taxids, str) else taxids
+    print(query)
+    taxon_nodes = TaxonNode.objects(**query) if query else TaxonNode.objects()
     if filter:
         q_filter = query_visitors_helper.taxon_query(filter) if filter else None
         taxon_nodes = taxon_nodes.filter(q_filter)
+    if sort_by:
+        sort = '-' + sort_by if sort_order == 'desc' else sort_by
+        taxon_nodes = taxon_nodes.order_by(sort)
     taxon_nodes = taxon_nodes.exclude('id').skip(offset).limit(limit).as_pymongo()
     return response_helper.json_response_with_pagination(taxon_nodes, taxon_nodes.count(), offset, limit)
 

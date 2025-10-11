@@ -34,29 +34,65 @@ def get_stats(items:QuerySet, field:str):
         raise HTTPException(status_code=400, detail="Field parameter is required")
     
     try:
-        pipeline = [
-            {
-                "$project": {
-                    "field_value": {
-                        "$ifNull": [f"${field}", f"{NO_VALUE_KEY}"]
+        # First, check if the field is a DictField by sampling a document
+        sample_doc = items.first()
+        field_value = sample_doc
+        for part in field.split('.'):
+            field_value = getattr(field_value, part, None) if hasattr(field_value, part) else field_value.get(part) if isinstance(field_value, dict) else None
+            if field_value is None:
+                break
+        
+        # If the field is a dict, use a different pipeline to unpack and sum values
+        is_dict_field = isinstance(field_value, dict)
+        
+        if is_dict_field:
+            # Pipeline for DictField: unpack the dictionary and sum values by key
+            pipeline = [
+                {
+                    "$project": {
+                        "field_value": {
+                            "$ifNull": [f"${field}", {}]
+                        }
+                    }
+                },
+                {
+                    "$project": {
+                        "field_array": {"$objectToArray": "$field_value"}
+                    }
+                },
+                {"$unwind": "$field_array"},
+                {
+                    "$group": {
+                        "_id": "$field_array.k",
+                        "count": {"$sum": "$field_array.v"}
                     }
                 }
-            },
-            {"$unwind": "$field_value"},
-            {
-                "$group": {
-                    "_id": "$field_value",
-                    "count": {"$sum": 1}
-                }
-            },
-        ]
+            ]
+        else:
+            # Original pipeline for regular fields
+            pipeline = [
+                {
+                    "$project": {
+                        "field_value": {
+                            "$ifNull": [f"${field}", f"{NO_VALUE_KEY}"]
+                        }
+                    }
+                },
+                {"$unwind": "$field_value"},
+                {
+                    "$group": {
+                        "_id": "$field_value",
+                        "count": {"$sum": 1}
+                    }
+                },
+            ]
 
         response = {
             str(doc["_id"]): int(doc["count"])
-            for doc in items.aggregate(pipeline)
+            for doc in sorted(items.aggregate(pipeline), key=lambda x: x["count"], reverse=True)
         }
 
-        sorted_response = {key: value for key, value in sorted(response.items())}
+        sorted_response = {key: value for key, value in sorted(response.items(), key=lambda item: item[1], reverse=True)} #sort desc by value
         return sorted_response
 
     except Exception as e:

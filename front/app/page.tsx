@@ -9,6 +9,7 @@ import type { FilterType } from "@/lib/types"
 import { getTaxon } from "@/lib/api/taxons"
 import { DataPipelineTimeline } from "@/components/pipeline-steps"
 import { getAssembly } from "@/lib/api/assemblies"
+import { TopAnnotations } from "@/components/top-annotated-records"
 
 export default function Home() {
   const [filterType, setFilterType] = useState<FilterType>(null)
@@ -96,7 +97,7 @@ export default function Home() {
         ) : (
           <>
             <Hero />
-            <DataPipelineTimeline />
+            <TopAnnotations onFilterSelect={handleFilterSelect} />
           </>
         )}
       </main>

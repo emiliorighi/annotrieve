@@ -22,9 +22,9 @@ interface FilterDetailsProps {
 export function FilterDetails({ filterType, filterObject, onClearFilter, onAssembliesSelectionChange, onTaxonChange, onJBrowseChange, onAssemblySelect }: FilterDetailsProps) {
   return (
     <Card className="p-6">
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-3">
-          <Badge variant="outline" className="capitalize">
+          <Badge variant="secondary" className="capitalize">
             {filterType}
           </Badge>
         </div>

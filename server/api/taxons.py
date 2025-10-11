@@ -11,12 +11,18 @@ class CommonQueryParams:
         offset: int = 0,
         limit: int = 20,
         taxids: Optional[str] = None,
+        rank: Optional[str] = None,
+        sort_by: Optional[str] = None,
+        sort_order: Optional[str] = None,
     ):
         self.filter = filter
         self.offset = offset
         self.limit = limit
         self.taxids = taxids
-
+        self.rank = rank
+        self.sort_by = sort_by
+        self.sort_order = sort_order
+        
 @router.get("/taxons")
 @router.post("/taxons")
 async def get_taxons(commons: CommonQueryParams = Depends(), payload: Optional[dict] = Body(None)):

@@ -36,7 +36,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
   const [sortOrder, setSortOrder] = useState<string>('desc')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(6)
-  
+
   // Fetch assemblies when organism, sort, or filters change
   useEffect(() => {
     let cancelled = false
@@ -47,12 +47,12 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
       setError(null)
       try {
         const offset = (currentPage - 1) * itemsPerPage
-        const params: any = { 
-          taxids: taxid, 
-          limit: itemsPerPage, 
-          offset: offset, 
-          sort_by: sortBy, 
-          sort_order: sortOrder 
+        const params: any = {
+          taxids: taxid,
+          limit: itemsPerPage,
+          offset: offset,
+          sort_by: sortBy,
+          sort_order: sortOrder
         }
         // Only add submitters filter if one is selected
         if (selectedSubmitter) {
@@ -82,7 +82,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
       setSubmittersLoading(true)
       setSubmittersError(null)
       try {
-        const res = await getAssembliesStats({taxids: taxid}, 'submitter')
+        const res = await getAssembliesStats({ taxids: taxid }, 'submitter')
         if (cancelled) return
         setSubmitters(res || {})
       } catch (e: any) {
@@ -180,7 +180,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
   }
 
   return (
-    <div className="border rounded-lg p-6 bg-muted/30">
+    <div>
       <div className="flex justify-between align-center mb-4">
         <div className="flex items-center align-center gap-2">
           <h4 className="text-lg font-semibold">Available Assemblies ({totalAssemblies})</h4>
@@ -190,9 +190,9 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
             <Info className="h-4 w-4" />
           </Button>
           {selectedAssemblies.size > 0 && (
-            <Badge 
-              variant="default" 
-              className="ml-2 cursor-pointer hover:bg-primary/80 transition-colors" 
+            <Badge
+              variant="default"
+              className="ml-2 cursor-pointer hover:bg-primary/80 transition-colors"
               onClick={clearAllSelections}
             >
               {selectedAssemblies.size} selected (click to clear)
@@ -233,55 +233,58 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
             return (
               <ContextMenu key={assembly.assembly_accession}>
                 <ContextMenuTrigger asChild>
-                  <div
-                    className={`border rounded-lg p-4 flex-col gap-4 cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'
-                      }`}
-                    onClick={() => toggleAssemblySelection(assembly.assembly_accession)}
-                  >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-md">{assembly.assembly_name}</span>
-                  {isSelected && (
-                    <Badge variant="default" className="ml-2 animate-in fade-in zoom-in duration-200">Selected</Badge>
-                  )}
-                </div>
-                <div className="flex gap-4 mt-4">
-                  {view === 'taxon' && (
-                    <div className="flex items-start gap-2">
-                      <PawPrint className="h-5 w-5 text-primary mt-0.5" />
-                      <div className="flex-1">
-                        <div className="font-mono text-sm italic text-muted-foreground">{assembly.organism_name}</div>
+                  <div onClick={() => toggleAssemblySelection(assembly.assembly_accession)} className={`border rounded-lg p-4 flex justify-between align-center cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'
+                    }`}>
+                    <div className="flex-col gap-4">
+                      <div className="flex items-center">
+                        <span className="font-mono text-md">{assembly.assembly_name}</span>
+                        {isSelected && (
+                          <Badge variant="default" className="ml-2 animate-in fade-in zoom-in duration-200">Selected</Badge>
+                        )}
+                      </div>
+                      <div className="flex gap-4 mt-4">
+                        {view === 'taxon' && (
+                          <div className="flex items-start gap-2">
+                            <PawPrint className="h-5 w-5 text-primary mt-0.5" />
+                            <div className="flex-1">
+                              <div className="font-mono text-sm italic text-muted-foreground">{assembly.organism_name}</div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="flex items-start gap-2">
+                          <Database className="h-5 w-5 text-primary mt-0.5" />
+                          <div className="flex-1">
+                            <div className="font-mono text-sm text-muted-foreground">{assembly.assembly_accession}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Calendar className="h-5 w-5 text-primary mt-0.5" />
+                          <div className="flex-1">
+                            <div className="text-sm text-muted-foreground">
+                              {new Date(assembly.release_date as string).toLocaleDateString("en-US", {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Building2 className="h-5 w-5 text-primary mt-0.5" />
+                          <div className="flex-1">
+                            <div className="text-sm text-muted-foreground">{assembly.submitter as string}</div>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  )}
-                  <div className="flex items-start gap-2">
-                    <Database className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <div className="font-mono text-sm text-muted-foreground">{assembly.assembly_accession}</div>
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Annotations</span>
+                      <h3 className="text-2xl font-bold text-primary">{assembly.annotations_count as number}</h3>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <div className="text-sm text-muted-foreground">
-                        {new Date(assembly.release_date as string).toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "long",
-                          day: "numeric",
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Building2 className="h-5 w-5 text-primary mt-0.5" />
-                    <div className="flex-1">
-                      <div className="text-sm text-muted-foreground">{assembly.submitter as string}</div>
-                    </div>
-                  </div>
-                </div>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent className="w-56">
-                  <ContextMenuItem 
+                  <ContextMenuItem
                     onClick={(e) => {
                       e.stopPropagation()
                       onAssemblySelect?.(assembly.assembly_accession)
@@ -291,7 +294,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
                     <Info className="h-4 w-4" />
                     <span>View Assembly Details</span>
                   </ContextMenuItem>
-                  <ContextMenuItem 
+                  <ContextMenuItem
                     onClick={(e) => {
                       e.stopPropagation()
                       onJBrowseChange?.(assembly.assembly_accession)
@@ -328,7 +331,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
               <ChevronLeft className="h-4 w-4" />
               Previous
             </Button>
-            
+
             <div className="flex items-center gap-1">
               {getPageNumbers().map((page, index) => (
                 page === '...' ? (

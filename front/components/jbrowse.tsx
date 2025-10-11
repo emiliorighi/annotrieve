@@ -8,7 +8,6 @@ import {
 } from '@jbrowse/react-linear-genome-view2'
 import { getAssembledMolecules } from '@/lib/api/assemblies'
 import { listAnnotations } from '@/lib/api/annotations'
-import { getJBrowseWorker } from '@/lib/jbrowse-worker'
 
 interface JBrowseLinearGenomeViewComponentProps {
   accession: string
@@ -22,23 +21,30 @@ const configuration = {
   theme: {
     palette: {
       mode: 'dark',
+      // UI Colors - Muted and harmonious with dark background
       primary: {
-        main: '#0891b2', // Cyan-600 - matches app primary
+        main: '#64748b', // Slate-500 - Muted gray-blue for primary actions
+        light: '#94a3b8', // Slate-400 - Lighter variant
+        dark: '#475569', // Slate-600 - Darker variant
+        contrastText: '#ffffff', // White text on muted gray
       },
       secondary: {
-        main: '#d97706', // Amber-600 - matches app secondary
+        main: '#6b7280', // Gray-500 - Neutral gray for secondary actions
+        light: '#9ca3af', // Gray-400 - Lighter variant
+        dark: '#4b5563', // Gray-600 - Darker variant
+        contrastText: '#ffffff', // White text on gray
       },
       tertiary: {
-        main: '#ea580c', // Orange-600 - matches app destructive
+        main: '#7c2d12', // Red-800 - Dark red for tertiary elements
+        light: '#991b1b', // Red-800 - Slightly lighter
+        dark: '#5c1a1a', // Custom dark red
+        contrastText: '#ffffff', // White text on dark red
       },
       quaternary: {
-        main: '#dc2626', // Red-600 - complementary error color
-      },
-      bases: {
-        A: { main: '#98FB98' }, // Pale green for Adenine
-        C: { main: '#87CEEB' }, // Sky blue for Cytosine
-        G: { main: '#DAA520' }, // Goldenrod for Guanine
-        T: { main: '#DC143C' }, // Crimson for Thymine
+        main: '#1e3a8a', // Blue-800 - Dark blue for quaternary elements
+        light: '#1e40af', // Blue-700 - Lighter variant
+        dark: '#1e293b', // Slate-800 - Darker variant
+        contrastText: '#ffffff', // White text on dark blue
       },
     },
   },
@@ -68,10 +74,10 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
 
         const chromosomeResults = chromosomesResponse.results ?? []
         const annotationResults = annotationsResponse.results ?? []
-        
+
         setChromosomes(chromosomeResults)
         setAssemblyName(annotationResults[0]?.assembly_name ?? '')
-        
+
         if (annotationId) {
           setAnnotations(annotationResults.filter((annotation: any) => annotation.annotation_id === annotationId))
         } else {
@@ -109,7 +115,22 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
           },
           indexType: "CSI"
         },
-      }
+      },
+      displays: [
+        {
+          type: "LinearBasicDisplay",
+          displayId: "myTrackLinearDisplay",
+          renderer: {
+            type: "SvgFeatureRenderer",
+            showLabels: true,
+            showDescriptions: true,
+            labels: {
+              descriptionColor: "#8b8b8b",    // <-- override this
+            },
+          }
+        }
+      ]
+
     }))
   }, [annotations])
 
@@ -155,6 +176,8 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
       return
     }
 
+    // JBrowse needs to create multiple workers for its RPC system
+    // Don't use a singleton - let JBrowse manage worker lifecycle
     const state = createViewState({
       assembly,
       tracks,
@@ -165,7 +188,9 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
         },
         ...configuration,
       },
-      makeWorkerInstance: getJBrowseWorker,
+      makeWorkerInstance: () => {
+        return new Worker(new URL('../app/rpcWorker.ts', import.meta.url))
+      },
     })
     setViewState(state)
   }, [assembly, tracks])

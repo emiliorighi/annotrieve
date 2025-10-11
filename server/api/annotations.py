@@ -38,6 +38,7 @@ async def get_annotations_stats(field: str, commons: Dict[str, Any] = Depends(pa
     params = params_helper.handle_request_params(commons, payload)
     return annotations_service.get_annotations(response_type='stats', field=field, **params)
 
+
 @router.get("/annotations/download")
 @router.post("/annotations/download")
 async def get_annotations_download_file(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
@@ -70,6 +71,16 @@ async def get_annotation(md5_checksum: str):
     """
     annotation = annotations_service.get_annotation(md5_checksum)
     return annotation.to_mongo().to_dict()
+
+@router.post("/annotations/{md5_checksum}/annotation_metrics")
+async def update_annotation_metrics(md5_checksum: str, payload: Optional[Dict[str, Any]] = Body(None)):
+    """
+    Update annotation metrics, endpoint used from github action to update the stats of the annotations
+    """
+    annotation = annotations_service.get_annotation(md5_checksum, payload)
+    return annotation.to_mongo().to_dict()
+
+
 
 @router.get("/annotations/{md5_checksum}/contigs")
 async def get_contigs(md5_checksum: str):

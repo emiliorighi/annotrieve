@@ -5,10 +5,14 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, FileText, Calendar, HardDrive } from "lucide-react"
+import { Search, FileText, Calendar, HardDrive, CheckSquare, Square, Download } from "lucide-react"
 import { AnnotationActions } from "@/components/annotation-actions"
 import type { FilterType, Annotation } from "@/lib/types"
 import { listAnnotations } from "@/lib/api/annotations"
+import { BulkDownloadBar } from "@/components/bulk-download-bar"
+import { Button } from "./ui/button"
+import * as Checkbox from "@radix-ui/react-checkbox"
+import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 
 interface AnnotationsListProps {
   filterType: FilterType
@@ -19,9 +23,23 @@ interface AnnotationsListProps {
 
 export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions, onJBrowseChange }: AnnotationsListProps) {
   const [searchQuery, setSearchQuery] = useState("")
-  const [sourceFilter, setSourceFilter] = useState<"all" | "GenBank"| "RefSeq" | "Ensembl">("all")
+  const [sourceFilter, setSourceFilter] = useState<"all" | "GenBank" | "RefSeq" | "Ensembl">("all")
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [totalAnnotations, setTotalAnnotations] = useState<number>(0)
+  
+  // Zustand store
+  const {
+    selectedIds,
+    selectedAnnotations,
+    toggleSelection,
+    selectAll,
+    selectMostRecent,
+    clearSelection,
+    setSelectedAnnotations,
+    isSelected,
+    allSelected,
+    someSelected
+  } = useSelectedAnnotationsStore()
 
   useEffect(() => {
     async function fetchData() {
@@ -39,22 +57,77 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
           params = { ...params, assembly_accessions: filterObject?.assembly_accession || filterObject?.assemblyAccession }
         }
         const res = await listAnnotations(params as any)
-        setAnnotations((res as any)?.results as any)
+        const fetchedAnnotations = (res as any)?.results as any
+        setAnnotations(fetchedAnnotations)
         setTotalAnnotations((res as any)?.total ?? 0)
+        
+        // Update store with current annotations
+        setSelectedAnnotations(fetchedAnnotations)
       } catch (e) {
         setAnnotations([])
+        setSelectedAnnotations([])
       }
     }
     fetchData()
-  }, [filterType, filterObject, selectedAssemblyAccessions])
+  }, [filterType, filterObject, selectedAssemblyAccessions, setSelectedAnnotations])
+
+  const handleSelectAll = () => {
+    selectAll(annotations)
+  }
+
+  const handleSelectMostRecent = () => {
+    selectMostRecent(annotations)
+  }
+
+  const handleClearSelection = () => {
+    clearSelection()
+  }
+
+  const handleToggleSelection = (id: string) => {
+    toggleSelection(id)
+  }
 
   return (
     <div className="space-y-4">
       {/* Header with filters */}
       <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+        
         <h3 className="text-xl font-semibold">
           Related Annotations <span className="text-muted-foreground">({totalAnnotations})</span>
         </h3>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={allSelected(annotations.length) ? handleClearSelection : handleSelectAll}
+            className="h-8 text-xs bg-transparent"
+          >
+            {allSelected(annotations.length) ? (
+              <>
+                <CheckSquare className="h-3.5 w-3.5 mr-1.5" />
+                Deselect All
+              </>
+            ) : (
+              <>
+                <Square className="h-3.5 w-3.5 mr-1.5" />
+                Select All
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSelectMostRecent}
+            className="h-8 text-xs bg-transparent"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Most Recent per Species
+          </Button>
+        </div>
+        </div>
+
+
         <div className="flex items-center gap-3">
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -81,7 +154,7 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
       </div>
 
       {/* Annotations list */}
-        {annotations.length === 0 ? (
+      {annotations.length === 0 ? (
         <Card className="p-12">
           <div className="text-center text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
@@ -91,26 +164,45 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
       ) : (
         <div className="grid gap-4">
           {annotations.map((annotation) => (
-            <AnnotationCard key={annotation.annotation_id} annotation={annotation} onJBrowseChange={onJBrowseChange} />
+            <AnnotationCard onToggleSelection={handleToggleSelection} isSelected={isSelected(annotation.annotation_id)} key={annotation.annotation_id} annotation={annotation} onJBrowseChange={onJBrowseChange} />
           ))}
         </div>
+      )}
+      {selectedIds.size > 0 && (
+        <BulkDownloadBar
+          selectedAnnotations={selectedAnnotations}
+          onClearSelection={handleClearSelection}
+        />
       )}
     </div>
   )
 }
 
-function AnnotationCard({ annotation, onJBrowseChange }: { annotation: Annotation, onJBrowseChange?: (accession: string, annotationId: string) => void }) {
+function AnnotationCard({ annotation, onJBrowseChange, isSelected, onToggleSelection }: { annotation: Annotation, onJBrowseChange?: (accession: string, annotationId: string) => void, isSelected: boolean, onToggleSelection: (id: string) => void }) {
   function convertToHumanReadableSize(file_size: any) {
     const units = ["B", "KB", "MB", "GB", "TB"]
     const index = Math.floor(Math.log10(file_size) / 3)
     return (file_size / Math.pow(1024, index)).toFixed(2) + " " + units[index]
   }
-// above the return:
-const rootCounts = annotation.features_summary?.root_types_counts ?? {};
-const rootCountEntries = Object.entries(rootCounts).sort((a, b) => b[1] - a[1]); // optional: sort desc
+  // above the return:
+  const rootCounts = annotation.features_summary?.root_types_counts ?? {};
+  const rootCountEntries = Object.entries(rootCounts).sort((a, b) => b[1] - a[1]); // optional: sort desc
   return (
-    <Card className="p-5 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-4">
+    <Card className={`p-5 hover:shadow-md transition-shadow ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'}`}>
+      <div className="flex items-center gap-4">
+        <div className="flex items-center justify-center">
+          <Checkbox.Root
+            checked={isSelected}
+            onCheckedChange={() => onToggleSelection(annotation.annotation_id)}
+            className="w-5 h-5 rounded border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:border-primary flex items-center justify-center"
+          >
+            <Checkbox.Indicator className="text-primary-foreground">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+                <path d="M11.5 3.5L5.25 9.75L2.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+            </Checkbox.Indicator>
+          </Checkbox.Root>
+        </div>
         <div className="flex-1 min-w-0">
           {/* Header */}
           <div className="flex items-start gap-3 mb-3">

@@ -56,6 +56,7 @@ export interface AssemblyRecord {
   assembly_stats?: AssemblyStats
   release_date?: string
   submitter?: string
+  download_url?: string
   [key: string]: unknown
 }
 
