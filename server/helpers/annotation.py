@@ -2,13 +2,16 @@ from helpers import parameters as parameters_helper
 from typing import Optional, Dict, List
 
 DEFAULT_FIELD_MAP: Dict[str, str] = {
-    "taxids": "taxon_lineage",
-    "db_sources": "source_file_info__database",
-    "assembly_accessions": "assembly_accession",
-    "md5_checksums": "annotation_id",
-    "feature_types": "features_summary__types",
-    "feature_sources": "features_summary__sources",
-    "biotypes": "features_summary__biotypes",
+    "taxids": "taxon_lineage__in",
+    "db_sources": "source_file_info__database__in",
+    "assembly_accessions": "assembly_accession__in",
+    "md5_checksums": "annotation_id__in",
+    "feature_types": "features_summary__types__in",
+    "feature_sources": "features_summary__sources__in",
+    "biotypes": "features_summary__biotypes__in",
+    "has_metrics": "annotation_metrics__exists",
+    "pipelines": "source_file_info__pipeline__name__in",
+    "providers": "source_file_info__provider__in",
 }
 
 def query_params_to_mongoengine_query(
@@ -19,6 +22,9 @@ def query_params_to_mongoengine_query(
     feature_types: Optional[List[str] | str] = None,
     feature_sources: Optional[List[str] | str] = None,
     biotypes: Optional[List[str] | str] = None,
+    has_metrics: Optional[bool] = None,
+    pipelines: Optional[str] = None,
+    providers: Optional[str] = None,
     field_map: Optional[Dict[str, str]] = None,
 ) -> Dict[str, object]:
     """
@@ -38,17 +44,25 @@ def query_params_to_mongoengine_query(
         "feature_types": feature_types,
         "feature_sources": feature_sources,
         "biotypes": biotypes,
+        "has_metrics": has_metrics,
+        "pipelines": pipelines,
+        "providers": providers,
     }
 
     for param_name, raw_value in inputs.items():
-        values = parameters_helper.normalize_to_list(raw_value)
-        if not values:
-            continue
+        if param_name.lower() == 'true':
+            raw_value = True
+        elif param_name.lower() == 'false':
+            raw_value = False
+        else:
+            values = parameters_helper.normalize_to_list(raw_value)
+            if not values:
+                continue
         field = mapping.get(param_name)
         if not field:
             # Unknown param; ignore silently or log if you prefer
             continue
-        query[f"{field}__in"] = values
+        query[field] = values
     return query
 
 def get_latest_release_by_group_pipeline(group_by: str):

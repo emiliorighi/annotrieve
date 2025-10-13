@@ -10,7 +10,6 @@ from fastapi import HTTPException
 from typing import Optional
 import os
 from jobs.import_annotations import import_annotations
-from mongoengine import QuerySet
 
 NO_VALUE_KEY = "no_value"
 
@@ -53,13 +52,16 @@ response_file_too_big_with_suggestions_example = {
 
 
 def get_annotations(
-    filter:str = None,
+    filter:str = None, #text search on assembly, taxonomy or annotation id
     taxids: Optional[str] = None, 
-    db_sources: Optional[str] = None,
+    db_sources: Optional[str] = None, #GenBank, RefSeq, Ensembl
     feature_sources: Optional[str] = None,
     assembly_accessions: Optional[str] = None,
     biotypes: Optional[str] = None,
     feature_types: Optional[str] = None,
+    has_metrics: Optional[bool] = None, #True, False, None for all
+    pipelines: Optional[str] = None, #pipeline name
+    providers: Optional[str] = None, #annotation provider list separated by comma
     md5_checksums: Optional[str] = None, 
     offset: int = 0, limit: int = 20, 
     response_type: str = 'metadata', #metadata, download_info, download_file
@@ -83,12 +85,14 @@ def get_annotations(
             feature_sources=feature_sources,
             biotypes=biotypes,
             feature_types=feature_types,
+            has_metrics=has_metrics,
+            pipelines=pipelines,
+            providers=providers,
         )
         annotations = GenomeAnnotation.objects(**mongoengine_query).exclude('id')
         
         if filter:
             annotations = annotations.filter(query_visitors_helper.annotation_query(filter))
-
         if latest_release_by:
             pymongo_query = annotations.aggregate(
                 *annotation_helper.get_latest_release_by_group_pipeline(latest_release_by)
