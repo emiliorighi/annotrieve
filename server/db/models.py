@@ -1,5 +1,5 @@
 from datetime import datetime
-from .embedded_documents import AssemblyStats, SourceFileInfo, IndexedFileInfo, FeatureOverview
+from .embedded_documents import AssemblyStats, SourceFileInfo, IndexedFileInfo, FeatureOverview, GFFStats
 from mongoengine import (
     Document,
     DynamicDocument,
@@ -9,6 +9,7 @@ from mongoengine import (
     EmbeddedDocumentField,
     URLField,
     DateTimeField,
+    DictField,
 )
 
 def drop_all_collections():
@@ -129,7 +130,7 @@ class GenomeAnnotation(DynamicDocument):
     features_summary = EmbeddedDocumentField(FeatureOverview)
 
     #ANNOTATION METRICS TODO: ADD THIS LATER
-    #annotation_metrics = EmbeddedDocumentField(AnnotationMetrics)
+    annotation_stats = DictField(field=EmbeddedDocumentField(GFFStats)) #key is coding_genes, non_coding_genes, pseudogenes
 
     # Time
     meta = {

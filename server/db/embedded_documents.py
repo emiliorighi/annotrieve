@@ -66,22 +66,32 @@ class FeatureOverview(EmbeddedDocument):
     has_cds = BooleanField() # Whether the GFF file has a CDS feature
     has_exon = BooleanField() # Whether the GFF file has an exon feature
 
-#key is the combination of root_type and biotype
-class AnnotationStatistics(DynamicEmbeddedDocument):
-    count = IntField() # Count of the combination of root_type and biotype
-    genomic_span = FloatField() # Sum of the genomic span of the combination of root_type and biotype
-    shortest_feature_length = IntField() # Shortest feature length of the combination of root_type and biotype
-    longest_feature_length = IntField() # Longest feature length of the combination of root_type and biotype
-"""
-dynamically generate keys 
-<child_type>_count
-<child_type>
+class GeneLengthStats(EmbeddedDocument):
+    min = IntField()
+    max = IntField()
+    avg = FloatField()
 
-"""
 
-"""
-dict field protein_coding_genes { 
+class TranscriptTypeStats(EmbeddedDocument):
+    count = IntField()
+    count_per_gene = FloatField()
+    exons_per_transcript = FloatField()
+    avg_length = FloatField()
+    avg_spliced_length = FloatField()
 
-}
+class TranscriptStats(EmbeddedDocument):
+    total = IntField()
+    count_per_gene = FloatField()
+    by_type = DictField(field=EmbeddedDocumentField(TranscriptTypeStats))
 
-"""
+class FeatureBaseStats(EmbeddedDocument):
+    total = IntField()
+    avg_length = FloatField()
+
+class GFFStats(DynamicEmbeddedDocument):
+    count = IntField()
+    length = EmbeddedDocumentField(GeneLengthStats)
+    transcripts = EmbeddedDocumentField(TranscriptStats)
+    exons = EmbeddedDocumentField(FeatureBaseStats)
+    cds = EmbeddedDocumentField(FeatureBaseStats)
+    introns = EmbeddedDocumentField(FeatureBaseStats)
