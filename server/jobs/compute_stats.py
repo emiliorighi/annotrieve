@@ -17,7 +17,6 @@ import json
 import sys
 from collections import defaultdict
 from typing import Optional
-import statistics
 
 # Precompiled regex for faster parsing
 attribute_pattern = re.compile(r'([^=;]+)=([^;]+)')
@@ -286,25 +285,24 @@ def compute_gff_stats(gff_url: str) -> dict:
                 'length': {
                     'min': (min(lengths) if lengths else 0),
                     'max': (max(lengths) if lengths else 0),
-                    'average': (round(sum(lengths) / len(lengths), 2) if lengths else 0),
-                    'median': (statistics.median(lengths) if lengths else 0)
+                    'avg': (round(sum(lengths) / len(lengths), 2) if lengths else 0),
                 },
                 'transcripts': {
                     'total': total_transcripts,
-                    'average_per_gene': (round(total_transcripts / gene_count, 2) if gene_count else 0),
+                    'count_per_gene': (round(total_transcripts / gene_count, 2) if gene_count else 0),
                     'by_type': {}
                 },
                 'exons': {
                     'total': ex_total,                   
-                    'average_length': (round(ex_sum / ex_total, 2) if ex_total else 0)
+                    'avg_length': (round(ex_sum / ex_total, 2) if ex_total else 0)
                 },
                 'introns': {
                     'total': in_total,
-                    'average_length': (round(in_sum / in_total, 2) if in_total else 0)
+                    'avg_length': (round(in_sum / in_total, 2) if in_total else 0)
                 },
                 'cds': {
                     'total': cds_total,
-                    'average_length': (round(cds_len_sum / cds_transcripts, 2) if cds_transcripts else 0)
+                    'avg_length': (round(cds_len_sum / cds_transcripts, 2) if cds_transcripts else 0)
                 }
             }
 
@@ -319,10 +317,10 @@ def compute_gff_stats(gff_url: str) -> dict:
                                if type_transcripts.get(ctype, 0) > 0 else 0)
                 category_obj['transcripts']['by_type'][ctype] = {
                     'count': total,
-                    'average_per_gene': avg_per_gene,
-                    'average_exons': avg_exons,
-                    'average_length': avg_len,
-                    'average_spliced_length': avg_spliced
+                    'count_per_gene': avg_per_gene,
+                    'exons_per_transcript': avg_exons,
+                    'avg_length': avg_len,
+                    'avg_spliced_length': avg_spliced,
                 }
 
             return category_obj
