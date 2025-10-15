@@ -75,7 +75,7 @@ def get_annotations(
         elif response_type == 'frequencies':
             return query_visitors_helper.get_frequencies(annotations, field)
         elif response_type == 'summary_stats':
-            return get_annotations_summary_stats(annotations, field)
+            return get_annotations_summary_stats(annotations)
         else:
             return response_helper.json_response_with_pagination(annotations, total, offset, limit)
 
@@ -93,118 +93,221 @@ def get_annotation(md5_checksum):
 
 
 def get_annotations_summary_stats(annotations):
-
+    """
+    Calculate summary statistics across all annotations in the queryset.
+    Returns aggregated stats for genes, transcripts, and features.
+    """
+    
+    # Basic annotation counts
+    total_count = annotations.count()
+    related_organisms_count = len(annotations.distinct('taxid'))
+    related_assemblies_count = len(annotations.distinct('assembly_accession'))
+    
+    # Helper function to calculate stats for a gene category
+    def get_gene_category_stats(category_name):
+        pipeline = [
+            {
+                "$project": {
+                    "count": f"$features_statistics.{category_name}.count",
+                    "mean_length": f"$features_statistics.{category_name}.length_stats.mean",
+                    "transcript_types": f"$features_statistics.{category_name}.transcripts.types"
+                }
+            },
+            {
+                "$match": {
+                    "count": {"$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "counts": {"$push": "$count"},
+                    "mean_lengths": {"$push": "$mean_length"},
+                    "total_count": {"$sum": "$count"},
+                    "avg_count": {"$avg": "$count"},
+                    "avg_mean_length": {"$avg": "$mean_length"},
+                    "transcript_types_array": {"$push": "$transcript_types"}
+                }
+            }
+        ]
+        
+        result = list(annotations.aggregate(pipeline))
+        if not result or not result[0]:
+            return None
+        
+        data = result[0]
+        counts = [c for c in data.get('counts', []) if c is not None]
+        mean_lengths = [ml for ml in data.get('mean_lengths', []) if ml is not None]
+        
+        return {
+            'total_count': data.get('total_count', 0),
+            'mean_count': round(data.get('avg_count', 0), 2) if data.get('avg_count') else 0,
+            'median_count': round(statistics.median(counts), 2) if counts else 0,
+            'mean_length': round(data.get('avg_mean_length', 0), 2) if data.get('avg_mean_length') else 0,
+            'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0,
+            'transcript_types': data.get('transcript_types_array', [])
+        }
+    
+    # Get stats for each gene category
+    coding_genes_stats = get_gene_category_stats('coding_genes')
+    non_coding_genes_stats = get_gene_category_stats('non_coding_genes')
+    pseudogenes_stats = get_gene_category_stats('pseudogenes')
+    
+    # Helper function to aggregate transcript type stats (e.g., mRNA)
+    def get_transcript_type_stats(gene_categories):
+        """Aggregate transcript types across all gene categories"""
+        transcript_stats = {}
+        
+        for category_stats in gene_categories:
+            if not category_stats or not category_stats.get('transcript_types'):
+                continue
+            
+            for types_dict in category_stats['transcript_types']:
+                if not types_dict or not isinstance(types_dict, dict):
+                    continue
+                
+                for type_name, type_data in types_dict.items():
+                    if type_name not in transcript_stats:
+                        transcript_stats[type_name] = {
+                            'counts': [],
+                            'mean_lengths': []
+                        }
+                    
+                    if isinstance(type_data, dict):
+                        count = type_data.get('count')
+                        if count is not None:
+                            transcript_stats[type_name]['counts'].append(count)
+                        
+                        length_stats = type_data.get('length_stats', {})
+                        if isinstance(length_stats, dict):
+                            mean_length = length_stats.get('mean')
+                            if mean_length is not None:
+                                transcript_stats[type_name]['mean_lengths'].append(mean_length)
+        
+        # Calculate final stats for each transcript type
+        result = {}
+        for type_name, data in transcript_stats.items():
+            counts = data['counts']
+            mean_lengths = data['mean_lengths']
+            
+            result[type_name] = {
+                'total_count': sum(counts) if counts else 0,
+                'mean_count': round(statistics.mean(counts), 2) if counts else 0,
+                'median_count': round(statistics.median(counts), 2) if counts else 0,
+                'mean_length': round(statistics.mean(mean_lengths), 2) if mean_lengths else 0,
+                'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0,
+            }
+        
+        return result
+    
+    # Get transcript stats
+    transcript_stats = get_transcript_type_stats([
+        coding_genes_stats,
+        non_coding_genes_stats,
+        pseudogenes_stats
+    ])
+    
+    # Helper function to get feature stats (cds, exons, introns)
+    def get_feature_stats(gene_category, feature_name):
+        """Get stats for a specific feature type within a gene category"""
+        pipeline = [
+            {"$match": annotations._query},
+            {
+                "$project": {
+                    "mean_length": f"$features_statistics.{gene_category}.features.{feature_name}.length_stats.mean"
+                }
+            },
+            {
+                "$match": {
+                    "mean_length": {"$ne": None}
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "mean_lengths": {"$push": "$mean_length"},
+                    "avg_mean_length": {"$avg": "$mean_length"}
+                }
+            }
+        ]
+        
+        result = list(annotations.aggregate(pipeline))
+        if not result or not result[0]:
+            return None
+        
+        data = result[0]
+        mean_lengths = [ml for ml in data.get('mean_lengths', []) if ml is not None]
+        
+        return {
+            'mean_length': round(data.get('avg_mean_length', 0), 2) if data.get('avg_mean_length') else 0,
+            'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0
+        }
+    
+    # Aggregate feature stats across all gene categories
+    feature_types = ['cds', 'exons', 'introns']
+    gene_categories = ['coding_genes', 'non_coding_genes', 'pseudogenes']
+    
+    features_stats = {}
+    for feature_name in feature_types:
+        all_mean_lengths = []
+        
+        for gene_category in gene_categories:
+            feature_stat = get_feature_stats(gene_category, feature_name)
+            if feature_stat and feature_stat.get('mean_length'):
+                all_mean_lengths.append(feature_stat['mean_length'])
+        
+        features_stats[feature_name] = {
+            'mean_length': round(statistics.mean(all_mean_lengths), 2) if all_mean_lengths else 0,
+            'median_length': round(statistics.median(all_mean_lengths), 2) if all_mean_lengths else 0
+        }
+    
+    # Build final summary report
     summary_report = {
-        'organisms_count':0,
-        'assemblies_count':0,
-        'annotations_count':0,
-        'genes':{
-            'coding_genes':{
-                'total_count':0,
-                'mean_count':0,
-                'median_count':0,
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            },
-            'non_coding_genes':{
-                'total_count':0,
-                'mean_count':0,
-                'median_count':0,
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            },
-            'pseudogenes':{
-                'total_count':0,
-                'mean_count':0,
-                'median_count':0,
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            }
+        'annotations': {
+            'total_count': total_count,
+            'related_organisms_count': related_organisms_count,
+            'related_assemblies_count': related_assemblies_count,
         },
-        'transcripts':{
-            'mRNA':{
-                'total_count':0,
-                'mean_count':0,
-                'median_count':0,
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            }
-        },
-        'features':{
-            'cds':{
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            },
-            'exons':{
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            },
-            'introns':{
-                'total_length':0,
-                'mean_length':0,
-                'median_length':0
-            }
-        },
+        'genes': {}
     }
-    #calculate min, max, mean, median for the field
-    dot_field = f"features_statistics.{field}"
-    underscore_field = f'{dot_field.replace(".", "__")}'
     
-    total = annotations.count()
-    
-    # Filter out annotations with no stats (use __ notation for filtering)
-    annotations = annotations.filter(**{f"{underscore_field}__exists": True})
-    new_count = annotations.count()
-    
-    # Use aggregation pipeline to get values from nested fields (including dict fields)
-    pipeline = [
-        {
-            "$project": {
-                "value": f"${dot_field}"
-            }
-        },
-        {
-            "$group": {
-                "_id": None,
-                "values": {"$push": "$value"},
-                "mean": {"$avg": "$value"},
-                "min": {"$min": "$value"},
-                "max": {"$max": "$value"}
-            }
+    # Add gene stats
+    if coding_genes_stats:
+        summary_report['genes']['coding_genes'] = {
+            'total_count': coding_genes_stats['total_count'],
+            'mean_count': coding_genes_stats['mean_count'],
+            'median_count': coding_genes_stats['median_count'],
+            'mean_length': coding_genes_stats['mean_length'],
+            'median_length': coding_genes_stats['median_length']
         }
-    ]
     
-    result = list(annotations.aggregate(pipeline))
-    if not result or not result[0].get('values'):
-        raise HTTPException(status_code=404, detail=f"No data found for field: {field}")
-    
-    values = result[0]['values']
-    # Remove None values
-    values = [v for v in values if v is not None and not isinstance(v, dict)]
-    
-    if not values:
-        raise HTTPException(status_code=404, detail=f"No valid data found for field: {field}")
-    
-    sorted_values = sorted(values)
-    median = statistics.median(sorted_values)
-    
-    return {
-        'field': field,
-        'annotations_count': total,
-        'annotations_with_stats': new_count,
-        'summary': {    
-            'min': result[0]['min'],
-            'max': result[0]['max'],
-            'mean': round(result[0]['mean'], 2),
-            'median': median
+    if non_coding_genes_stats:
+        summary_report['genes']['non_coding_genes'] = {
+            'total_count': non_coding_genes_stats['total_count'],
+            'mean_count': non_coding_genes_stats['mean_count'],
+            'median_count': non_coding_genes_stats['median_count'],
+            'mean_length': non_coding_genes_stats['mean_length'],
+            'median_length': non_coding_genes_stats['median_length']
         }
-    }
+    
+    if pseudogenes_stats:
+        summary_report['genes']['pseudogenes'] = {
+            'total_count': pseudogenes_stats['total_count'],
+            'mean_count': pseudogenes_stats['mean_count'],
+            'median_count': pseudogenes_stats['median_count'],
+            'mean_length': pseudogenes_stats['mean_length'],
+            'median_length': pseudogenes_stats['median_length']
+        }
+    
+    # Add transcript stats
+    if transcript_stats:
+        summary_report['transcripts'] = transcript_stats
+    
+    # Add feature stats
+    if features_stats:
+        summary_report['features'] = features_stats
+    
+    return summary_report
 
 def update_annotation_stats(md5_checksum, payload):
     print(payload)

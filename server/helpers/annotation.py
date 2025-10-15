@@ -2,6 +2,7 @@ from helpers import parameters as parameters_helper
 from typing import Optional, Dict, List, Any
 from db.embedded_documents import GeneStats, GeneLengthStats, TranscriptStats, LengthStats, FeatureStats, TranscriptTypeStats, FeatureTypeStats, GFFStats
 
+
 DEFAULT_FIELD_MAP: Dict[str, str] = {
     "taxids": "taxon_lineage__in",
     "db_sources": "source_file_info__database__in",
@@ -144,3 +145,4 @@ def get_latest_release_by_group_pipeline(group_by: str):
         {"$group": {"_id": f"${field}", "latest_annotation": {"$first": "$$ROOT"}}},
         {"$replaceRoot": {"newRoot": "$latest_annotation"}},
     ]
+

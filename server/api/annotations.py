@@ -47,9 +47,21 @@ async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common
 @router.post("/annotations/stats/summary")
 async def get_annotations_stats_summary(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
     """
-    Get annotations stats summary
+    Get annotations stats summary across all annotations in the queryset
     """
     params = params_helper.handle_request_params(commons, payload)
+    
+    # Get valid parameters from the service function signature
+    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
+    
+    # Filter out invalid parameters
+    invalid_params = set(params.keys()) - valid_params
+    if invalid_params:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
+        )
+    
     return annotations_service.get_annotations(response_type='summary_stats', **params)
 
 @router.get("/annotations/frequencies/{field}")
@@ -59,6 +71,18 @@ async def get_annotations_frequencies(field: str, commons: Dict[str, Any] = Depe
     Get annotations frequencies for a given field
     """
     params = params_helper.handle_request_params(commons, payload)
+    
+    # Get valid parameters from the service function signature
+    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
+    
+    # Filter out invalid parameters
+    invalid_params = set(params.keys()) - valid_params
+    if invalid_params:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
+        )
+    
     return annotations_service.get_annotations(response_type='frequencies', field=field, **params)
 
 
