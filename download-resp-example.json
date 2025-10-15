@@ -1,0 +1,36 @@
+{
+    "error": "Requested package exceeds 10GB streaming limit.",
+    "estimated_size_gb": 23.7,
+    "annotation_count": 18753,
+    "suggestions": [
+      {
+        "description": "Download only the most recent annotation per species",
+        "example_filter": {
+          "taxids": "40674", 
+          "latest_per_species": true
+        },
+        "estimated_size_gb": 4.9,
+        "annotation_count": 2465
+      },
+      {
+        "description": "Split download by database source",
+        "options": [
+          {
+            "source": "Ensembl",
+            "annotation_count": 6200,
+            "estimated_size_gb": 6.3
+          },
+          {
+            "source": "NCBI",
+            "annotation_count": 7800,
+            "estimated_size_gb": 8.9
+          },
+          {
+            "source": "UCSC",
+            "annotation_count": 2753,
+            "estimated_size_gb": 3.1
+          }
+        ]
+      }
+    ]
+  }

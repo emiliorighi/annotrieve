@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from db.models import GenomeAssembly, GenomicSequence
 from helpers import response as response_helper, query_visitors as query_visitors_helper
 import os
-from jobs.update_assemblies import update_fields
+from jobs.updates import update_fields
 from fastapi.responses import StreamingResponse
 import io
 def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: str = None, offset: int = 0, limit: int = 20, sort_by: str = None, sort_order: str = None, field: str = None, submitters: str = None, response_type: str = 'metadata'):

@@ -29,7 +29,7 @@ def annotation_query(filter):
     return taxonomic_query(filter) | assembly_query(filter) | (Q(source_info__database__iexact=filter) | Q(source_info__database__icontains=filter))
 
 
-def get_stats(items:QuerySet, field:str):
+def get_frequencies(items:QuerySet, field:str):
     if not field:
         raise HTTPException(status_code=400, detail="Field parameter is required")
     

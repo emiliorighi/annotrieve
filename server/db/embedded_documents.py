@@ -69,29 +69,44 @@ class FeatureOverview(EmbeddedDocument):
 class GeneLengthStats(EmbeddedDocument):
     min = IntField()
     max = IntField()
-    avg = FloatField()
+    mean = FloatField()
+    median = FloatField()
 
+class LengthStats(EmbeddedDocument):
+    mean = FloatField()
+    median = FloatField()
 
 class TranscriptTypeStats(EmbeddedDocument):
     count = IntField()
-    count_per_gene = FloatField()
+    per_gene = FloatField()
     exons_per_transcript = FloatField()
-    avg_length = FloatField()
-    avg_spliced_length = FloatField()
+    length_stats = EmbeddedDocumentField(LengthStats)
+    spliced_length_stats = EmbeddedDocumentField(LengthStats)
+    exon_length_stats = EmbeddedDocumentField(LengthStats)
 
 class TranscriptStats(EmbeddedDocument):
-    total = IntField()
-    count_per_gene = FloatField()
-    by_type = DictField(field=EmbeddedDocumentField(TranscriptTypeStats))
+    count = IntField()
+    per_gene = FloatField()
+    types = DictField(field=EmbeddedDocumentField(TranscriptTypeStats))
 
-class FeatureBaseStats(EmbeddedDocument):
-    total = IntField()
-    avg_length = FloatField()
+class FeatureTypeStats(EmbeddedDocument):
+    count = IntField()
+    length_stats = EmbeddedDocumentField(LengthStats)
+
+class FeatureStats(EmbeddedDocument):
+    exons = EmbeddedDocumentField(FeatureTypeStats)
+    cds = EmbeddedDocumentField(FeatureTypeStats)
+    introns = EmbeddedDocumentField(FeatureTypeStats)
+
+class GeneStats(EmbeddedDocument):
+    count = IntField()
+    length_stats = EmbeddedDocumentField(GeneLengthStats)
+    transcripts = EmbeddedDocumentField(TranscriptStats)
+    features = EmbeddedDocumentField(FeatureStats)
 
 class GFFStats(DynamicEmbeddedDocument):
-    count = IntField()
-    length = EmbeddedDocumentField(GeneLengthStats)
-    transcripts = EmbeddedDocumentField(TranscriptStats)
-    exons = EmbeddedDocumentField(FeatureBaseStats)
-    cds = EmbeddedDocumentField(FeatureBaseStats)
-    introns = EmbeddedDocumentField(FeatureBaseStats)
+    coding_genes = EmbeddedDocumentField(GeneStats)
+    non_coding_genes = EmbeddedDocumentField(GeneStats)
+    pseudogenes = EmbeddedDocumentField(GeneStats)
+
+

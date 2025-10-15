@@ -10,70 +10,33 @@ from fastapi import HTTPException
 from typing import Optional
 import os
 from jobs.import_annotations import import_annotations
+import statistics
+
 
 NO_VALUE_KEY = "no_value"
-
-response_file_too_big_with_suggestions_example = {
-  "error": "Requested package exceeds 10GB streaming limit.",
-  "estimated_size_gb": 23.7,
-  "annotation_count": 18753,
-  "suggestions": [
-    {
-      "description": "Download only the most recent annotation per species",
-      "example_filter": {
-        "taxids": "40674", 
-        "latest_per_species": True
-      },
-      "estimated_size_gb": 4.9,
-      "annotation_count": 2465
-    },
-    {
-      "description": "Split download by database source",
-      "options": [
-        {
-          "source": "Ensembl",
-          "annotation_count": 6200,
-          "estimated_size_gb": 6.3
-        },
-        {
-          "source": "NCBI",
-          "annotation_count": 7800,
-          "estimated_size_gb": 8.9
-        },
-        {
-          "source": "UCSC",
-          "annotation_count": 2753,
-          "estimated_size_gb": 3.1
-        }
-      ]
-    }
-  ]
-}
 
 
 def get_annotations(
     filter:str = None, #text search on assembly, taxonomy or annotation id
     taxids: Optional[str] = None, 
     db_sources: Optional[str] = None, #GenBank, RefSeq, Ensembl
-    feature_sources: Optional[str] = None,
+    feature_sources: Optional[str] = None, #second column in the gff file
     assembly_accessions: Optional[str] = None,
-    biotypes: Optional[str] = None,
-    feature_types: Optional[str] = None,
-    has_metrics: Optional[bool] = None, #True, False, None for all
+    biotypes: Optional[str] = None, #biotype present in the 9th column in the gff file
+    feature_types: Optional[str] = None,# third column in the gff file
+    has_stats: Optional[bool] = None, #True, False, None for all
     pipelines: Optional[str] = None, #pipeline name
     providers: Optional[str] = None, #annotation provider list separated by comma
     md5_checksums: Optional[str] = None, 
     offset: int = 0, limit: int = 20, 
     response_type: str = 'metadata', #metadata, download_info, download_file
     latest_release_by: str = None, #organism, assembly, taxon / None for no grouping
-    field: str = None, #field to get stats for
+    field: str = None, #field to get frequencies or statistics
     sort_by: str = None,
     sort_order: str = None,
 ):
     try:
-        # trigger import annotations asynchronously (fire-and-forget)
-        #drop_all_collections()   
-        #import_annotations.delay()
+
         if latest_release_by and latest_release_by not in ['organism', 'assembly']:
             raise HTTPException(status_code=400, detail=f"Invalid latest_release_by: {latest_release_by}, valid values are: organism, assembly, taxon")
         
@@ -85,7 +48,7 @@ def get_annotations(
             feature_sources=feature_sources,
             biotypes=biotypes,
             feature_types=feature_types,
-            has_metrics=has_metrics,
+            has_stats=has_stats,
             pipelines=pipelines,
             providers=providers,
         )
@@ -109,21 +72,148 @@ def get_annotations(
             return response_helper.download_summary_response(annotations, total)
         elif response_type == 'download_file':
             return response_helper.download_file_response(annotations)
-        elif response_type == 'stats':
-            return query_visitors_helper.get_stats(annotations, field)
+        elif response_type == 'frequencies':
+            return query_visitors_helper.get_frequencies(annotations, field)
+        elif response_type == 'summary_stats':
+            return get_annotations_summary_stats(annotations, field)
         else:
             return response_helper.json_response_with_pagination(annotations, total, offset, limit)
 
     except HTTPException as e:
         raise e
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500, detail=f"Error fetching annotations: {e}")
 
 def get_annotation(md5_checksum):
-    annotation = GenomeAnnotation.objects(annotation_id=md5_checksum).exclude('id').first()
+    annotation = GenomeAnnotation.objects(annotation_id=md5_checksum).first()
     if not annotation:
         raise HTTPException(status_code=404, detail=f"Annotation {md5_checksum} not found")
     return annotation
+
+
+def get_annotations_summary_stats(annotations):
+
+    summary_report = {
+        'organisms_count':0,
+        'assemblies_count':0,
+        'annotations_count':0,
+        'genes':{
+            'coding_genes':{
+                'total_count':0,
+                'mean_count':0,
+                'median_count':0,
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            },
+            'non_coding_genes':{
+                'total_count':0,
+                'mean_count':0,
+                'median_count':0,
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            },
+            'pseudogenes':{
+                'total_count':0,
+                'mean_count':0,
+                'median_count':0,
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            }
+        },
+        'transcripts':{
+            'mRNA':{
+                'total_count':0,
+                'mean_count':0,
+                'median_count':0,
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            }
+        },
+        'features':{
+            'cds':{
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            },
+            'exons':{
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            },
+            'introns':{
+                'total_length':0,
+                'mean_length':0,
+                'median_length':0
+            }
+        },
+    }
+    #calculate min, max, mean, median for the field
+    dot_field = f"features_statistics.{field}"
+    underscore_field = f'{dot_field.replace(".", "__")}'
+    
+    total = annotations.count()
+    
+    # Filter out annotations with no stats (use __ notation for filtering)
+    annotations = annotations.filter(**{f"{underscore_field}__exists": True})
+    new_count = annotations.count()
+    
+    # Use aggregation pipeline to get values from nested fields (including dict fields)
+    pipeline = [
+        {
+            "$project": {
+                "value": f"${dot_field}"
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "values": {"$push": "$value"},
+                "mean": {"$avg": "$value"},
+                "min": {"$min": "$value"},
+                "max": {"$max": "$value"}
+            }
+        }
+    ]
+    
+    result = list(annotations.aggregate(pipeline))
+    if not result or not result[0].get('values'):
+        raise HTTPException(status_code=404, detail=f"No data found for field: {field}")
+    
+    values = result[0]['values']
+    # Remove None values
+    values = [v for v in values if v is not None and not isinstance(v, dict)]
+    
+    if not values:
+        raise HTTPException(status_code=404, detail=f"No valid data found for field: {field}")
+    
+    sorted_values = sorted(values)
+    median = statistics.median(sorted_values)
+    
+    return {
+        'field': field,
+        'annotations_count': total,
+        'annotations_with_stats': new_count,
+        'summary': {    
+            'min': result[0]['min'],
+            'max': result[0]['max'],
+            'mean': round(result[0]['mean'], 2),
+            'median': median
+        }
+    }
+
+def update_annotation_stats(md5_checksum, payload):
+    print(payload)
+    auth_key = payload.get('auth_key')
+    if auth_key != os.getenv('AUTH_KEY'):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    annotation = get_annotation(md5_checksum)
+    annotation.features_statistics = annotation_helper.map_to_gff_stats(payload.get('features_statistics'))
+    annotation.save()
 
 def get_mapped_regions(md5_checksum, offset_param, limit_param):
     try:

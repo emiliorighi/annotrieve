@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, Body
-from typing import Optional, Dict, Any
+from fastapi import APIRouter, Depends, Body, HTTPException
+from typing import Optional, Dict, Any, Literal
 from services import annotations_service
 from helpers import parameters as params_helper
+import inspect
 
 router = APIRouter()
 
@@ -27,16 +28,38 @@ async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common
     Get annotations metadata
     """
     params = params_helper.handle_request_params(commons, payload)
+    
+    # Get valid parameters from the service function signature
+    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
+    
+    # Filter out invalid parameters
+    invalid_params = set(params.keys()) - valid_params
+    if invalid_params:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
+        )
+    
     return annotations_service.get_annotations(**params)
 
-@router.get("/annotations/stats/{field}")
-@router.post("/annotations/stats/{field}")
-async def get_annotations_stats(field: str, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+
+@router.get("/annotations/stats/summary")
+@router.post("/annotations/stats/summary")
+async def get_annotations_stats_summary(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
     """
-    Get annotations stats for a given field
+    Get annotations stats summary
     """
     params = params_helper.handle_request_params(commons, payload)
-    return annotations_service.get_annotations(response_type='stats', field=field, **params)
+    return annotations_service.get_annotations(response_type='summary_stats', **params)
+
+@router.get("/annotations/frequencies/{field}")
+@router.post("/annotations/frequencies/{field}")
+async def get_annotations_frequencies(field: str, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+    """
+    Get annotations frequencies for a given field
+    """
+    params = params_helper.handle_request_params(commons, payload)
+    return annotations_service.get_annotations(response_type='frequencies', field=field, **params)
 
 
 @router.get("/annotations/download")
@@ -72,14 +95,13 @@ async def get_annotation(md5_checksum: str):
     annotation = annotations_service.get_annotation(md5_checksum)
     return annotation.to_mongo().to_dict()
 
-@router.post("/annotations/{md5_checksum}/annotation_metrics")
-async def update_annotation_metrics(md5_checksum: str, payload: Optional[Dict[str, Any]] = Body(None)):
+@router.put("/annotations/{md5_checksum}/stats")
+async def update_annotation_stats(md5_checksum: str, payload: Optional[Dict[str, Any]] = Body(None)):
     """
-    Update annotation metrics, endpoint used from github action to update the stats of the annotations
+    Update annotation stats, endpoint used from github action to update the stats of the annotations
     """
-    annotation = annotations_service.get_annotation(md5_checksum, payload)
-    return annotation.to_mongo().to_dict()
-
+    annotations_service.update_annotation_stats(md5_checksum, payload)
+    return {"message": "Annotation stats updated"}
 
 
 @router.get("/annotations/{md5_checksum}/contigs")
