@@ -48,13 +48,6 @@ def get_paired_assembly(assembly_accession: str):
         raise HTTPException(status_code=404, detail=f"Assembly {assembly_accession} is not a paired assembly")
     return get_assembly(paired_assembly_accession)
 
-def trigger_update_release_date(auth_key: str):
-    if auth_key != os.getenv('AUTH_KEY'):
-        raise HTTPException(status_code=401, detail="Invalid auth key")
-    update_fields.delay()
-    return response_helper.json_response(message="Update release date job triggered")   
-
-
 def get_chr_aliases_file(accession: str):    
     # Query chromosomes based on accession_version
     chromosomes = GenomicSequence.objects(assembly_accession=accession)

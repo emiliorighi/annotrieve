@@ -32,7 +32,3 @@ async def get_assembled_molecules(assembly_accession: str, offset: int = 0, limi
 @router.get("/assemblies/{assembly_accession}/paired") 
 async def get_paired_assembly(assembly_accession: str):
     return assemblies_service.get_paired_assembly(assembly_accession).to_mongo().to_dict()
-
-@router.get("/assemblies/{auth_key}/update_release_date")
-async def update_release_date(auth_key: str):
-    return assemblies_service.trigger_update_release_date(auth_key)

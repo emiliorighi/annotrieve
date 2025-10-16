@@ -1,5 +1,7 @@
 from db.models import GenomeAssembly, GenomeAnnotation, Organism, TaxonNode
 from itertools import chain
+from mongoengine.queryset.visitor import Q
+
 
 def update_db_stats(saved_annotations: list[GenomeAnnotation]):
     """
@@ -38,8 +40,11 @@ def clean_up_empty_models():
     """
     Clean up empty models where annotations_count is 0
     """
-    GenomeAssembly.objects(annotations_count=0).delete()
-    Organism.objects(annotations_count=0).delete()
-    TaxonNode.objects(annotations_count=0).delete()
+    print("Cleaning up empty models")
+    query_op = Q(annotations_count=0) | Q(annotations_count__exists=False)
+    deleted_assemblies_count = GenomeAssembly.objects(query_op).delete()
+    deleted_organisms_count = Organism.objects(query_op).delete()
+    deleted_taxon_nodes_count = TaxonNode.objects(query_op).delete()
+    print(f"Deleted {deleted_assemblies_count} assemblies, {deleted_organisms_count} organisms, {deleted_taxon_nodes_count} taxon nodes")
 
     #update counts on organisms and taxon nodes after deleting empty models
