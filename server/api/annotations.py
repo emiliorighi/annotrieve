@@ -13,14 +13,6 @@ async def trigger_import_annotations(auth_key: str):
     """
     return annotations_service.trigger_import_annotations(auth_key)
 
-# @router.get("/annotations/drop/{auth_key}/{model}")
-# async def drop_collections(auth_key: str, model: str):
-#     """
-#     Drop collections
-#     """
-#     return annotations_service.drop_collections(auth_key, model)
-
-
 @router.get("/annotations")
 @router.post("/annotations")
 async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
@@ -127,7 +119,7 @@ async def get_annotation(md5_checksum: str):
     return annotation.to_mongo().to_dict()
 
 @router.put("/annotations/{md5_checksum}/stats")
-async def update_annotation_stats(md5_checksum: str, payload: Dict[str, Any] = Body(...)):
+async def update_annotation_stats(md5_checksum: str, payload: Optional[Dict[str, Any]] = Body(None)):
     """
     Update annotation stats, endpoint used from github action to update the stats of the annotations
     """
