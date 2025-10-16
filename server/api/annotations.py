@@ -134,6 +134,12 @@ async def update_annotation_stats(md5_checksum: str, payload: Optional[Dict[str,
     annotations_service.update_annotation_stats(md5_checksum, payload)
     return {"message": "Annotation stats updated"}
 
+@router.get("/annotations/{md5_checksum}/gff")
+async def stream_annotation_gff(md5_checksum: str, commons: Dict[str, Any] = Depends(params_helper.common_params)):
+    """
+    Get GFF of an annotation file
+    """
+    return annotations_service.stream_annotation_tabix(md5_checksum, **commons)
 
 @router.get("/annotations/{md5_checksum}/contigs")
 async def get_contigs(md5_checksum: str):
@@ -141,13 +147,6 @@ async def get_contigs(md5_checksum: str):
     Get contigs of an annotation file, as in pysam.contigs(). Returns a stream of contigs
     """
     return annotations_service.get_contigs(md5_checksum)
-
-@router.get("/annotations/{md5_checksum}/contigs/{region}/gff")
-async def get_annotation_tabix(md5_checksum: str, region: str, start: Optional[int] = None, end: Optional[int] = None, feature_type: Optional[str] = None, feature_source: Optional[str] = None):
-    """
-    Stream a region of an annotation file given a region and optionally a start and end
-    """
-    return annotations_service.stream_annotation_tabix(md5_checksum, region, start, end, feature_type, feature_source)
 
 @router.get("/annotations/{md5_checksum}/contigs/aliases")
 async def get_mapped_regions(md5_checksum: str, offset: int = 0, limit: int = 20):

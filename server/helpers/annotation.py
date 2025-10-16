@@ -2,6 +2,9 @@ from helpers import parameters as parameters_helper
 from typing import Optional, Dict, List, Any
 from db.embedded_documents import GeneStats, GeneLengthStats, TranscriptStats, LengthStats, FeatureStats, TranscriptTypeStats, FeatureTypeStats, GFFStats
 import statistics
+from fastapi import HTTPException
+from db.models import AnnotationSequenceMap
+from helpers import pysam_helper
 
 
 DEFAULT_FIELD_MAP: Dict[str, str] = {
@@ -27,6 +30,26 @@ def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dic
         else:
             items.append((new_key, v))
     return dict(items)
+
+def resolve_sequence_id(region:str| int, md5_checksum:str, file_path:str):
+    """
+    Resolve the sequence id from the region or aliases
+    """
+    region_str = str(region)
+    seq_id = None
+    #resolve aliases to sequence_id
+    gff_region = AnnotationSequenceMap.objects(annotation_id=md5_checksum, aliases__in=[region, region_str]).first()
+    if not gff_region:
+        #check if the region is present in the contigs
+        for contig in pysam_helper.stream_contigs(file_path):
+            if region == contig:
+                seq_id = region
+                break
+        if not seq_id:
+            raise HTTPException(status_code=404, detail=f"Region '{region}' not found in annotation {md5_checksum}")
+    else:
+        seq_id = gff_region.sequence_id
+    return seq_id
 
 def map_to_gff_stats(features_stats: Dict[str, Any]) -> GFFStats:
     """

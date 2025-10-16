@@ -273,7 +273,7 @@ def get_contigs(md5_checksum):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching contigs: {e}")
 
-def stream_annotation_tabix(md5_checksum, region, start, end, feature_type, feature_source):
+def stream_annotation_tabix(md5_checksum:str, region:str=None, start:int=None, end:int=None, feature_type:str=None, feature_source:str=None, biotype:str=None):
     try:
         annotation = get_annotation(md5_checksum)
         file_path = file_helper.get_annotation_file_path(annotation)
@@ -283,25 +283,23 @@ def stream_annotation_tabix(md5_checksum, region, start, end, feature_type, feat
         start = params_helper.coerce_optional_int(start, 'start')
         end = params_helper.coerce_optional_int(end, 'end')
         
+        #if there is no filter raise an error suggesting to download the file instead
+        if not feature_type and not feature_source and not biotype and not region:
+            raise HTTPException(status_code=400, detail="No filters provided, please provide a region, feature type, feature source or biotype to filter the annotation file, or download the file instead.")
+
         if start is not None and end is not None and start > end:
             raise HTTPException(status_code=400, detail="start must be less than end")
-        region_str = str(region)
-        seq_id = None
-        #resolve aliases to sequence_id
-        gff_region = AnnotationSequenceMap.objects(annotation_id=md5_checksum, aliases__in=[region, region_str]).first()
-        if not gff_region:
-            #check if the region is present in the contigs
-            for contig in pysam_helper.stream_contigs(file_path):
-                if region == contig:
-                    seq_id = region
-                    break
-            if not seq_id:
-                raise HTTPException(status_code=404, detail=f"Region '{region}' not found in annotation {md5_checksum}")
-        else:
-            seq_id = gff_region.sequence_id
-        if feature_type:
-            return StreamingResponse(pysam_helper.stream_region_with_filters(file_path, seq_id, start, end, feature_type), media_type='text/plain')
-        return StreamingResponse(pysam_helper.stream_gff_file_region(file_path, seq_id, start, end))
+        
+        seq_id = annotation_helper.resolve_sequence_id(region, md5_checksum, file_path) if region else None
+
+        #check if biotype, feature_type and feature_source are valid values
+        if biotype and biotype not in annotation.features_summary.biotypes:
+            raise HTTPException(status_code=400, detail=f"Invalid biotype: {biotype}, expected values are: {annotation.features_summary.biotypes}")
+        if feature_type and feature_type not in annotation.features_summary.types:
+            raise HTTPException(status_code=400, detail=f"Invalid feature type: {feature_type}, expected values are: {annotation.features_summary.types}")
+        if feature_source and feature_source not in annotation.features_summary.sources:
+            raise HTTPException(status_code=400, detail=f"Invalid feature source: {feature_source}, expected values are: {annotation.features_summary.sources}")
+        return StreamingResponse(pysam_helper.stream_gff_file(file_path, index_format='csi', seqid=seq_id, start=start, end=end, feature_type=feature_type, feature_source=feature_source, biotype=biotype), media_type='text/plain')
     except HTTPException as e:
         raise e
     except Exception as e:
