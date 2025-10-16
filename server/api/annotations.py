@@ -118,7 +118,7 @@ async def get_annotation(md5_checksum: str):
     annotation = annotations_service.get_annotation(md5_checksum)
     return annotation.to_mongo().to_dict()
 
-@router.put("/annotations/{md5_checksum}/stats")
+@router.post("/annotations/{md5_checksum}/stats")
 async def update_annotation_stats(md5_checksum: str, payload: Optional[Dict[str, Any]] = Body(None)):
     """
     Update annotation stats, endpoint used from github action to update the stats of the annotations
