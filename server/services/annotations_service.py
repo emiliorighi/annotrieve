@@ -4,6 +4,7 @@ from helpers import response as response_helper
 from helpers import parameters as params_helper
 from helpers import pysam_helper
 from helpers import annotation as annotation_helper
+from helpers import pipelines as pipelines_helper
 from db.models import GenomeAnnotation, AnnotationError, AnnotationSequenceMap, drop_all_collections, TaxonNode, GenomeAssembly, Organism, GenomicSequence
 from fastapi.responses import StreamingResponse, Response
 from fastapi import HTTPException
@@ -14,7 +15,6 @@ import statistics
 
 
 NO_VALUE_KEY = "no_value"
-
 
 def get_annotations(
     filter:str = None, #text search on assembly, taxonomy or annotation id
@@ -34,6 +34,9 @@ def get_annotations(
     field: str = None, #field to get frequencies or statistics
     sort_by: str = None,
     sort_order: str = None,
+    filename: str = 'annotations.tar',
+    include_csi_index: bool = True,
+    include_metadata: bool = True,
 ):
     try:
 
@@ -71,7 +74,7 @@ def get_annotations(
         if response_type == 'download_info':
             return response_helper.download_summary_response(annotations, total)
         elif response_type == 'download_file':
-            return response_helper.download_file_response(annotations)
+            return response_helper.download_file_response(annotations, filename=filename, include_csi_index=include_csi_index, include_metadata=include_metadata)
         elif response_type == 'frequencies':
             return query_visitors_helper.get_frequencies(annotations, field)
         elif response_type == 'summary_stats':
@@ -97,7 +100,7 @@ def get_annotations_summary_stats(annotations):
     Calculate summary statistics across all annotations in the queryset.
     Returns aggregated stats for genes, transcripts, and features.
     """
-    
+
     # Basic annotation counts
     total_count = annotations.count()
     related_organisms_count = len(annotations.distinct('taxid'))
@@ -105,31 +108,7 @@ def get_annotations_summary_stats(annotations):
     
     # Helper function to calculate stats for a gene category
     def get_gene_category_stats(category_name):
-        pipeline = [
-            {
-                "$project": {
-                    "count": f"$features_statistics.{category_name}.count",
-                    "mean_length": f"$features_statistics.{category_name}.length_stats.mean",
-                    "transcript_types": f"$features_statistics.{category_name}.transcripts.types"
-                }
-            },
-            {
-                "$match": {
-                    "count": {"$ne": None}
-                }
-            },
-            {
-                "$group": {
-                    "_id": None,
-                    "counts": {"$push": "$count"},
-                    "mean_lengths": {"$push": "$mean_length"},
-                    "total_count": {"$sum": "$count"},
-                    "avg_count": {"$avg": "$count"},
-                    "avg_mean_length": {"$avg": "$mean_length"},
-                    "transcript_types_array": {"$push": "$transcript_types"}
-                }
-            }
-        ]
+        pipeline = pipelines_helper.category_stats_pipeline(category_name)
         
         result = list(annotations.aggregate(pipeline))
         if not result or not result[0]:
@@ -139,14 +118,7 @@ def get_annotations_summary_stats(annotations):
         counts = [c for c in data.get('counts', []) if c is not None]
         mean_lengths = [ml for ml in data.get('mean_lengths', []) if ml is not None]
         
-        return {
-            'total_count': data.get('total_count', 0),
-            'mean_count': round(data.get('avg_count', 0), 2) if data.get('avg_count') else 0,
-            'median_count': round(statistics.median(counts), 2) if counts else 0,
-            'mean_length': round(data.get('avg_mean_length', 0), 2) if data.get('avg_mean_length') else 0,
-            'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0,
-            'transcript_types': data.get('transcript_types_array', [])
-        }
+        return annotation_helper.map_to_gene_category_stats(data, counts, mean_lengths)
     
     # Get stats for each gene category
     coding_genes_stats = get_gene_category_stats('coding_genes')
@@ -190,13 +162,7 @@ def get_annotations_summary_stats(annotations):
             counts = data['counts']
             mean_lengths = data['mean_lengths']
             
-            result[type_name] = {
-                'total_count': sum(counts) if counts else 0,
-                'mean_count': round(statistics.mean(counts), 2) if counts else 0,
-                'median_count': round(statistics.median(counts), 2) if counts else 0,
-                'mean_length': round(statistics.mean(mean_lengths), 2) if mean_lengths else 0,
-                'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0,
-            }
+            result[type_name] = annotation_helper.map_to_transcript_type_stats(data, counts, mean_lengths)
         
         return result
     
@@ -210,27 +176,8 @@ def get_annotations_summary_stats(annotations):
     # Helper function to get feature stats (cds, exons, introns)
     def get_feature_stats(gene_category, feature_name):
         """Get stats for a specific feature type within a gene category"""
-        pipeline = [
-            {"$match": annotations._query},
-            {
-                "$project": {
-                    "mean_length": f"$features_statistics.{gene_category}.features.{feature_name}.length_stats.mean"
-                }
-            },
-            {
-                "$match": {
-                    "mean_length": {"$ne": None}
-                }
-            },
-            {
-                "$group": {
-                    "_id": None,
-                    "mean_lengths": {"$push": "$mean_length"},
-                    "avg_mean_length": {"$avg": "$mean_length"}
-                }
-            }
-        ]
         
+        pipeline = pipelines_helper.feature_stats_pipeline(gene_category, feature_name)        
         result = list(annotations.aggregate(pipeline))
         if not result or not result[0]:
             return None
@@ -273,31 +220,13 @@ def get_annotations_summary_stats(annotations):
     
     # Add gene stats
     if coding_genes_stats:
-        summary_report['genes']['coding_genes'] = {
-            'total_count': coding_genes_stats['total_count'],
-            'mean_count': coding_genes_stats['mean_count'],
-            'median_count': coding_genes_stats['median_count'],
-            'mean_length': coding_genes_stats['mean_length'],
-            'median_length': coding_genes_stats['median_length']
-        }
+        summary_report['genes']['coding_genes'] = annotation_helper.category_stats_to_dict(coding_genes_stats)
     
     if non_coding_genes_stats:
-        summary_report['genes']['non_coding_genes'] = {
-            'total_count': non_coding_genes_stats['total_count'],
-            'mean_count': non_coding_genes_stats['mean_count'],
-            'median_count': non_coding_genes_stats['median_count'],
-            'mean_length': non_coding_genes_stats['mean_length'],
-            'median_length': non_coding_genes_stats['median_length']
-        }
+        summary_report['genes']['non_coding_genes'] = annotation_helper.category_stats_to_dict(non_coding_genes_stats)
     
     if pseudogenes_stats:
-        summary_report['genes']['pseudogenes'] = {
-            'total_count': pseudogenes_stats['total_count'],
-            'mean_count': pseudogenes_stats['mean_count'],
-            'median_count': pseudogenes_stats['median_count'],
-            'mean_length': pseudogenes_stats['mean_length'],
-            'median_length': pseudogenes_stats['median_length']
-        }
+        summary_report['genes']['pseudogenes'] = annotation_helper.category_stats_to_dict(pseudogenes_stats)
     
     # Add transcript stats
     if transcript_stats:
@@ -310,7 +239,6 @@ def get_annotations_summary_stats(annotations):
     return summary_report
 
 def update_annotation_stats(md5_checksum, payload):
-    print(payload)
     auth_key = payload.get('auth_key')
     if auth_key != os.getenv('AUTH_KEY'):
         raise HTTPException(status_code=401, detail="Unauthorized")

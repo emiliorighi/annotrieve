@@ -4,6 +4,7 @@ from mongoengine.queryset import QuerySet
 
 NO_VALUE_KEY = "no_value"
 
+
 def taxonomic_query(filter):
     return (Q(taxid__iexact=filter) | 
             Q(taxid__icontains=filter) |
@@ -26,66 +27,45 @@ def assembly_query(filter):
         )
 
 def annotation_query(filter):
-    return taxonomic_query(filter) | assembly_query(filter) | (Q(source_info__database__iexact=filter) | Q(source_info__database__icontains=filter))
+    return taxonomic_query(filter) | assembly_query(filter)
 
+
+ALLOWED_FIELDS_MAP = {
+    'taxid':'taxid',
+    'organism_name':'organism_name',
+    'database':'source_file_info.database',
+    'assembly_accession':'assembly_accession',
+    'assembly_name':'assembly_name',
+    'feature_type':'features_summary.types',
+    'feature_source':'features_summary.sources',
+    'biotype':'features_summary.biotypes',
+    'pipeline':'source_file_info.pipeline.name',
+    'provider':'source_file_info.provider',
+}
 
 def get_frequencies(items:QuerySet, field:str):
-    if not field:
-        raise HTTPException(status_code=400, detail="Field parameter is required")
-    
+    if not field or field not in ALLOWED_FIELDS_MAP:
+        raise HTTPException(status_code=400, detail=f"Field parameter is required and must be one of: {', '.join(ALLOWED_FIELDS_MAP.keys())}")
+    field = ALLOWED_FIELDS_MAP[field]
     try:
-        # First, check if the field is a DictField by sampling a document
-        sample_doc = items.first()
-        field_value = sample_doc
-        for part in field.split('.'):
-            field_value = getattr(field_value, part, None) if hasattr(field_value, part) else field_value.get(part) if isinstance(field_value, dict) else None
-            if field_value is None:
-                break
-        
-        # If the field is a dict, use a different pipeline to unpack and sum values
-        is_dict_field = isinstance(field_value, dict)
-        
-        if is_dict_field:
-            # Pipeline for DictField: unpack the dictionary and sum values by key
-            pipeline = [
-                {
-                    "$project": {
-                        "field_value": {
-                            "$ifNull": [f"${field}", {}]
-                        }
-                    }
-                },
-                {
-                    "$project": {
-                        "field_array": {"$objectToArray": "$field_value"}
-                    }
-                },
-                {"$unwind": "$field_array"},
-                {
-                    "$group": {
-                        "_id": "$field_array.k",
-                        "count": {"$sum": "$field_array.v"}
+
+            # Original pipeline for regular fields
+        pipeline = [
+            {
+                "$project": {
+                    "field_value": {
+                        "$ifNull": [f"${field}", f"{NO_VALUE_KEY}"]
                     }
                 }
-            ]
-        else:
-            # Original pipeline for regular fields
-            pipeline = [
-                {
-                    "$project": {
-                        "field_value": {
-                            "$ifNull": [f"${field}", f"{NO_VALUE_KEY}"]
-                        }
-                    }
-                },
-                {"$unwind": "$field_value"},
-                {
-                    "$group": {
-                        "_id": "$field_value",
-                        "count": {"$sum": 1}
-                    }
-                },
-            ]
+            },
+            {"$unwind": "$field_value"},
+            {
+                "$group": {
+                    "_id": "$field_value",
+                    "count": {"$sum": 1}
+                }
+            },
+        ]
 
         response = {
             str(doc["_id"]): int(doc["count"])

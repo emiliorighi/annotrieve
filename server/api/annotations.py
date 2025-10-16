@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Body, HTTPException
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any
 from services import annotations_service
 from helpers import parameters as params_helper
 import inspect
-
+from helpers import query_visitors as query_visitors_helper
 router = APIRouter()
 
 @router.get("/annotations/import/{auth_key}")
@@ -63,6 +63,13 @@ async def get_annotations_stats_summary(commons: Dict[str, Any] = Depends(params
         )
     
     return annotations_service.get_annotations(response_type='summary_stats', **params)
+
+@router.get("/annotations/frequencies")
+async def get_frequency_fields():
+    """
+    Get allowed fields for frequencies endpoint
+    """
+    return {"fields": list(query_visitors_helper.ALLOWED_FIELDS_MAP.keys())}
 
 @router.get("/annotations/frequencies/{field}")
 @router.post("/annotations/frequencies/{field}")

@@ -1,6 +1,7 @@
 from helpers import parameters as parameters_helper
 from typing import Optional, Dict, List, Any
 from db.embedded_documents import GeneStats, GeneLengthStats, TranscriptStats, LengthStats, FeatureStats, TranscriptTypeStats, FeatureTypeStats, GFFStats
+import statistics
 
 
 DEFAULT_FIELD_MAP: Dict[str, str] = {
@@ -146,3 +147,31 @@ def get_latest_release_by_group_pipeline(group_by: str):
         {"$replaceRoot": {"newRoot": "$latest_annotation"}},
     ]
 
+
+def map_to_gene_category_stats(data: Dict[str, Any], counts: List[int], mean_lengths: List[float]) -> dict[str, Any]:
+    return {
+        'total_count': data.get('total_count', 0),
+        'mean_count': round(data.get('avg_count', 0), 2) if data.get('avg_count') else 0,
+        'median_count': round(statistics.median(counts), 2) if counts else 0,
+        'mean_length': round(data.get('avg_mean_length', 0), 2) if data.get('avg_mean_length') else 0,
+        'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0,
+        'transcript_types': data.get('transcript_types_array', [])
+    }
+
+def map_to_transcript_type_stats(data: Dict[str, Any], counts: List[int], mean_lengths: List[float]) -> dict[str, Any]:
+    return {
+        'total_count': data.get('total_count', 0),
+        'mean_count': round(data.get('avg_count', 0), 2) if data.get('avg_count') else 0,
+        'median_count': round(statistics.median(counts), 2) if counts else 0,
+        'mean_length': round(data.get('avg_mean_length', 0), 2) if data.get('avg_mean_length') else 0,
+        'median_length': round(statistics.median(mean_lengths), 2) if mean_lengths else 0,
+    }
+
+def category_stats_to_dict(dict_data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'total_count': dict_data.get('total_count'),
+        'mean_count': dict_data.get('mean_count'),
+        'median_count': dict_data.get('median_count'),
+        'mean_length': dict_data.get('mean_length'),
+        'median_length': dict_data.get('median_length'),
+    }
