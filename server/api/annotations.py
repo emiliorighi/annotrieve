@@ -13,12 +13,12 @@ async def trigger_import_annotations(auth_key: str):
     """
     return annotations_service.trigger_import_annotations(auth_key)
 
-@router.get("/annotations/drop/{auth_key}/{model}")
-async def drop_collections(auth_key: str, model: str):
-    """
-    Drop collections
-    """
-    return annotations_service.drop_collections(auth_key, model)
+# @router.get("/annotations/drop/{auth_key}/{model}")
+# async def drop_collections(auth_key: str, model: str):
+#     """
+#     Drop collections
+#     """
+#     return annotations_service.drop_collections(auth_key, model)
 
 
 @router.get("/annotations")
