@@ -294,5 +294,5 @@ def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list
         source_database=assembly_dict.get('source_database'),
         taxon_lineage=valid_lineages.get(str(organism_info.get('tax_id')), []),
         release_date=assembly_info.get('release_date'),
-        submitter=assembly_dict.get('submitter'),
+        submitter=assembly_info.get('submitter'),
     )
