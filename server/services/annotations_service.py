@@ -162,7 +162,14 @@ def get_annotations_summary_stats(annotations):
             counts = data['counts']
             mean_lengths = data['mean_lengths']
             
-            result[type_name] = annotation_helper.map_to_transcript_type_stats(data, counts, mean_lengths)
+            # Build the proper data dictionary with calculated stats
+            stats_data = {
+                'total_count': sum(counts) if counts else 0,
+                'avg_count': statistics.mean(counts) if counts else 0,
+                'avg_mean_length': statistics.mean(mean_lengths) if mean_lengths else 0
+            }
+            
+            result[type_name] = annotation_helper.map_to_transcript_type_stats(stats_data, counts, mean_lengths)
         
         return result
     

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Body, HTTPException
+from fastapi import APIRouter, Depends, Body, HTTPException, Response
 from typing import Optional, Dict, Any
 from services import annotations_service
 from helpers import parameters as params_helper
@@ -37,7 +37,7 @@ async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common
 
 @router.get("/annotations/stats/summary")
 @router.post("/annotations/stats/summary")
-async def get_annotations_stats_summary(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+async def get_annotations_stats_summary(response: Response, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
     """
     Get annotations stats summary across all annotations in the queryset
     """
@@ -53,6 +53,10 @@ async def get_annotations_stats_summary(commons: Dict[str, Any] = Depends(params
             status_code=400, 
             detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
         )
+    
+    # Add cache control headers (nginx will respect these)
+    response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
+    response.headers["Vary"] = "Accept-Encoding"
     
     return annotations_service.get_annotations(response_type='summary_stats', **params)
 
