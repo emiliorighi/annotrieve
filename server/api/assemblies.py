@@ -11,11 +11,11 @@ async def get_assemblies(commons: Dict[str, Any] = Depends(params_helper.common_
     params = params_helper.handle_request_params(commons, payload)
     return assemblies_service.get_assemblies(**params)
 
-@router.get("/assemblies/stats/{field}")
-@router.post("/assemblies/stats/{field}")
-async def get_assemblies_stats(field: str, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+@router.get("/assemblies/frequencies/{field}")
+@router.post("/assemblies/frequencies/{field}")
+async def get_assemblies_frequencies(field: str, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
     params = params_helper.handle_request_params(commons, payload)
-    return assemblies_service.get_assemblies(**params, field=field, response_type='stats')
+    return assemblies_service.get_assemblies(**params, field=field, response_type='frequencies')
 
 @router.get("/assemblies/{assembly_accession}")
 async def get_assembly(assembly_accession: str):

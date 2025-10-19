@@ -35,6 +35,7 @@ def get_annotations(
     sort_by: str = None,
     sort_order: str = None,
     filename: str = 'annotations.tar',
+    fields: Optional[str] = None,
     include_csi_index: bool = True,
     include_metadata: bool = True,
 ):
@@ -76,10 +77,12 @@ def get_annotations(
         elif response_type == 'download_file':
             return response_helper.download_file_response(annotations, filename=filename, include_csi_index=include_csi_index, include_metadata=include_metadata)
         elif response_type == 'frequencies':
-            return query_visitors_helper.get_frequencies(annotations, field)
+            return query_visitors_helper.get_frequencies(annotations, field, type='annotation')
         elif response_type == 'summary_stats':
             return get_annotations_summary_stats(annotations)
         else:
+            if fields:
+                annotations = annotations.only(*fields.split(','))
             return response_helper.json_response_with_pagination(annotations, total, offset, limit)
 
     except HTTPException as e:

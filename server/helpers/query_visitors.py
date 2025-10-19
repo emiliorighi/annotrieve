@@ -42,11 +42,21 @@ ALLOWED_FIELDS_MAP = {
     'pipeline':'source_file_info.pipeline.name',
     'provider':'source_file_info.provider',
 }
-
-def get_frequencies(items:QuerySet, field:str):
-    if not field or field not in ALLOWED_FIELDS_MAP:
-        raise HTTPException(status_code=400, detail=f"Field parameter is required and must be one of: {', '.join(ALLOWED_FIELDS_MAP.keys())}")
-    field = ALLOWED_FIELDS_MAP[field]
+ALLOWED_FIELDS_MAP_ASSEMBLY = {
+    'organism_name':'organism_name',
+    'submitter':'submitter',
+    'source_database':'source_database',
+}
+def get_frequencies(items:QuerySet, field:str, type:str = 'annotation'):
+    if type == 'annotation':
+        allowed_fields_map = ALLOWED_FIELDS_MAP
+    elif type == 'assembly':
+        allowed_fields_map = ALLOWED_FIELDS_MAP_ASSEMBLY
+    else:
+        raise HTTPException(status_code=400, detail=f"Type parameter is required and must be one of: annotation, assembly")
+    if not field or field not in allowed_fields_map:
+        raise HTTPException(status_code=400, detail=f"Field parameter is required and must be one of: {', '.join(allowed_fields_map.keys())}")
+    field = allowed_fields_map[field]
     try:
 
             # Original pipeline for regular fields
@@ -55,16 +65,23 @@ def get_frequencies(items:QuerySet, field:str):
                 "$project": {
                     "field_value": {
                         "$ifNull": [f"${field}", f"{NO_VALUE_KEY}"]
-                    }
+                    },
+                    "annotation_id": "$_id"  # Keep track of unique annotations
                 }
             },
             {"$unwind": "$field_value"},
             {
                 "$group": {
                     "_id": "$field_value",
-                    "count": {"$sum": 1}
+                    "count": {"$addToSet": "$annotation_id"}  # Count unique annotations
                 }
             },
+            {
+                "$project": {
+                    "_id": 1,
+                    "count": {"$size": "$count"}  # Get the size of unique annotation IDs
+                }
+            }
         ]
 
         response = {

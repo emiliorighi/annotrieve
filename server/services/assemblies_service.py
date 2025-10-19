@@ -1,12 +1,13 @@
 from fastapi import HTTPException
 from db.models import GenomeAssembly, GenomicSequence
 from helpers import response as response_helper, query_visitors as query_visitors_helper
-import os
-from jobs.updates import update_fields
 from fastapi.responses import StreamingResponse
 import io
+
 def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: str = None, offset: int = 0, limit: int = 20, sort_by: str = None, sort_order: str = None, field: str = None, submitters: str = None, response_type: str = 'metadata'):
     try:
+        print(f"field: {field}")
+        print(f"response_type: {response_type}")
         query = {}
         if taxids:
             query['taxon_lineage__in'] = taxids.split(',') if isinstance(taxids, str) else taxids
@@ -14,14 +15,15 @@ def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: 
             query['assembly_accession__in'] = assembly_accessions.split(',') if isinstance(assembly_accessions, str) else assembly_accessions
         if submitters:
             query['submitter__in'] = [submitters]
-        print(query)
         assemblies = GenomeAssembly.objects(**query)
         
         q_filter =  query_visitors_helper.assembly_query(filter) if filter else None
         if q_filter:
             assemblies = assemblies.filter(q_filter)
-        if field and response_type == 'stats':
-            return query_visitors_helper.get_stats(assemblies, field)
+        if response_type == 'frequencies':
+            if not field:
+                raise HTTPException(status_code=400, detail=f"Field is required for frequencies response")
+            return query_visitors_helper.get_frequencies(assemblies, field, type='assembly')
 
         if sort_by:
             sort = '-' + sort_by if sort_order == 'desc' else sort_by
