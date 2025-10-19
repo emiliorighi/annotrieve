@@ -34,7 +34,6 @@ def get_annotations(
     field: str = None, #field to get frequencies or statistics
     sort_by: str = None,
     sort_order: str = None,
-    filename: str = 'annotations.tar',
     release_date_from: str = None,
     release_date_to: str = None,
     fields: Optional[str] = None,
@@ -76,11 +75,12 @@ def get_annotations(
         total = annotations.count()
         offset, limit = params_helper.handle_pagination_params(offset, limit, total)
 
-        if response_type == 'download_info':
-            return response_helper.download_summary_response(annotations, total)
-        elif response_type == 'download_file':
-            return response_helper.download_file_response(annotations, filename=filename, include_csi_index=include_csi_index, include_metadata=include_metadata)
-        elif response_type == 'frequencies':
+        # if response_type == 'download_info':
+        #     return response_helper.download_summary_response(annotations, total)
+        # elif response_type == 'download_file':
+        #     return response_helper.download_file_response(annotations, include_csi_index=include_csi_index, include_metadata=include_metadata)
+        
+        if response_type == 'frequencies':
             return query_visitors_helper.get_frequencies(annotations, field, type='annotation')
         elif response_type == 'summary_stats':
             return get_annotations_summary_stats(annotations)
