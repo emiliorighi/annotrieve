@@ -42,7 +42,6 @@ def download_file_response(items, threshold_gb: int = 15, filename: str = 'annot
     
     # Determine if we should include metadata
     should_include_metadata = include_metadata in [True, 'true', 'True', '1', 1]
-    print(f"DEBUG: include_metadata={include_metadata}, should_include_metadata={should_include_metadata}")
     
     return StreamingResponse(
         tar_helper.tar_stream_chunked(paths, items if should_include_metadata else None), 

@@ -253,7 +253,6 @@ def get_annotations_summary_stats(annotations):
     return summary_report
 
 def update_annotation_stats(md5_checksum, payload):
-    print(f"DEBUG: Received payload: {payload}")
     if not payload:
         raise HTTPException(status_code=400, detail="No payload provided")
     auth_key = payload.get('auth_key')
