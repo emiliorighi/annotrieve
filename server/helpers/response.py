@@ -31,7 +31,7 @@ def download_summary_response(items, count):
         'file_format': 'tar',
     }
 
-async def download_file_response(items, threshold_gb: int = 15, filename: str = 'annotations.tar', include_csi_index: bool = True, include_metadata: bool = True):
+def download_file_response(items, threshold_gb: int = 15, filename: str = 'annotations.tar', include_csi_index: bool = True, include_metadata: bool = True):
     total_size_gb = get_gb_size(items)
     if total_size_gb > threshold_gb:
         raise HTTPException(status_code=400, detail="Dataset is too large to download, limit is 15gb. Refine your query to download a smaller dataset.")
