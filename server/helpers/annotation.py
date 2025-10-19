@@ -18,6 +18,8 @@ DEFAULT_FIELD_MAP: Dict[str, str] = {
     "has_stats": "features_statistics__exists",
     "pipelines": "source_file_info__pipeline__name__in",
     "providers": "source_file_info__provider__in",
+    "release_date_from": "source_file_info__release_date__gte",
+    "release_date_to": "source_file_info__release_date__lte",
 }
 
 # Utility to flatten nested dictionaries
@@ -109,18 +111,54 @@ def query_params_to_mongoengine_query(
     feature_sources: Optional[List[str] | str] = None,
     biotypes: Optional[List[str] | str] = None,
     has_stats: Optional[bool] = None,
-    pipelines: Optional[str] = None,
-    providers: Optional[str] = None,
+    pipelines: Optional[List[str] | str] = None,
+    providers: Optional[List[str] | str] = None,
+    release_date_from: Optional[str] = None,
+    release_date_to: Optional[str] = None,
     field_map: Optional[Dict[str, str]] = None,
-) -> Dict[str, object]:
+) -> Dict[str, Any]:
     """
-    Map API query parameters to a dict. Accepts str (comma-separated)
-    or list inputs; normalizes, deduplicates, and skips empty filters.
+    Convert API query parameters to MongoDB query format.
+    
+    Args:
+        taxids: Taxonomic IDs (organism identifiers)
+        db_sources: Database sources to filter by
+        assembly_accessions: Assembly accession numbers
+        md5_checksums: MD5 checksums of annotation files
+        feature_types: Types of genomic features
+        feature_sources: Sources of features
+        biotypes: Biological types of features
+        has_stats: Whether annotations have computed statistics
+        pipelines: Annotation pipelines used
+        providers: Data providers
+        release_date_from: Filter annotations from this date (ISO format)
+        release_date_to: Filter annotations to this date (ISO format)
+        field_map: Custom field mapping overrides
+    
     Returns:
-        formatted dict
+        Dict containing MongoDB query conditions
+        
+    Raises:
+        ValueError: If invalid parameter values are provided
     """
-    query: Dict[str, object] = {}
+    query: Dict[str, Any] = {}
     mapping = {**DEFAULT_FIELD_MAP, **(field_map or {})}
+
+    # Define parameter configurations with their processing rules
+    param_configs = {
+        "taxids": {"type": "list", "normalize": True, "required": False},
+        "db_sources": {"type": "list", "normalize": True, "required": False},
+        "assembly_accessions": {"type": "list", "normalize": True, "required": False},
+        "md5_checksums": {"type": "list", "normalize": True, "required": False},
+        "feature_types": {"type": "list", "normalize": True, "required": False},
+        "feature_sources": {"type": "list", "normalize": True, "required": False},
+        "biotypes": {"type": "list", "normalize": True, "required": False},
+        "has_stats": {"type": "bool", "normalize": False, "required": False},
+        "pipelines": {"type": "list", "normalize": True, "required": False},
+        "providers": {"type": "list", "normalize": True, "required": False},
+        "release_date_from": {"type": "date", "normalize": False, "required": False},
+        "release_date_to": {"type": "date", "normalize": False, "required": False},
+    }
 
     inputs = {
         "taxids": taxids,
@@ -133,24 +171,230 @@ def query_params_to_mongoengine_query(
         "has_stats": has_stats,
         "pipelines": pipelines,
         "providers": providers,
+        "release_date_from": release_date_from,
+        "release_date_to": release_date_to,
     }
+
     for param_name, raw_value in inputs.items():
-        if not raw_value:
+        # Skip if no value provided
+        if raw_value is None:
             continue
-        if raw_value.lower() == 'true':
-            values = True
-        elif raw_value.lower() == 'false':
-            values = False
-        else:
-            values = parameters_helper.normalize_to_list(raw_value)
-            if not values:
-                continue
+            
+        config = param_configs.get(param_name, {"type": "list", "normalize": True, "required": False})
         field = mapping.get(param_name)
+        
         if not field:
-            # Unknown param; ignore silently or log if you prefer
             continue
-        query[field] = values
+            
+        try:
+            processed_value = _process_parameter_value(raw_value, config)
+            if processed_value is not None:
+                query[field] = processed_value
+        except (ValueError, TypeError) as e:
+            raise ValueError(f"Invalid value for parameter '{param_name}': {raw_value}. {str(e)}")
+
     return query
+
+
+def _process_parameter_value(raw_value: Any, config: Dict[str, Any]) -> Any:
+    """
+    Process a single parameter value according to its configuration.
+    
+    Args:
+        raw_value: The raw parameter value
+        config: Configuration dict with type and normalization rules
+        
+    Returns:
+        Processed value ready for MongoDB query
+        
+    Raises:
+        ValueError: If value cannot be processed according to config
+    """
+    param_type = config.get("type", "list")
+    should_normalize = config.get("normalize", True)
+    
+    if param_type == "bool":
+        return _process_boolean_value(raw_value)
+    elif param_type == "list":
+        return _process_list_value(raw_value, should_normalize)
+    elif param_type == "int":
+        return _process_int_value(raw_value)
+    elif param_type == "date":
+        return _process_date_value(raw_value)
+    elif param_type == "string":
+        return _process_string_value(raw_value, should_normalize)
+    else:
+        raise ValueError(f"Unsupported parameter type: {param_type}")
+
+
+def _process_boolean_value(raw_value: Any) -> bool:
+    """Process boolean parameter values."""
+    if isinstance(raw_value, bool):
+        return raw_value
+    elif isinstance(raw_value, str):
+        normalized = raw_value.lower().strip()
+        if normalized in ('true', '1', 'yes', 'on'):
+            return True
+        elif normalized in ('false', '0', 'no', 'off'):
+            return False
+        else:
+            raise ValueError(f"Invalid boolean value: {raw_value}")
+    elif isinstance(raw_value, (int, float)):
+        return bool(raw_value)
+    else:
+        raise ValueError(f"Cannot convert to boolean: {type(raw_value).__name__}")
+
+
+def _process_list_value(raw_value: Any, should_normalize: bool = True) -> List[str] | None:
+    """
+    Process list parameter values.
+    
+    Args:
+        raw_value: The raw parameter value
+        should_normalize: Whether to normalize the value (trim, dedupe, etc.)
+        
+    Returns:
+        Processed list or None if empty after processing
+    """
+    if isinstance(raw_value, list):
+        values = raw_value
+    elif isinstance(raw_value, str):
+        if should_normalize:
+            values = parameters_helper.normalize_to_list(raw_value)
+        else:
+            # Simple split without normalization
+            values = [v.strip() for v in raw_value.split(',') if v.strip()]
+    else:
+        # Convert single value to list
+        values = [str(raw_value)] if raw_value is not None else []
+    
+    # Return None for empty lists to avoid adding empty filters
+    return values if values else None
+
+
+def _process_int_value(raw_value: Any) -> int:
+    """Process integer parameter values."""
+    if isinstance(raw_value, int):
+        return raw_value
+    elif isinstance(raw_value, str):
+        try:
+            return int(raw_value.strip())
+        except ValueError:
+            raise ValueError(f"Invalid integer value: {raw_value}")
+    elif isinstance(raw_value, float):
+        return int(raw_value)
+    else:
+        raise ValueError(f"Cannot convert to integer: {type(raw_value).__name__}")
+
+
+def _process_date_value(raw_value: Any) -> str:
+    """Process date parameter values."""
+    if isinstance(raw_value, str):
+        date_str = raw_value.strip()
+        # Basic validation - could be enhanced with proper date parsing
+        if not date_str:
+            raise ValueError("Empty date string")
+        return date_str
+    else:
+        raise ValueError(f"Date must be a string, got: {type(raw_value).__name__}")
+
+
+def _process_string_value(raw_value: Any, should_normalize: bool = True) -> str:
+    """Process string parameter values."""
+    if isinstance(raw_value, str):
+        if should_normalize:
+            return raw_value.strip()
+        else:
+            return raw_value
+    else:
+        # Convert to string
+        return str(raw_value).strip() if should_normalize else str(raw_value)
+
+def build_complex_query(base_query: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    """
+    Build complex MongoDB queries with support for advanced operators.
+    
+    Args:
+        base_query: Base query dictionary
+        **kwargs: Additional query parameters
+        
+    Returns:
+        Enhanced query dictionary
+    """
+    query = base_query.copy()
+    
+    # Handle range queries
+    if 'date_range' in kwargs:
+        date_range = kwargs['date_range']
+        if 'from' in date_range:
+            query['source_file_info__release_date__gte'] = date_range['from']
+        if 'to' in date_range:
+            query['source_file_info__release_date__lte'] = date_range['to']
+    
+    if 'size_range' in kwargs:
+        size_range = kwargs['size_range']
+        if 'min' in size_range:
+            query['indexed_file_info__file_size__gte'] = size_range['min']
+        if 'max' in size_range:
+            query['indexed_file_info__file_size__lte'] = size_range['max']
+    
+    # Handle text search
+    if 'text_search' in kwargs:
+        text_search = kwargs['text_search']
+        if 'organism' in text_search:
+            query['organism_name__icontains'] = text_search['organism']
+        if 'assembly' in text_search:
+            query['assembly_name__icontains'] = text_search['assembly']
+    
+    # Handle existence checks
+    if 'has_fields' in kwargs:
+        for field in kwargs['has_fields']:
+            query[f'{field}__exists'] = True
+    
+    return query
+
+
+def validate_query_parameters(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validate and sanitize query parameters.
+    
+    Args:
+        params: Raw query parameters
+        
+    Returns:
+        Validated and sanitized parameters
+        
+    Raises:
+        ValueError: If validation fails
+    """
+    validated = {}
+    
+    # Validate numeric ranges
+    if 'file_size_min' in params and 'file_size_max' in params:
+        min_size = params['file_size_min']
+        max_size = params['file_size_max']
+        if isinstance(min_size, (int, str)) and isinstance(max_size, (int, str)):
+            try:
+                min_val = int(min_size)
+                max_val = int(max_size)
+                if min_val > max_val:
+                    raise ValueError("file_size_min cannot be greater than file_size_max")
+                validated['file_size_min'] = min_val
+                validated['file_size_max'] = max_val
+            except ValueError as e:
+                raise ValueError(f"Invalid file size range: {e}")
+    
+    # Validate date ranges
+    if 'release_date_from' in params and 'release_date_to' in params:
+        from_date = params['release_date_from']
+        to_date = params['release_date_to']
+        if from_date and to_date:
+            # Basic string comparison - could be enhanced with proper date parsing
+            if str(from_date) > str(to_date):
+                raise ValueError("release_date_from cannot be after release_date_to")
+    
+    return validated
+
 
 def get_latest_release_by_group_pipeline(group_by: str):
     group_field_map = {
