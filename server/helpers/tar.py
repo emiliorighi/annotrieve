@@ -12,25 +12,25 @@ def tar_stream_chunked(files: List[str], items=None, chunk_size: int = 8192) -> 
     """
     Ultra memory-efficient streaming tar creation using temporary files.
     Writes metadata to temp file, creates tar in temp file, streams it, then cleans up.
+    Uses a generator to start streaming immediately and avoid nginx timeouts.
     """
-    temp_files = []  # Track temp files for cleanup
+    temp_dir = None
+    metadata_file_path = None
+    temp_tar_path = None
     
     try:
         # Create temporary directory for our files
         temp_dir = tempfile.mkdtemp(prefix="annotrieve_tar_")
-        temp_files.append(temp_dir)
         
-        # Create temporary tar file
+        # Create temporary tar file path
         temp_tar_path = os.path.join(temp_dir, "annotations.tar")
         
-        # Create metadata file if needed
-        metadata_file_path = None
+        # Create metadata file if needed (write to disk, no memory loading)
         if items is not None:
             metadata_file_path = os.path.join(temp_dir, "metadata.json")
             _write_metadata_to_file(items, metadata_file_path)
-            temp_files.append(metadata_file_path)
         
-        # Create tar file with all files
+        # Create tar file with all files (write to disk)
         with tarfile.open(temp_tar_path, mode="w") as tar:
             # Add annotation files
             for path in files:
@@ -43,9 +43,7 @@ def tar_stream_chunked(files: List[str], items=None, chunk_size: int = 8192) -> 
             if metadata_file_path and os.path.exists(metadata_file_path):
                 tar.add(metadata_file_path, arcname="metadata.json")
         
-        temp_files.append(temp_tar_path)
-        
-        # Stream the tar file in chunks
+        # Stream the tar file in chunks from disk
         with open(temp_tar_path, 'rb') as tar_file:
             while True:
                 chunk = tar_file.read(chunk_size)
@@ -56,8 +54,17 @@ def tar_stream_chunked(files: List[str], items=None, chunk_size: int = 8192) -> 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating chunked tar stream: {e}")
     finally:
-        # Clean up all temporary files
-        _cleanup_temp_files(temp_files)
+        # Clean up all temporary files after streaming completes
+        try:
+            if metadata_file_path and os.path.exists(metadata_file_path):
+                os.unlink(metadata_file_path)
+            if temp_tar_path and os.path.exists(temp_tar_path):
+                os.unlink(temp_tar_path)
+            if temp_dir and os.path.exists(temp_dir):
+                import shutil
+                shutil.rmtree(temp_dir)
+        except Exception as e:
+            print(f"Warning: Could not clean up temporary files: {e}")
 
 
 def _write_metadata_to_file(items, file_path: str) -> None:
@@ -97,21 +104,3 @@ def _write_metadata_to_file(items, file_path: str) -> None:
                 first = False
         
         f.write(']')  # End JSON array
-
-
-def _cleanup_temp_files(temp_files: List[str]) -> None:
-    """
-    Clean up temporary files and directories.
-    """
-    for temp_path in temp_files:
-        try:
-            if os.path.exists(temp_path):
-                if os.path.isdir(temp_path):
-                    # Remove directory and all contents
-                    import shutil
-                    shutil.rmtree(temp_path)
-                else:
-                    # Remove single file
-                    os.unlink(temp_path)
-        except Exception as e:
-            print(f"Warning: Could not clean up temporary file {temp_path}: {e}")

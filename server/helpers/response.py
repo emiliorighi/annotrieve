@@ -31,7 +31,7 @@ def download_summary_response(items, count):
         'file_format': 'tar',
     }
 
-def download_file_response(items, threshold_gb: int = 15, filename: str = 'annotations.tar', include_csi_index: bool = True, include_metadata: bool = True):
+async def download_file_response(items, threshold_gb: int = 15, filename: str = 'annotations.tar', include_csi_index: bool = True, include_metadata: bool = True):
     total_size_gb = get_gb_size(items)
     if total_size_gb > threshold_gb:
         raise HTTPException(status_code=400, detail="Dataset is too large to download, limit is 15gb. Refine your query to download a smaller dataset.")
@@ -45,6 +45,9 @@ def download_file_response(items, threshold_gb: int = 15, filename: str = 'annot
     
     return StreamingResponse(
         tar_helper.tar_stream_chunked(paths, items if should_include_metadata else None), 
-        media_type='application/tar', 
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        media_type='application/x-tar', 
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "X-Accel-Buffering": "no"  # Disable nginx buffering
+        }
     )
