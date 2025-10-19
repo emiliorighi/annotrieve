@@ -91,20 +91,49 @@ async def get_annotations_frequencies(field: str, commons: Dict[str, Any] = Depe
 
 @router.get("/annotations/download")
 @router.post("/annotations/download")
-async def get_annotations_download_file(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+async def get_annotations_download_file(response: Response, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
     """
     Get annotations download file (response_type='download_file')
     """
     params = params_helper.handle_request_params(commons, payload)
+        # Get valid parameters from the service function signature
+    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
+    
+    # Filter out invalid parameters
+    invalid_params = set(params.keys()) - valid_params
+    if invalid_params:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
+        )
+    
+    # Add cache control headers (nginx will respect these)
+    response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
+    response.headers["Vary"] = "Accept-Encoding"
+    
     return annotations_service.get_annotations(response_type='download_file', **params)
 
 @router.get("/annotations/download/summary")
 @router.post("/annotations/download/summary")
-async def get_annotations_download_info(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+async def get_annotations_download_info(response: Response, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
     """
     Get annotations download info/summary (response_type='download_info')
     """
     params = params_helper.handle_request_params(commons, payload)
+        # Get valid parameters from the service function signature
+    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
+    
+    # Filter out invalid parameters
+    invalid_params = set(params.keys()) - valid_params
+    if invalid_params:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
+        )
+    
+    # Add cache control headers (nginx will respect these)
+    response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
+    response.headers["Vary"] = "Accept-Encoding"
     return annotations_service.get_annotations(response_type='download_info', **params)
 
 @router.get("/annotations/errors")

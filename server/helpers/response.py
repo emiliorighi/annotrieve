@@ -1,6 +1,7 @@
 from fastapi.responses import StreamingResponse
 from helpers import file as file_helper, tar as tar_helper
 from fastapi import HTTPException
+import json
 
 def json_response_with_pagination(items, count, offset, limit):
     """Format response as JSON with pagination."""
@@ -34,8 +35,17 @@ def download_file_response(items, threshold_gb: int = 15, filename: str = 'annot
     total_size_gb = get_gb_size(items)
     if total_size_gb > threshold_gb:
         raise HTTPException(status_code=400, detail="Dataset is too large to download, limit is 15gb. Refine your query to download a smaller dataset.")
+    
     paths = [file_helper.get_annotation_file_path(annotation) for annotation in items]
-    metadata = list(items.as_pymongo()) if include_metadata == 'true' or include_metadata == True else None
     if include_csi_index == 'true' or include_csi_index == True:
         paths.extend([f"{path}.csi" for path in paths])
-    return StreamingResponse(tar_helper.tar_stream(paths, metadata), media_type='application/tar', headers={"Content-Disposition": f"attachment; filename={filename}"})
+    
+    # Determine if we should include metadata
+    should_include_metadata = include_metadata in [True, 'true', 'True', '1', 1]
+    print(f"DEBUG: include_metadata={include_metadata}, should_include_metadata={should_include_metadata}")
+    
+    return StreamingResponse(
+        tar_helper.tar_stream_chunked(paths, items if should_include_metadata else None), 
+        media_type='application/tar', 
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
