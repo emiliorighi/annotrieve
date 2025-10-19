@@ -35,6 +35,8 @@ def get_annotations(
     sort_by: str = None,
     sort_order: str = None,
     filename: str = 'annotations.tar',
+    release_date_from: str = None,
+    release_date_to: str = None,
     fields: Optional[str] = None,
     include_csi_index: bool = True,
     include_metadata: bool = True,
@@ -55,6 +57,8 @@ def get_annotations(
             has_stats=has_stats,
             pipelines=pipelines,
             providers=providers,
+            release_date_from=release_date_from,
+            release_date_to=release_date_to,
         )
         annotations = GenomeAnnotation.objects(**mongoengine_query).exclude('id')
         
