@@ -12,7 +12,6 @@ const nextConfig = {
   // For development, keep the rewrites
   async rewrites() {
     // Only apply rewrites in development
-    if (process.env.NODE_ENV === 'development') {
       const apiTarget = "https://genome.crg.es/annotrieve/api/v0"
       const nginxTarget = "https://genome.crg.es/annotrieve"
       
@@ -40,8 +39,6 @@ const nextConfig = {
           destination: `${nginxTarget}/files/:path*`
         }
       ]
-    }
-    return []
   },
 }
 

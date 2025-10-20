@@ -28,15 +28,20 @@ export default function ApiDocsPage() {
 
         <div className="rounded-lg border bg-white shadow-sm overflow-hidden">
           <SwaggerUI
-            url="/annotrieve-api-specs.yaml"
+            url="/annotrieve/annotrieve-api-specs.yaml"
             docExpansion="list"
             defaultModelsExpandDepth={1}
             defaultModelExpandDepth={1}
             tryItOutEnabled={true}
             requestInterceptor={(req) => {
-              // Rewrite API URLs to use Next.js proxy
-              if (req.url.includes('genome.crg.es/annotrieve/api/v0')) {
-                req.url = req.url.replace('https://genome.crg.es/annotrieve/api/v0', '')
+              // For GitHub Pages, use absolute URLs to avoid CORS issues
+              if (typeof window !== 'undefined' && window.location.hostname.includes('github.io')) {
+                if (req.url.startsWith('/annotations/') || 
+                    req.url.startsWith('/assemblies/') || 
+                    req.url.startsWith('/taxons/') || 
+                    req.url.startsWith('/organisms/')) {
+                  req.url = `https://genome.crg.es/annotrieve/api/v0${req.url}`
+                }
               }
               return req
             }}
