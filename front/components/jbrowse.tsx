@@ -29,7 +29,7 @@ const baseURL = process.env.NEXT_PUBLIC_API_URL ||
     : '')
 const apiBaseURL = process.env.NEXT_PUBLIC_API_URL || 
   (typeof window !== 'undefined' && window.location.hostname.includes('github.io') 
-    ? 'https://genome.crg.es/annotrieve' 
+    ? 'https://genome.crg.es/annotrieve/api/v0' 
     : '')
 
 const configuration = {

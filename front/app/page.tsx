@@ -51,7 +51,7 @@ export default function Home() {
     if (annotationId) {
       params.set('annotationId', annotationId)
     }
-    window.location.href = `/jbrowse?${params.toString()}`
+    window.location.href = `/annotrieve/jbrowse?${params.toString()}`
   }
 
   const handleAssemblySelect = async (accession: string) => {
