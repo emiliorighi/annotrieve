@@ -120,12 +120,12 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
       adapter: {
         type: "Gff3TabixAdapter",
         gffGzLocation: {
-          uri: `${baseURL}/files/${annotation.indexed_file_info.bgzipped_path}`,
+          uri: `${baseURL}/files${annotation.indexed_file_info.bgzipped_path}`,
           locationType: "UriLocation",
         },
         index: {
           location: {
-            uri: `${baseURL}/files/${annotation.indexed_file_info.csi_path}`,
+            uri: `${baseURL}/files${annotation.indexed_file_info.csi_path}`,
             locationType: "UriLocation",
           },
           indexType: "CSI"
