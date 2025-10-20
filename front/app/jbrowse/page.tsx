@@ -20,7 +20,7 @@ interface ChromosomeInterface {
 }
 
 function JBrowseContent() {
-  const [accession, setAccession] = useState<string>('')
+  const [accession, setAccession] = useState<string | null>(null)
   const [annotationId, setAnnotationId] = useState<string>('')
   const [assembly, setAssembly] = useState<AssemblyRecord | null>(null)
   const [annotations, setAnnotations] = useState<AnnotationRecord[]>([])
@@ -28,6 +28,7 @@ function JBrowseContent() {
   const [selectedChromosome, setSelectedChromosome] = useState<ChromosomeInterface | null>(null)
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
+  const [isInitialized, setIsInitialized] = useState(false)
 
   // Read URL parameters on client side
   useEffect(() => {
@@ -36,11 +37,12 @@ function JBrowseContent() {
       const accessionParam = urlParams.get('accession')
       const annotationIdParam = urlParams.get('annotationId')
       
-      if (accessionParam) setAccession(accessionParam)
+      setAccession(accessionParam)
       if (annotationIdParam) {
         setAnnotationId(annotationIdParam)
         setSelectedAnnotationId(annotationIdParam)
       }
+      setIsInitialized(true)
     }
   }, [])
 
@@ -67,18 +69,28 @@ function JBrowseContent() {
     fetchData()
   }, [accession])
 
+  // Show loading while initializing
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  // Show error only after initialization and if no accession
   if (!accession) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-red-600 mb-4">Invalid Accession</h1>
           <p className="text-gray-600 mb-4">No assembly accession provided in URL parameters.</p>
-          <a 
-            href="/" 
-            className="inline-flex items-center px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          >
-            ← Back to Home
-          </a>
+          <Link href="/">
+            <Button variant="default" className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Home
+            </Button>
+          </Link>
         </div>
       </div>
     )

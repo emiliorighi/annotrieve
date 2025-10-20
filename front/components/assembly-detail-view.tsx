@@ -5,6 +5,7 @@ import { AssemblyRecord } from "@/lib/api/types"
 import { ChromosomeViewer } from "./chromosome-viewer"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { useRouter } from "next/navigation"
 
 interface AssemblyDetailViewProps {
   assemblyDetails: AssemblyRecord
@@ -13,25 +14,27 @@ interface AssemblyDetailViewProps {
 
 export function AssemblyDetailView({ assemblyDetails, onJBrowseChange }: AssemblyDetailViewProps) {
   const [showMoreStatistics, setShowMoreStatistics] = useState(false)
+  const router = useRouter()
 
   const handleDownload = () => {
-  // Create a temporary anchor element to trigger download
-  const link = document.createElement('a')
-  link.href = assemblyDetails.download_url as string
-  link.download = '' // optional: set a filename if needed
-  link.target = '_blank' // open in a new tab if preferred
-  link.rel = 'noopener noreferrer'
+    // Create a temporary anchor element to trigger download
+    const link = document.createElement('a')
+    link.href = assemblyDetails.download_url as string
+    link.download = '' // optional: set a filename if needed
+    link.target = '_blank' // open in a new tab if preferred
+    link.rel = 'noopener noreferrer'
 
-  // Append to body and simulate click
-  document.body.appendChild(link)
-  link.click()
+    // Append to body and simulate click
+    document.body.appendChild(link)
+    link.click()
 
-  // Clean up
-  document.body.removeChild(link)
+    // Clean up
+    document.body.removeChild(link)
   }
+  
   const handleViewInBrowser = () => {
-    onJBrowseChange?.(assemblyDetails.assembly_accession)
-    // In real implementation, this would open the genome browser
+    // Use URL navigation instead of bubbling up params
+    router.push(`/jbrowse/?accession=${assemblyDetails.assembly_accession}`)
   }
 
   const formatNumber = (num: string | number) => {

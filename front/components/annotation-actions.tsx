@@ -13,6 +13,7 @@ import { Download, Eye, Activity, MoreVertical, FileText } from "lucide-react"
 import { StreamIntervalDialog } from "@/components/stream-interval-dialog"
 import { FileOverviewDialog } from "@/components/file-overview-dialog"
 import type { Annotation } from "@/lib/types"
+import { useRouter } from "next/navigation"
 
 interface AnnotationActionsProps {
   annotation: Annotation
@@ -23,9 +24,10 @@ export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationAct
   const [streamDialogOpen, setStreamDialogOpen] = useState(false)
   const [overviewDialogOpen, setOverviewDialogOpen] = useState(false)
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false)
+  const router = useRouter()
 
   const handleDownload = () => {
-  // Create a temporary anchor element to trigger download
+    // Create a temporary anchor element to trigger download
     const link = document.createElement('a')
     link.href = `https://genome.crg.es/annotrieve/files/${annotation.indexed_file_info.bgzipped_path}`
     link.download = '' // optional: set a filename if needed
@@ -41,7 +43,8 @@ export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationAct
   }
 
   const handleViewInBrowser = () => {
-    onJBrowseChange?.(annotation.assembly_accession, annotation.annotation_id)
+    // Use URL navigation instead of bubbling up params
+    router.push(`/jbrowse/?accession=${annotation.assembly_accession}&annotationId=${annotation.annotation_id}`)
   }
 
   return (
