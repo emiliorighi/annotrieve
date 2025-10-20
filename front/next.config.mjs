@@ -3,6 +3,7 @@
 const nextConfig = {
   // Enable static export for GitHub Pages
   output: 'export',
+  basePath: '/annotrieve',
   trailingSlash: true,
   images: {
     unoptimized: true

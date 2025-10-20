@@ -82,10 +82,10 @@ export default function Home() {
 
           {/* Right side - Navigation links */}
           <nav className="flex items-center gap-6 px-6">
-            <Link href="/faqs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/faqs/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               FAQs
             </Link>
-            <Link href="/api-docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/api-docs/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               API
             </Link>
             <a 
