@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from db.database import connect_to_db, close_db_connection
 from celery_app.celery_utils import create_celery
 from api.router import router as api_router
@@ -6,6 +7,19 @@ from jobs.import_annotations import import_annotations
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Annotrieve API (FastAPI)")
+
+    # Configure CORS to allow requests from GitHub Pages
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost:3000",  # Development
+            "https://emiliorighi.github.io",  # GitHub Pages
+            "https://genome.crg.es",  # Production
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.on_event("startup")
     async def startup_event():
