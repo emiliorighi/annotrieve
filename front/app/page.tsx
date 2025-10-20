@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
+import { Github } from "lucide-react"
 import { SearchBar } from "@/components/search-bar"
 import { FilterDetails } from "@/components/filter-details"
 import { AnnotationsList } from "@/components/annotations-list"
@@ -8,6 +10,8 @@ import { Hero } from "@/components/hero"
 import type { FilterType } from "@/lib/types"
 import { getTaxon } from "@/lib/api/taxons"
 import { DataPipelineTimeline } from "@/components/pipeline-steps"
+import { StatsComputationGuide } from "@/components/stats-computation-guide"
+import { AnnotationsCharts } from "@/components/annotations-charts"
 import { getAssembly } from "@/lib/api/assemblies"
 import { TopAnnotations } from "@/components/top-annotated-records"
 
@@ -64,13 +68,35 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="border-b bg-card sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 z-index-10">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Annotrieve</h1>
-            </div>
+        <div className="flex items-center py-4">
+          {/* Left side - Title */}
+          <div className="px-6">
+            <h1 className="text-2xl font-bold text-foreground whitespace-nowrap">Annotrieve</h1>
           </div>
-          <SearchBar onFilterSelect={handleFilterSelect} />
+
+
+          {/* Center - Search bar (container aligned) */}
+          <div className="flex-1 container mx-auto px-4">
+            <SearchBar onFilterSelect={handleFilterSelect} />
+          </div>
+
+          {/* Right side - Navigation links */}
+          <nav className="flex items-center gap-6 px-6">
+            <Link href="/faqs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              FAQs
+            </Link>
+            <Link href="/api-docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              API
+            </Link>
+            <a 
+              href="https://github.com/emiliorighi/annotrieve" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Github className="h-5 w-5" />
+            </a>
+          </nav>
         </div>
       </header>
 
@@ -98,6 +124,7 @@ export default function Home() {
           <>
             <Hero />
             <TopAnnotations onFilterSelect={handleFilterSelect} />
+            {/* <AnnotationsCharts /> */}
           </>
         )}
       </main>

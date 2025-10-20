@@ -31,7 +31,7 @@ export function getPairedAssembly(accession: string) {
 }
 
 export function getAssembliesStats(params: FetchAssembliesParams, field: string) {
-  return apiGet<Record<string, number>>(`/assemblies/stats/${encodeURIComponent(field)}`, params)
+  return apiGet<Record<string, number>>(`/assemblies/frequencies/${encodeURIComponent(field)}`, params)
 }
 
 export function getChrAliases(accession: string) {

@@ -10,7 +10,6 @@ info:
 servers:
   - url: https://genome.crg.es/annotrieve/api/v0
     description: Production server
-
 tags:
   - name: "annotations"
     description: "Genome annotation endpoints"
@@ -39,8 +38,16 @@ paths:
         - $ref: "#/components/parameters/feature_sources"
         - $ref: "#/components/parameters/biotypes"
         - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
         - $ref: "#/components/parameters/md5_checksums"
         - $ref: "#/components/parameters/latest_release_by"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+        - $ref: "#/components/parameters/fields"
       responses:
         "200":
           description: "Successful operation"
@@ -75,26 +82,94 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /annotations/stats/{field}:
+  /annotations/stats/summary:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationStats"
-      summary: "Get statistics for a specific field across annotations"
+      operationId: "getAnnotationsSummaryStats"
+      summary: "Get comprehensive summary statistics across all annotations"
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/latest_release_by"
+      responses:
+        "200":
+          description: "Comprehensive annotation statistics"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationsSummaryStats"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationsSummaryStats"
+      summary: "Get summary statistics using POST"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Comprehensive annotation statistics"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationsSummaryStats"
+
+  /annotations/frequencies:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getFrequencyFields"
+      summary: "Get list of available fields for frequency queries"
+      responses:
+        "200":
+          description: "List of available frequency fields"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      type: string
+
+  /annotations/frequencies/{field}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationFrequencies"
+      summary: "Get frequency counts for a specific field across annotations"
       parameters:
         - name: field
           in: path
           required: true
-          description: "Field to get statistics for (e.g., 'source', 'taxid', 'assembly_accession')"
+          description: "Field to get frequencies for (e.g., 'organism_name', 'taxid', 'source')"
           schema:
             type: string
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
         - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
       responses:
         "200":
-          description: "Statistics for the field"
+          description: "Frequency counts for the field"
           content:
             application/json:
               schema:
@@ -105,8 +180,8 @@ paths:
     post:
       tags:
         - "annotations"
-      operationId: "postAnnotationStats"
-      summary: "Get field statistics using POST"
+      operationId: "postAnnotationFrequencies"
+      summary: "Get field frequencies using POST"
       parameters:
         - name: field
           in: path
@@ -120,87 +195,11 @@ paths:
               $ref: "#/components/schemas/AnnotationQueryParams"
       responses:
         "200":
-          description: "Statistics response"
+          description: "Frequency counts response"
           content:
             application/json:
               schema:
                 type: object
-
-  /annotations/download:
-    get:
-      tags:
-        - "annotations"
-      operationId: "getAnnotationsDownload"
-      summary: "Download annotations as a ZIP file"
-      parameters:
-        - $ref: "#/components/parameters/filter"
-        - $ref: "#/components/parameters/taxids"
-        - $ref: "#/components/parameters/assembly_accessions"
-        - $ref: "#/components/parameters/db_sources"
-        - $ref: "#/components/parameters/latest_release_by"
-      responses:
-        "200":
-          description: "ZIP file containing annotations"
-          content:
-            application/zip:
-              schema:
-                type: string
-                format: binary
-        "400":
-          $ref: "#/components/responses/BadRequest"
-    post:
-      tags:
-        - "annotations"
-      operationId: "postAnnotationsDownload"
-      summary: "Download annotations using POST"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AnnotationQueryParams"
-      responses:
-        "200":
-          description: "ZIP file"
-          content:
-            application/zip:
-              schema:
-                type: string
-                format: binary
-
-  /annotations/download/summary:
-    get:
-      tags:
-        - "annotations"
-      operationId: "getAnnotationsDownloadSummary"
-      summary: "Get download summary/preview information"
-      parameters:
-        - $ref: "#/components/parameters/filter"
-        - $ref: "#/components/parameters/taxids"
-        - $ref: "#/components/parameters/assembly_accessions"
-      responses:
-        "200":
-          description: "Download summary"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DownloadSummaryResponse"
-    post:
-      tags:
-        - "annotations"
-      operationId: "postAnnotationsDownloadSummary"
-      summary: "Get download summary using POST"
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AnnotationQueryParams"
-      responses:
-        "200":
-          description: "Download summary"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/DownloadSummaryResponse"
 
   /annotations/errors:
     get:
@@ -256,45 +255,51 @@ paths:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationContigs"
-      summary: "Get list of contigs/chromosomes in an annotation"
+      operationId: "updateAnnotationStats"
+      summary: "Update annotation statistics (admin endpoint)"
       parameters:
         - name: md5_checksum
           in: path
           required: true
           schema:
             type: string
+            pattern: '^[a-f0-9]{32}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: "Statistics data to update"
       responses:
         "200":
-          description: "List of contigs"
+          description: "Stats updated successfully"
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  data:
-                    type: array
-                    items:
-                      type: string
-                  total:
-                    type: integer
+                  message:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
 
-  /annotations/{md5_checksum}/contigs/{region}/gff:
+  /annotations/{md5_checksum}/gff:
     get:
       tags:
         - "annotations"
-      operationId: "getAnnotationRegionGFF"
-      summary: "Stream GFF data for a specific region"
+      operationId: "streamAnnotationGFF"
+      summary: "Stream GFF data for an annotation file"
       parameters:
         - name: md5_checksum
           in: path
           required: true
           schema:
             type: string
-        - name: region
-          in: path
-          required: true
-          description: "Contig/chromosome name or alias"
+            pattern: '^[a-f0-9]{32}$'
+        - name: seqid
+          in: query
+          description: "Sequence/contig identifier"
           schema:
             type: string
         - name: start
@@ -375,6 +380,8 @@ paths:
         - $ref: "#/components/parameters/assembly_accessions"
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
       responses:
         "200":
           description: "List of assemblies"
@@ -402,6 +409,53 @@ paths:
               schema:
                 $ref: "#/components/schemas/PaginatedAssembliesResponse"
 
+  /assemblies/frequencies/{field}:
+    get:
+      tags:
+        - "assemblies"
+      operationId: "getAssemblyFrequencies"
+      summary: "Get frequency counts for a specific field across assemblies"
+      parameters:
+        - name: field
+          in: path
+          required: true
+          description: "Field to get frequencies for"
+          schema:
+            type: string
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+      responses:
+        "200":
+          description: "Frequency counts"
+          content:
+            application/json:
+              schema:
+                type: object
+    post:
+      tags:
+        - "assemblies"
+      operationId: "postAssemblyFrequencies"
+      summary: "Get assembly frequencies using POST"
+      parameters:
+        - name: field
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssemblyQueryParams"
+      responses:
+        "200":
+          description: "Frequency counts"
+          content:
+            application/json:
+              schema:
+                type: object
+
   /assemblies/{assembly_accession}:
     get:
       tags:
@@ -422,6 +476,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Assembly"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /assemblies/{assembly_accession}/chr_aliases:
+    get:
+      tags:
+        - "assemblies"
+      operationId: "getChromosomeAliases"
+      summary: "Get chromosome aliases file for the assembly"
+      parameters:
+        - name: assembly_accession
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Chromosome aliases mapping file"
+          content:
+            text/plain:
+              schema:
+                type: string
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -550,8 +626,11 @@ paths:
       parameters:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/rank"
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
       responses:
         "200":
           description: "List of taxon nodes"
@@ -733,6 +812,76 @@ components:
       schema:
         type: "string"
         enum: ["organism", "assembly"]
+    
+    pipelines:
+      name: "pipelines"
+      in: "query"
+      description: "Comma-separated list of pipeline names"
+      schema:
+        type: "string"
+      example: "BestRefSeq,NCBI"
+    
+    providers:
+      name: "providers"
+      in: "query"
+      description: "Comma-separated list of annotation providers"
+      schema:
+        type: "string"
+      example: "RefSeq,Ensembl"
+    
+    has_stats:
+      name: "has_stats"
+      in: "query"
+      description: "Filter by presence of statistics"
+      schema:
+        type: "boolean"
+    
+    sort_by:
+      name: "sort_by"
+      in: "query"
+      description: "Field to sort by"
+      schema:
+        type: "string"
+    
+    sort_order:
+      name: "sort_order"
+      in: "query"
+      description: "Sort order (asc or desc)"
+      schema:
+        type: "string"
+        enum: ["asc", "desc"]
+        default: "asc"
+    
+    release_date_from:
+      name: "release_date_from"
+      in: "query"
+      description: "Filter annotations released after this date (ISO format)"
+      schema:
+        type: "string"
+        format: "date"
+    
+    release_date_to:
+      name: "release_date_to"
+      in: "query"
+      description: "Filter annotations released before this date (ISO format)"
+      schema:
+        type: "string"
+        format: "date"
+    
+    fields:
+      name: "fields"
+      in: "query"
+      description: "Comma-separated list of fields to return (for projection)"
+      schema:
+        type: "string"
+    
+    rank:
+      name: "rank"
+      in: "query"
+      description: "Taxonomic rank to filter by"
+      schema:
+        type: "string"
+      example: "species"
 
   responses:
     BadRequest:
@@ -744,6 +893,13 @@ components:
     
     NotFound:
       description: "Resource not found"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    
+    Forbidden:
+      description: "Forbidden - authentication required"
       content:
         application/json:
           schema:
@@ -792,8 +948,14 @@ components:
           type: "string"
         feature_types:
           type: "string"
+        pipelines:
+          type: "string"
+        providers:
+          type: "string"
         md5_checksums:
           type: "string"
+        has_stats:
+          type: "boolean"
         offset:
           type: "integer"
           default: 0
@@ -803,6 +965,19 @@ components:
         latest_release_by:
           type: "string"
           enum: ["organism", "assembly"]
+        sort_by:
+          type: "string"
+        sort_order:
+          type: "string"
+          enum: ["asc", "desc"]
+        release_date_from:
+          type: "string"
+          format: "date"
+        release_date_to:
+          type: "string"
+          format: "date"
+        fields:
+          type: "string"
 
     Annotation:
       type: "object"
@@ -922,6 +1097,50 @@ components:
           type: "string"
           format: "date-time"
 
+    AnnotationsSummaryStats:
+      type: "object"
+      description: "Comprehensive summary statistics across annotations"
+      properties:
+        total_annotations:
+          type: "integer"
+          description: "Total number of annotations"
+        organisms_count:
+          type: "integer"
+          description: "Number of unique organisms"
+        assemblies_count:
+          type: "integer"
+          description: "Number of unique assemblies"
+        coding_genes:
+          type: "object"
+          description: "Statistics for coding genes"
+          properties:
+            count:
+              type: "array"
+              items:
+                type: "integer"
+            mean_gene_length:
+              type: "array"
+              items:
+                type: "number"
+        non_coding_genes:
+          type: "object"
+          description: "Statistics for non-coding genes"
+        pseudogenes:
+          type: "object"
+          description: "Statistics for pseudogenes"
+        mrna:
+          type: "object"
+          description: "Statistics for mRNA transcripts"
+        lncrna:
+          type: "object"
+          description: "Statistics for lncRNA"
+        cds:
+          type: "object"
+          description: "Statistics for CDS features"
+        exons:
+          type: "object"
+          description: "Statistics for exons"
+
     DownloadSummaryResponse:
       type: "object"
       properties:
@@ -958,6 +1177,11 @@ components:
         limit:
           type: "integer"
           default: 20
+        sort_by:
+          type: "string"
+        sort_order:
+          type: "string"
+          enum: ["asc", "desc"]
 
     Assembly:
       type: "object"
@@ -1073,12 +1297,20 @@ components:
           type: "string"
         taxids:
           type: "string"
+        rank:
+          type: "string"
+          description: "Filter by taxonomic rank"
         offset:
           type: "integer"
           default: 0
         limit:
           type: "integer"
           default: 20
+        sort_by:
+          type: "string"
+        sort_order:
+          type: "string"
+          enum: ["asc", "desc"]
 
     TaxonNode:
       type: "object"

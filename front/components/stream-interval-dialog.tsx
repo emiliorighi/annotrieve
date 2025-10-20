@@ -29,10 +29,10 @@ export function StreamIntervalDialog({ annotation, open, onOpenChange }: StreamI
     // Mock streaming data
     const mockData = [
       `##gff-version 3`,
-      `${chromosome}\t${annotation.source}\tgene\t${start}\t${Number.parseInt(start) + 5000}\t.\t+\t.\tID=gene1;Name=EXAMPLE1`,
-      `${chromosome}\t${annotation.source}\texon\t${start}\t${Number.parseInt(start) + 1000}\t.\t+\t.\tParent=gene1`,
-      `${chromosome}\t${annotation.source}\tCDS\t${start}\t${Number.parseInt(start) + 1000}\t.\t+\t0\tParent=gene1`,
-      `${chromosome}\t${annotation.source}\tgene\t${Number.parseInt(start) + 10000}\t${Number.parseInt(start) + 15000}\t.\t-\t.\tID=gene2;Name=EXAMPLE2`,
+      `${chromosome}\t${annotation.source_file_info?.database || 'Unknown'}\tgene\t${start}\t${Number.parseInt(start) + 5000}\t.\t+\t.\tID=gene1;Name=EXAMPLE1`,
+      `${chromosome}\t${annotation.source_file_info?.database || 'Unknown'}\texon\t${start}\t${Number.parseInt(start) + 1000}\t.\t+\t.\tParent=gene1`,
+      `${chromosome}\t${annotation.source_file_info?.database || 'Unknown'}\tCDS\t${start}\t${Number.parseInt(start) + 1000}\t.\t+\t0\tParent=gene1`,
+      `${chromosome}\t${annotation.source_file_info?.database || 'Unknown'}\tgene\t${Number.parseInt(start) + 10000}\t${Number.parseInt(start) + 15000}\t.\t-\t.\tID=gene2;Name=EXAMPLE2`,
     ]
 
     let index = 0
@@ -93,11 +93,11 @@ export function StreamIntervalDialog({ annotation, open, onOpenChange }: StreamI
           <div className="bg-muted/50 rounded-lg p-3 text-sm">
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Source:</span>
-              <Badge variant="outline">{annotation.source}</Badge>
+              <Badge variant="outline">{annotation.source_file_info?.database || 'Unknown'}</Badge>
             </div>
             <div className="flex items-center justify-between mt-1">
               <span className="text-muted-foreground">File:</span>
-              <span className="font-mono text-xs truncate ml-2">{annotation.fileName}</span>
+              <span className="font-mono text-xs truncate ml-2">{annotation.annotation_id}</span>
             </div>
           </div>
 

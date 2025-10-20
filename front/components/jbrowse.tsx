@@ -9,13 +9,28 @@ import {
 import { getAssembledMolecules } from '@/lib/api/assemblies'
 import { listAnnotations } from '@/lib/api/annotations'
 
+interface ChromosomeInterface {
+  accession_version: string
+  chr_name: string
+  length: number
+  aliases: string[]
+}
+
 interface JBrowseLinearGenomeViewComponentProps {
   accession: string
   annotationId?: string
+  selectedChromosome?: ChromosomeInterface | null
 }
 // Use relative URLs to leverage Next.js rewrites and avoid CORS issues
-const baseURL = process.env.NEXT_PUBLIC_API_URL || ''
-const apiBaseURL = process.env.NEXT_PUBLIC_API_URL || ''
+// For GitHub Pages deployment, use absolute URLs
+const baseURL = process.env.NEXT_PUBLIC_API_URL || 
+  (typeof window !== 'undefined' && window.location.hostname.includes('github.io') 
+    ? 'https://genome.crg.es/annotrieve' 
+    : '')
+const apiBaseURL = process.env.NEXT_PUBLIC_API_URL || 
+  (typeof window !== 'undefined' && window.location.hostname.includes('github.io') 
+    ? 'https://genome.crg.es/annotrieve' 
+    : '')
 
 const configuration = {
   theme: {
@@ -50,7 +65,7 @@ const configuration = {
   },
 }
 
-export default function JBrowseLinearGenomeViewComponent({ accession, annotationId }: JBrowseLinearGenomeViewComponentProps) {
+export default function JBrowseLinearGenomeViewComponent({ accession, annotationId, selectedChromosome }: JBrowseLinearGenomeViewComponentProps) {
   const [viewState, setViewState] = useState<ViewModel>()
   const [chromosomes, setChromosomes] = useState<any[]>([])
   const [annotations, setAnnotations] = useState<any[]>([])
@@ -119,7 +134,7 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
       displays: [
         {
           type: "LinearBasicDisplay",
-          displayId: "myTrackLinearDisplay",
+          displayId: `${annotation.annotation_id}_TrackDisplay`,
           renderer: {
             type: "SvgFeatureRenderer",
             showLabels: true,
@@ -176,6 +191,24 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
       return
     }
 
+    // Get the first chromosome for default location
+    const firstChromosome = chromosomes[0]
+    const defaultLocation = firstChromosome
+      ? `${firstChromosome.chr_name || firstChromosome.sequence_name}:1-${Math.min(100000, firstChromosome.length)}`
+      : undefined
+
+    // Create session tracks with all tracks visible by default
+    const sessionTracks = tracks.map((track) => ({
+      type: 'FeatureTrack',
+      configuration: track.trackId,
+      displays: [
+        {
+          type: 'LinearBasicDisplay',
+          configuration: `${track.trackId}_TrackDisplay`,
+        },
+      ],
+    }))
+
     // JBrowse needs to create multiple workers for its RPC system
     // Don't use a singleton - let JBrowse manage worker lifecycle
     const state = createViewState({
@@ -188,12 +221,46 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
         },
         ...configuration,
       },
+      defaultSession: {
+        name: 'Annotrieve Session',
+        view: {
+          id: 'linearGenomeView',
+          type: 'LinearGenomeView',
+          ...(defaultLocation && firstChromosome && {
+            displayedRegions: [
+              {
+                refName: firstChromosome.chr_name || firstChromosome.sequence_name,
+                start: 0,
+                end: Math.min(100000, firstChromosome.length),
+                assemblyName,
+              }
+            ]
+          }),
+          tracks: sessionTracks,
+        },
+      },
       makeWorkerInstance: () => {
         return new Worker(new URL('../app/rpcWorker.ts', import.meta.url))
       },
     })
     setViewState(state)
-  }, [assembly, tracks])
+  }, [assembly, tracks, chromosomes, assemblyName])
+
+  // Update view when chromosome is selected
+  useEffect(() => {
+    if (!viewState || !selectedChromosome || !assemblyName) return
+
+    try {
+      // Navigate to the selected chromosome
+      const view = viewState.session.view
+      view.navToLocString(
+        `${selectedChromosome.chr_name}:1-${Math.min(100000, selectedChromosome.length)}`,
+        assemblyName
+      )
+    } catch (error) {
+      console.error('Error navigating to chromosome:', error)
+    }
+  }, [selectedChromosome, viewState, assemblyName])
 
   if (isLoading || !viewState) {
     return (

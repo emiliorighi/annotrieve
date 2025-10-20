@@ -1,3 +1,11 @@
+export interface SourceFileInfo {
+  database: string
+  provider: string
+  release_date: string
+  last_modified: string
+  uncompressed_md5: string
+}
+
 export interface AssemblyStats {
   total_number_of_chromosomes: number
   total_sequence_length: string
@@ -29,12 +37,24 @@ export interface Pagination<T> {
 
 export interface AnnotationRecord {
   md5_checksum?: string
+  annotation_id?: string
   name?: string
   organism_name?: string
   assembly_accession?: string
   assembly_name?: string
   taxid?: string
-  source?: string
+  source_file_info?: SourceFileInfo
+  features_statistics?: {
+    coding_genes?: {
+      count?: number
+    }
+    non_coding_genes?: {
+      count?: number
+    }
+    pseudogenes?: {
+      count?: number
+    }
+  }
   [key: string]: unknown
 }
 

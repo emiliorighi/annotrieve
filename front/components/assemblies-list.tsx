@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { listAssemblies } from "@/lib/api/assemblies"
 import { useEffect, useState } from "react"
-import { ArrowDown, ArrowUp, Building2, Calendar, Database, Info, ChevronLeft, ChevronRight, FileText, PawPrint, ExternalLink } from "lucide-react"
+import { ArrowDown, ArrowUp, Building2, Calendar, Database, Info, ChevronLeft, ChevronRight, FileText, PawPrint, ExternalLink, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "./ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { getAssembliesStats } from "@/lib/api/assemblies"
@@ -36,6 +36,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
   const [sortOrder, setSortOrder] = useState<string>('desc')
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(6)
+  const [isExpanded, setIsExpanded] = useState<boolean>(false)
 
   // Fetch assemblies when organism, sort, or filters change
   useEffect(() => {
@@ -180,187 +181,222 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
   }
 
   return (
-    <div>
-      <div className="flex justify-between align-center mb-4">
-        <div className="flex items-center align-center gap-2">
-          <h4 className="text-lg font-semibold">Available Assemblies ({totalAssemblies})</h4>
+    <div className="border rounded-lg">
+      {/* Toggle Header */}
+      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="h-8 px-2 hover:bg-muted"
+          >
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+          <div>
+            <h3 className="text-2xl font-bold text-foreground">
+              Related Assemblies
+            </h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              <span className="font-semibold text-foreground">{totalAssemblies}</span> assembl{totalAssemblies !== 1 ? 'ies' : 'y'} available
+            </p>
+          </div>
+          {selectedAssemblies.size > 0 && (
+            <Badge
+              variant="default"
+              className="cursor-pointer hover:bg-primary/80 transition-colors"
+              onClick={clearAllSelections}
+            >
+              {selectedAssemblies.size} selected
+            </Badge>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => {
             alert("Select one or more assemblies to see the related annotations; use right click to see the context menu")
           }}>
             <Info className="h-4 w-4" />
           </Button>
-          {selectedAssemblies.size > 0 && (
-            <Badge
-              variant="default"
-              className="ml-2 cursor-pointer hover:bg-primary/80 transition-colors"
-              onClick={clearAllSelections}
-            >
-              {selectedAssemblies.size} selected (click to clear)
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center align-center gap-2">
-          {submittersLoading && <div className="text-sm text-muted-foreground">Loading submitters...</div>}
-          {submittersError && <div className="text-sm text-red-500">{submittersError}</div>}
-          {!submittersLoading && !submittersError && (
-            <Select value={selectedSubmitter || "all"} onValueChange={(value) => {
-              setSelectedSubmitter(value === "all" ? null : value)
-              setCurrentPage(1) // Reset to first page when filter changes
-            }}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All submitters" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px] overflow-y-auto">
-                <SelectItem value="all">All submitters</SelectItem>
-                {Object.entries(submitters).map(([submitter, count]) => (
-                  <SelectItem key={submitter} value={submitter}>{submitter} ({count})</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Button variant="outline" onClick={handleSort} className="ml-2 gap-2">
-            {sortOrder === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-            {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
-          </Button>
         </div>
       </div>
-      {loading && <div className="text-sm text-muted-foreground animate-in slide-in-from-top-2 fade-in duration-200">Loading assemblies...</div>}
-      {error && <div className="text-sm text-red-500 animate-in slide-in-from-top-2 fade-in duration-200">{error}</div>}
-      {!loading && !error && (
-        <div className="grid grid-cols-1 gap-2 animate-in slide-in-from-top-2 fade-in duration-200">
-          {assemblies.map((assembly: any) => {
-            const isSelected = selectedAssemblies.has(assembly.assembly_accession)
-            return (
-              <ContextMenu key={assembly.assembly_accession}>
-                <ContextMenuTrigger asChild>
-                  <div onClick={() => toggleAssemblySelection(assembly.assembly_accession)} className={`border rounded-lg p-4 flex justify-between align-center cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'
-                    }`}>
-                    <div className="flex-col gap-4">
-                      <div className="flex items-center">
-                        <span className="font-mono text-md">{assembly.assembly_name}</span>
-                        {isSelected && (
-                          <Badge variant="default" className="ml-2 animate-in fade-in zoom-in duration-200">Selected</Badge>
-                        )}
-                      </div>
-                      <div className="flex gap-4 mt-4">
-                        {view === 'taxon' && (
-                          <div className="flex items-start gap-2">
-                            <PawPrint className="h-5 w-5 text-primary mt-0.5" />
-                            <div className="flex-1">
-                              <div className="font-mono text-sm italic text-muted-foreground">{assembly.organism_name}</div>
-                            </div>
-                          </div>
-                        )}
-                        <div className="flex items-start gap-2">
-                          <Database className="h-5 w-5 text-primary mt-0.5" />
-                          <div className="flex-1">
-                            <div className="font-mono text-sm text-muted-foreground">{assembly.assembly_accession}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <Calendar className="h-5 w-5 text-primary mt-0.5" />
-                          <div className="flex-1">
-                            <div className="text-sm text-muted-foreground">
-                              {new Date(assembly.release_date as string).toLocaleDateString("en-US", {
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-start gap-2">
-                          <Building2 className="h-5 w-5 text-primary mt-0.5" />
-                          <div className="flex-1">
-                            <div className="text-sm text-muted-foreground">{assembly.submitter as string}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-sm text-muted-foreground">Annotations</span>
-                      <h3 className="text-2xl font-bold text-primary">{assembly.annotations_count as number}</h3>
-                    </div>
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent className="w-56">
-                  <ContextMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onAssemblySelect?.(assembly.assembly_accession)
-                    }}
-                    className="gap-2"
-                  >
-                    <Info className="h-4 w-4" />
-                    <span>View Assembly Details</span>
-                  </ContextMenuItem>
-                  <ContextMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onJBrowseChange?.(assembly.assembly_accession)
-                    }}
-                    className="gap-2"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    <span>View in Genome Browser</span>
-                  </ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
-            )
-          })}
-          {assemblies.length === 0 && (
-            <div className="text-sm text-muted-foreground animate-in slide-in-from-top-2 fade-in duration-200">No assemblies found for this organism.</div>
-          )}
-        </div>
-      )}
 
-      {/* Pagination */}
-      {!loading && !error && totalAssemblies > itemsPerPage && (
-        <div className="flex items-center justify-between mt-6 pt-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalAssemblies)} of {totalAssemblies} assemblies
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePreviousPage}
-              disabled={currentPage === 1}
-              className="gap-1"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Previous
-            </Button>
-
-            <div className="flex items-center gap-1">
-              {getPageNumbers().map((page, index) => (
-                page === '...' ? (
-                  <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">...</span>
-                ) : (
-                  <Button
-                    key={page}
-                    variant={currentPage === page ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handlePageClick(page as number)}
-                    className="min-w-[2.5rem]"
-                  >
-                    {page}
-                  </Button>
-                )
-              ))}
+      {/* Expandable Content */}
+      {isExpanded && (
+        <div className="p-4 space-y-4">
+          {/* Filters and Controls */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-muted-foreground">Filters:</span>
+              {submittersLoading && <div className="text-sm text-muted-foreground">Loading submitters...</div>}
+              {submittersError && <div className="text-sm text-red-500">{submittersError}</div>}
+              {!submittersLoading && !submittersError && (
+                <Select value={selectedSubmitter || "all"} onValueChange={(value) => {
+                  setSelectedSubmitter(value === "all" ? null : value)
+                  setCurrentPage(1) // Reset to first page when filter changes
+                }}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="All submitters" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px] overflow-y-auto">
+                    <SelectItem value="all">All submitters</SelectItem>
+                    {Object.entries(submitters).map(([submitter, count]) => (
+                      <SelectItem key={submitter} value={submitter}>{submitter} ({count})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages}
-              className="gap-1"
-            >
-              Next
-              <ChevronRight className="h-4 w-4" />
+            
+            <Button variant="outline" onClick={handleSort} className="gap-2">
+              {sortOrder === 'desc' ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+              {sortOrder === 'desc' ? 'Newest First' : 'Oldest First'}
             </Button>
           </div>
+          {/* Assemblies List */}
+          {loading && <div className="text-sm text-muted-foreground animate-in slide-in-from-top-2 fade-in duration-200">Loading assemblies...</div>}
+          {error && <div className="text-sm text-red-500 animate-in slide-in-from-top-2 fade-in duration-200">{error}</div>}
+          {!loading && !error && (
+            <div className="grid grid-cols-1 gap-2 animate-in slide-in-from-top-2 fade-in duration-200">
+              {assemblies.map((assembly: any) => {
+                const isSelected = selectedAssemblies.has(assembly.assembly_accession)
+                return (
+                  <ContextMenu key={assembly.assembly_accession}>
+                    <ContextMenuTrigger asChild>
+                      <div onClick={() => toggleAssemblySelection(assembly.assembly_accession)} className={`border rounded-lg p-4 flex justify-between align-center cursor-pointer transition-all duration-200 hover:shadow-md hover:border-primary/50 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'hover:bg-muted/30'
+                        }`}>
+                        <div className="flex-col gap-4">
+                          <div className="flex items-center">
+                            <span className="font-mono text-md">{assembly.assembly_name}</span>
+                            {isSelected && (
+                              <Badge variant="default" className="ml-2 animate-in fade-in zoom-in duration-200">Selected</Badge>
+                            )}
+                          </div>
+                          <div className="flex gap-4 mt-4">
+                            {view === 'taxon' && (
+                              <div className="flex items-start gap-2">
+                                <PawPrint className="h-5 w-5 text-primary mt-0.5" />
+                                <div className="flex-1">
+                                  <div className="font-mono text-sm italic text-muted-foreground">{assembly.organism_name}</div>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex items-start gap-2">
+                              <Database className="h-5 w-5 text-primary mt-0.5" />
+                              <div className="flex-1">
+                                <div className="font-mono text-sm text-muted-foreground">{assembly.assembly_accession}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <Calendar className="h-5 w-5 text-primary mt-0.5" />
+                              <div className="flex-1">
+                                <div className="text-sm text-muted-foreground">
+                                  {new Date(assembly.release_date as string).toLocaleDateString("en-US", {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <Building2 className="h-5 w-5 text-primary mt-0.5" />
+                              <div className="flex-1">
+                                <div className="text-sm text-muted-foreground">{assembly.submitter as string}</div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-center gap-2">
+                          <span className="text-sm text-muted-foreground">Annotations</span>
+                          <h3 className="text-2xl font-bold text-primary">{assembly.annotations_count as number}</h3>
+                        </div>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-56">
+                      <ContextMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAssemblySelect?.(assembly.assembly_accession)
+                        }}
+                        className="gap-2"
+                      >
+                        <Info className="h-4 w-4" />
+                        <span>View Assembly Details</span>
+                      </ContextMenuItem>
+                      <ContextMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onJBrowseChange?.(assembly.assembly_accession)
+                        }}
+                        className="gap-2"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        <span>View in Genome Browser</span>
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                )
+              })}
+              {assemblies.length === 0 && (
+                <div className="text-sm text-muted-foreground animate-in slide-in-from-top-2 fade-in duration-200">No assemblies found for this organism.</div>
+              )}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && !error && totalAssemblies > itemsPerPage && (
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, totalAssemblies)} of {totalAssemblies} assemblies
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreviousPage}
+                  disabled={currentPage === 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {getPageNumbers().map((page, index) => (
+                    page === '...' ? (
+                      <span key={`ellipsis-${index}`} className="px-2 text-muted-foreground">...</span>
+                    ) : (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageClick(page as number)}
+                        className="min-w-[2.5rem]"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  ))}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNextPage}
+                  disabled={currentPage === totalPages}
+                  className="gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

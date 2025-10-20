@@ -1,0 +1,200 @@
+/* Custom Swagger UI styles to match Annotrieve theme */
+
+.swagger-ui {
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+}
+
+/* Match card background */
+.swagger-ui .opblock {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+.swagger-ui .opblock .opblock-summary {
+  border: none;
+  padding: 1rem;
+}
+
+.swagger-ui .opblock .opblock-summary:hover {
+  background: hsl(var(--muted));
+}
+
+/* Method badges */
+.swagger-ui .opblock.opblock-get {
+  border-color: hsl(var(--primary) / 0.3);
+}
+
+.swagger-ui .opblock.opblock-post {
+  border-color: hsl(142 76% 36% / 0.3);
+}
+
+.swagger-ui .opblock.opblock-put {
+  border-color: hsl(38 92% 50% / 0.3);
+}
+
+.swagger-ui .opblock.opblock-delete {
+  border-color: hsl(0 84% 60% / 0.3);
+}
+
+/* Headers */
+.swagger-ui .info {
+  margin: 0;
+}
+
+.swagger-ui .info .title {
+  color: hsl(var(--foreground));
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+.swagger-ui .info .description {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Parameters */
+.swagger-ui .parameters-col_description {
+  color: hsl(var(--foreground));
+}
+
+.swagger-ui .parameter__name {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+.swagger-ui .parameter__type {
+  color: hsl(var(--muted-foreground));
+}
+
+/* Response */
+.swagger-ui .responses-inner {
+  background: hsl(var(--muted) / 0.5);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+
+/* Code blocks */
+.swagger-ui .highlight-code {
+  background: hsl(var(--muted));
+  border-radius: var(--radius);
+}
+
+.swagger-ui .highlight-code pre {
+  background: transparent;
+}
+
+/* Buttons */
+.swagger-ui .btn {
+  border-radius: var(--radius);
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.swagger-ui .btn.execute {
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border: none;
+}
+
+.swagger-ui .btn.execute:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+/* Tables */
+.swagger-ui table {
+  background: transparent;
+}
+
+.swagger-ui table thead tr th,
+.swagger-ui table thead tr td {
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.5);
+}
+
+.swagger-ui table tbody tr td {
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+/* Models */
+.swagger-ui .model-box {
+  background: hsl(var(--muted) / 0.3);
+  border-radius: var(--radius);
+}
+
+.swagger-ui .model {
+  color: hsl(var(--foreground));
+}
+
+.swagger-ui .model-title {
+  color: hsl(var(--foreground));
+  font-weight: 600;
+}
+
+/* Tabs */
+.swagger-ui .tab {
+  color: hsl(var(--muted-foreground));
+}
+
+.swagger-ui .tab.active {
+  color: hsl(var(--foreground));
+  border-bottom: 2px solid hsl(var(--primary));
+}
+
+/* Inputs */
+.swagger-ui input[type=text],
+.swagger-ui textarea,
+.swagger-ui select {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  border-radius: var(--radius);
+}
+
+.swagger-ui input[type=text]:focus,
+.swagger-ui textarea:focus,
+.swagger-ui select:focus {
+  border-color: hsl(var(--primary));
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.2);
+}
+
+/* Server selector */
+.swagger-ui .scheme-container {
+  background: hsl(var(--muted) / 0.5);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Authorization */
+.swagger-ui .auth-wrapper {
+  border-radius: var(--radius);
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+  .swagger-ui .topbar {
+    background-color: hsl(var(--background));
+    border-bottom: 1px solid hsl(var(--border));
+  }
+}
+
+/* Remove default topbar if you don't want it */
+.swagger-ui .topbar {
+  display: none;
+}
+
+/* Improve mobile responsiveness */
+@media (max-width: 768px) {
+  .swagger-ui .opblock-summary {
+    flex-wrap: wrap;
+  }
+  
+  .swagger-ui .opblock-summary-path {
+    font-size: 0.875rem;
+  }
+}
+

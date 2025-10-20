@@ -1,4 +1,4 @@
-import { apiGet, type Query } from './base'
+import { apiGet, apiPost, type Query } from './base'
 import type { AnnotationRecord, Pagination } from './types'
 
 export interface FetchAnnotationsParams extends Query {
@@ -8,6 +8,7 @@ export interface FetchAnnotationsParams extends Query {
   assembly_accessions?: string
   sort_by?: 'assembly_accession' | 'assembly_name' | 'organism_name' | 'release_date'
   sort_order?: 'asc' | 'desc'
+  latest_release_by?: 'organism' | 'assembly'
   limit?: number
   offset?: number
 }
@@ -24,6 +25,18 @@ export function getAnnotationsStats(field: string, params?: Query) {
   return apiGet<Record<string, number>>(`/annotations/stats/${encodeURIComponent(field)}`, params)
 }
 
+export function getAnnotationsStatsSummary(params?: Query) {
+  return apiGet<any>('/annotations/stats/summary', params)
+}
+
+export function getAnnotationsFrequencies(field: string, params?: Query) {
+  return apiGet<Record<string, number>>(`/annotations/frequencies/${encodeURIComponent(field)}`, params)
+}
+
 export function listAnnotationErrors(offset = 0, limit = 20) {
   return apiGet<Pagination<any>>('/annotations/errors', { offset, limit })
+}
+
+export function downloadAnnotations(md5_checksums: string[]) {
+  return apiPost<Blob>('/annotations/download', { md5_checksums }, {}, {}, 'blob')
 }

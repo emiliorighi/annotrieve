@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Download, Eye, Activity, MoreVertical, FileText } from "lucide-react"
 import { StreamIntervalDialog } from "@/components/stream-interval-dialog"
 import { FileOverviewDialog } from "@/components/file-overview-dialog"
@@ -26,9 +25,19 @@ export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationAct
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false)
 
   const handleDownload = () => {
-    // Mock download action
-    console.log("Downloading:", annotation.annotation_id)
-    setDownloadDialogOpen(true)
+  // Create a temporary anchor element to trigger download
+    const link = document.createElement('a')
+    link.href = `https://genome.crg.es/annotrieve/files/${annotation.indexed_file_info.bgzipped_path}`
+    link.download = '' // optional: set a filename if needed
+    link.target = '_blank' // open in a new tab if preferred
+    link.rel = 'noopener noreferrer'
+
+    // Append to body and simulate click
+    document.body.appendChild(link)
+    link.click()
+
+    // Clean up
+    document.body.removeChild(link)
   }
 
   const handleViewInBrowser = () => {
@@ -49,54 +58,26 @@ export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationAct
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => setStreamDialogOpen(true)}>
+            {/* <DropdownMenuItem onClick={() => setStreamDialogOpen(true)}>
               <Activity className="h-4 w-4 mr-2" />
               Stream Intervals
-            </DropdownMenuItem>
+            </DropdownMenuItem> */}
             <DropdownMenuItem onClick={handleViewInBrowser}>
               <Eye className="h-4 w-4 mr-2" />
-              View in Browser
+              View in Genome Browser
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleDownload}>
               <Download className="h-4 w-4 mr-2" />
-              Download TAR
+              Download File
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
 
-      <StreamIntervalDialog annotation={annotation} open={streamDialogOpen} onOpenChange={setStreamDialogOpen} />
+      {/* <StreamIntervalDialog annotation={annotation} open={streamDialogOpen} onOpenChange={setStreamDialogOpen} /> */}
 
       <FileOverviewDialog annotation={annotation} open={overviewDialogOpen} onOpenChange={setOverviewDialogOpen} />
-
-      <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Download Annotation</DialogTitle>
-            <DialogDescription>Preparing your download...</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="bg-muted/50 rounded-lg p-4">
-              <div className="text-sm font-medium mb-2">File Details</div>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <div className="flex justify-between">
-                  <span>Path:</span>
-                  <span className="font-mono text-xs">{annotation.indexed_file_info.bgzipped_path}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Size:</span>  
-                  <span>{annotation.indexed_file_info.file_size}</span>
-                </div>
-              </div>
-            </div>
-            <Button className="w-full" onClick={() => setDownloadDialogOpen(false)}>
-              <Download className="h-4 w-4 mr-2" />
-              Start Download
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

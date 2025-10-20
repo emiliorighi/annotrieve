@@ -3,55 +3,69 @@ import { persist } from 'zustand/middleware'
 import type { Annotation } from '@/lib/types'
 
 interface SelectedAnnotationsState {
-  selectedIds: Set<string>
-  selectedAnnotations: Annotation[]
+  // Store annotations in a Map for efficient lookup and persistence
+  annotationsCart: Map<string, Annotation>
   
   // Actions
-  toggleSelection: (id: string) => void
+  toggleSelection: (annotation: Annotation) => void
+  addToCart: (annotation: Annotation) => void
+  removeFromCart: (id: string) => void
   selectAll: (annotations: Annotation[]) => void
   selectMostRecent: (annotations: Annotation[]) => void
   clearSelection: () => void
-  setSelectedAnnotations: (annotations: Annotation[]) => void
   
   // Computed values
   isSelected: (id: string) => boolean
-  allSelected: (totalCount: number) => boolean
-  someSelected: (totalCount: number) => boolean
+  getSelectedAnnotations: () => Annotation[]
+  getSelectedIds: () => Set<string>
+  getSelectionCount: () => number
+  allSelected: (annotations: Annotation[]) => boolean
+  someSelected: (annotations: Annotation[]) => boolean
 }
 
 export const useSelectedAnnotationsStore = create<SelectedAnnotationsState>()(
   persist(
     (set, get) => ({
-      selectedIds: new Set<string>(),
-      selectedAnnotations: [],
+      annotationsCart: new Map<string, Annotation>(),
 
-      toggleSelection: (id: string) => {
+      toggleSelection: (annotation: Annotation) => {
         set((state) => {
-          const newSelectedIds = new Set(state.selectedIds)
-          if (newSelectedIds.has(id)) {
-            newSelectedIds.delete(id)
+          const newCart = new Map(state.annotationsCart)
+          const id = annotation.annotation_id
+          
+          if (newCart.has(id)) {
+            newCart.delete(id)
           } else {
-            newSelectedIds.add(id)
+            newCart.set(id, annotation)
           }
           
-          // Update selected annotations based on current annotations
-          const currentAnnotations = get().selectedAnnotations
-          const updatedSelectedAnnotations = currentAnnotations.filter(annotation => 
-            newSelectedIds.has(annotation.annotation_id)
-          )
-          
-          return {
-            selectedIds: newSelectedIds,
-            selectedAnnotations: updatedSelectedAnnotations
-          }
+          return { annotationsCart: newCart }
+        })
+      },
+
+      addToCart: (annotation: Annotation) => {
+        set((state) => {
+          const newCart = new Map(state.annotationsCart)
+          newCart.set(annotation.annotation_id, annotation)
+          return { annotationsCart: newCart }
+        })
+      },
+
+      removeFromCart: (id: string) => {
+        set((state) => {
+          const newCart = new Map(state.annotationsCart)
+          newCart.delete(id)
+          return { annotationsCart: newCart }
         })
       },
 
       selectAll: (annotations: Annotation[]) => {
-        const allIds = new Set(annotations.map(a => a.annotation_id))
-        set({
-          selectedIds: allIds,
-          selectedAnnotations: annotations
+        set((state) => {
+          const newCart = new Map(state.annotationsCart)
+          annotations.forEach((annotation) => {
+            newCart.set(annotation.annotation_id, annotation)
+          })
+          return { annotationsCart: newCart }
         })
       },
 
@@ -65,54 +79,58 @@ export const useSelectedAnnotationsStore = create<SelectedAnnotationsState>()(
           }
         })
         
-        const mostRecentAnnotations = Array.from(byOrganism.values())
-        const mostRecentIds = new Set(mostRecentAnnotations.map(a => a.annotation_id))
-        
-        set({
-          selectedIds: mostRecentIds,
-          selectedAnnotations: mostRecentAnnotations
+        set((state) => {
+          const newCart = new Map(state.annotationsCart)
+          byOrganism.forEach((annotation) => {
+            newCart.set(annotation.annotation_id, annotation)
+          })
+          return { annotationsCart: newCart }
         })
       },
 
       clearSelection: () => {
-        set({
-          selectedIds: new Set<string>(),
-          selectedAnnotations: []
-        })
-      },
-
-      setSelectedAnnotations: (annotations: Annotation[]) => {
-        set((state) => {
-          const selectedAnnotations = annotations.filter(annotation => 
-            state.selectedIds.has(annotation.annotation_id)
-          )
-          return { selectedAnnotations }
-        })
+        set({ annotationsCart: new Map() })
       },
 
       // Computed values
       isSelected: (id: string) => {
-        return get().selectedIds.has(id)
+        return get().annotationsCart.has(id)
       },
 
-      allSelected: (totalCount: number) => {
-        const state = get()
-        return totalCount > 0 && state.selectedIds.size === totalCount
+      getSelectedAnnotations: () => {
+        return Array.from(get().annotationsCart.values())
       },
 
-      someSelected: (totalCount: number) => {
-        const state = get()
-        return state.selectedIds.size > 0 && state.selectedIds.size < totalCount
+      getSelectedIds: () => {
+        return new Set(get().annotationsCart.keys())
+      },
+
+      getSelectionCount: () => {
+        return get().annotationsCart.size
+      },
+
+      allSelected: (annotations: Annotation[]) => {
+        const cart = get().annotationsCart
+        if (annotations.length === 0) return false
+        return annotations.every(annotation => cart.has(annotation.annotation_id))
+      },
+
+      someSelected: (annotations: Annotation[]) => {
+        const cart = get().annotationsCart
+        const selectedOnPage = annotations.filter(annotation => cart.has(annotation.annotation_id)).length
+        return selectedOnPage > 0 && selectedOnPage < annotations.length
       }
     }),
     {
       name: 'selected-annotations-storage',
-      // Only persist the selectedIds, not the full annotations (they change frequently)
-      partialize: (state) => ({ selectedIds: Array.from(state.selectedIds) }),
-      // Restore selectedIds from persisted array
+      // Persist the cart as an array of annotations
+      partialize: (state) => ({ 
+        annotationsCart: Array.from(state.annotationsCart.entries())
+      }),
+      // Restore cart from persisted array
       onRehydrateStorage: () => (state) => {
-        if (state && Array.isArray(state.selectedIds)) {
-          state.selectedIds = new Set(state.selectedIds)
+        if (state && Array.isArray(state.annotationsCart)) {
+          state.annotationsCart = new Map(state.annotationsCart as [string, Annotation][])
         }
       }
     }

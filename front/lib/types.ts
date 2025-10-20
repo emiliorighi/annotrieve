@@ -88,6 +88,17 @@ export interface Annotation {
     has_cds: boolean
     has_exon: boolean
   }
+  features_statistics?: {
+    coding_genes?: {
+      count?: number
+    }
+    non_coding_genes?: {
+      count?: number
+    }
+    pseudogenes?: {
+      count?: number
+    }
+  }
 }
 
 export interface SearchResult {

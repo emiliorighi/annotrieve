@@ -26,11 +26,13 @@ interface ChromosomeViewerProps {
   accession: string;
   selectedChromosomes?: ChromosomeInterface[];
   onChromosomeSelected?: (chromosome: ChromosomeInterface) => void;
+  showDetails?: boolean;
 }
 
 export function ChromosomeViewer({
   accession,
   onChromosomeSelected,
+  showDetails = true,
 }: ChromosomeViewerProps) {
 
   const [chromosomes, setChromosomes] = useState<ChromosomeInterface[]>([]);
@@ -166,7 +168,7 @@ export function ChromosomeViewer({
       </div>
 
       {/* Chromosome details card */}
-      {displayedChromosome && (
+      {showDetails && displayedChromosome && (
         <Card className="animate-in fade-in slide-in-from-top-2 duration-200">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -203,19 +205,3 @@ export function ChromosomeViewer({
   );
 }
 
-// CSS Module styles (add to your globals.css or component styles)
-// .chromosome-viewer {
-//   position: relative;
-//   display: block;
-//   width: 100%;
-// }
-
-// .scrollable-svg {
-//   overflow-x: auto;
-//   overflow-y: hidden;
-//   white-space: nowrap;
-// }
-
-// .scrollable-svg svg {
-//   display: block;
-// }
