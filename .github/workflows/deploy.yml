@@ -24,7 +24,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd front
-        npm ci
+        npm ci --legacy-peer-deps
         
     - name: Build
       run: |
