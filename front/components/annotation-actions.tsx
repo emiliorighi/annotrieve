@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -9,11 +9,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Download, Eye, Activity, MoreVertical, FileText } from "lucide-react"
+import { Download, Eye, Activity, MoreVertical, FileText, Star } from "lucide-react"
 import { StreamIntervalDialog } from "@/components/stream-interval-dialog"
 import { FileOverviewDialog } from "@/components/file-overview-dialog"
 import type { Annotation } from "@/lib/types"
 import { useRouter } from "next/navigation"
+import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 
 interface AnnotationActionsProps {
   annotation: Annotation
@@ -24,7 +25,16 @@ export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationAct
   const [streamDialogOpen, setStreamDialogOpen] = useState(false)
   const [overviewDialogOpen, setOverviewDialogOpen] = useState(false)
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  
+  const { isSelected, toggleSelection } = useSelectedAnnotationsStore()
+  const isFavorite = mounted ? isSelected(annotation.annotation_id) : false
+
+  // Prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   const handleDownload = () => {
     // Create a temporary anchor element to trigger download
@@ -50,6 +60,14 @@ export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationAct
   return (
     <>
       <div className="flex items-center gap-2">
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => toggleSelection(annotation)}
+          className={isFavorite ? "text-yellow-500 hover:text-yellow-600" : ""}
+        >
+          <Star className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setOverviewDialogOpen(true)}>
           <FileText className="h-4 w-4 mr-2" />
           Overview

@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TrendingUp, Dna, Database, Loader2 } from "lucide-react"
@@ -15,10 +16,23 @@ interface TopAnnotationsProps {
 }
 
 export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
+  const router = useRouter()
   const [topOrganisms, setTopOrganisms] = useState<OrganismRecord[]>([])
   const [topAssemblies, setTopAssemblies] = useState<AssemblyRecord[]>([])
   const [topTaxons, setTopTaxons] = useState<TaxonRecord[]>([])
   const [loading, setLoading] = useState(true)
+
+  const handleCardClick = (type: FilterType, item: any) => {
+    const paramKey = type === 'assembly' ? 'assembly' 
+      : type === 'organism' ? 'organism' 
+      : 'taxon'
+    
+    const paramValue = type === 'assembly' 
+      ? item.assembly_accession 
+      : item.taxid
+    
+    router.push(`/annotations/?${paramKey}=${paramValue}`)
+  }
 
   useEffect(() => {
     async function fetchTopRecords() {
@@ -98,7 +112,7 @@ export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
               <Card
                 key={organism.taxid}
                 className="p-4 hover:shadow-md transition-all cursor-pointer group hover:border-primary/50"
-                onClick={() => onFilterSelect("organism", organism)}
+                onClick={() => handleCardClick("organism", organism)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -133,7 +147,7 @@ export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
               <Card
                 key={taxon.taxid}
                 className="p-4 hover:shadow-md transition-all cursor-pointer group hover:border-primary/50"
-                onClick={() => onFilterSelect("taxon", taxon)}
+                onClick={() => handleCardClick("taxon", taxon)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -167,7 +181,7 @@ export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
               <Card
                 key={assembly.assembly_accession}
                 className="p-4 hover:shadow-md transition-all cursor-pointer group hover:border-primary/50"
-                onClick={() => onFilterSelect("assembly", assembly)}
+                onClick={() => handleCardClick("assembly", assembly)}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">

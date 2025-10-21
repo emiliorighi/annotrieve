@@ -13,6 +13,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { useRouter } from "next/navigation"
 
 interface AssembliesListProps {
   taxid: string
@@ -37,7 +38,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
   const [currentPage, setCurrentPage] = useState<number>(1)
   const [itemsPerPage] = useState<number>(6)
   const [isExpanded, setIsExpanded] = useState<boolean>(false)
-
+  const router = useRouter()
   // Fetch assemblies when organism, sort, or filters change
   useEffect(() => {
     let cancelled = false
@@ -117,7 +118,10 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
       return newSet
     })
   }
-
+  const handleViewInBrowser = (assembly: any) => {
+    // Use URL navigation instead of bubbling up params
+    router.push(`/jbrowse?accession=${assembly.assembly_accession}`)
+  }
   const clearAllSelections = () => {
     setSelectedAssemblies(new Set())
     // Notify parent component of selection change
@@ -329,10 +333,7 @@ export function AssembliesList({ taxid, onAssembliesSelectionChange, onAssemblyS
                         <span>View Assembly Details</span>
                       </ContextMenuItem>
                       <ContextMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          onJBrowseChange?.(assembly.assembly_accession)
-                        }}
+                          onClick={() => handleViewInBrowser(assembly)}
                         className="gap-2"
                       >
                         <ExternalLink className="h-4 w-4" />

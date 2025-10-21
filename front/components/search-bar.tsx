@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Search, X } from "lucide-react"
@@ -25,6 +26,7 @@ interface SearchBarProps {
 }
 
 export function SearchBar({ onFilterSelect }: SearchBarProps) {
+  const router = useRouter()
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebouncedValue(query, 300) // debounce INPUT, not selection
   const [results, setResults] = useState<SearchResult[]>([])
@@ -164,13 +166,23 @@ export function SearchBar({ onFilterSelect }: SearchBarProps) {
   // Immediate selection (no debounce)
   const handleSelect = useCallback(
     (result: SearchResult) => {
-      onFilterSelect(result.type, result.relatedObject)
+      // Navigate to annotations page with appropriate query parameter
+      const paramKey = result.type === 'assembly' ? 'assembly' 
+        : result.type === 'organism' ? 'organism' 
+        : 'taxon'
+      
+      const paramValue = result.type === 'assembly' 
+        ? (result.relatedObject as any).assembly_accession 
+        : (result.relatedObject as any).taxid
+      
+      router.push(`/annotations/?${paramKey}=${paramValue}`)
+      
       setQuery("")
       setResults([])
       setIsOpen(false)
       setSelectedIndex(0)
     },
-    [onFilterSelect]
+    [router]
   )
 
   const getTypeColor = (type: string) => {

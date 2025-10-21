@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { AppHeader } from "@/components/app-header";
+import { FavoritesFloatingButton } from "@/components/favorites-floating-button";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -28,7 +30,13 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <div className="min-h-screen flex flex-col">
+          <AppHeader />
+          <main className="flex-1">
+            {children}
+          </main>
+          <FavoritesFloatingButton />
+        </div>
       </body>
     </html>
   );

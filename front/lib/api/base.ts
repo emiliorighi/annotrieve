@@ -3,10 +3,7 @@ export type Query = Record<string, string | number | boolean | undefined | null>
 // Use relative paths by default so Next.js rewrites proxy API calls in dev
 // If you need absolute URLs, set NEXT_PUBLIC_API_BASE (e.g., https://api.example.com)
 // For GitHub Pages deployment, use absolute URLs
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 
-  (typeof window !== 'undefined' && window.location.hostname.includes('github.io') 
-    ? 'https://genome.crg.es/annotrieve/api/v0' 
-    : '')
+const API_BASE = 'https://genome.crg.es/annotrieve/api/v0'
 
 export function buildQuery(params: Query = {}): string {
   const usp = new URLSearchParams()

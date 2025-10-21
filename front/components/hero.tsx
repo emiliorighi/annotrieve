@@ -26,7 +26,7 @@ export function Hero() {
                             height={750}
                             cardDistance={30}
                             verticalDistance={40}
-                            delay={3000}
+                            delay={5000}
                             pauseOnHover={false}
                             easing="linear"
                             skewAmount={0}

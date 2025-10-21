@@ -2,16 +2,14 @@
 
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, HardDrive, Dna } from "lucide-react"
+import { Calendar, HardDrive } from "lucide-react"
 import { AnnotationActions } from "@/components/annotation-actions"
 import type { Annotation } from "@/lib/types"
-import * as Checkbox from "@radix-ui/react-checkbox"
 
 interface AnnotationCardProps {
   annotation: Annotation
   onJBrowseChange?: (accession: string, annotationId: string) => void
   isSelected: boolean
-  onToggleSelection: () => void
 }
 
 function convertToHumanReadableSize(file_size: any) {
@@ -20,7 +18,7 @@ function convertToHumanReadableSize(file_size: any) {
   return (file_size / Math.pow(1024, index)).toFixed(2) + " " + units[index]
 }
 
-export function AnnotationCard({ annotation, onJBrowseChange, isSelected, onToggleSelection }: AnnotationCardProps) {
+export function AnnotationCard({ annotation, onJBrowseChange, isSelected }: AnnotationCardProps) {
   const rootCounts = annotation.features_summary?.root_types_counts ?? {};
   const rootCountEntries = Object.entries(rootCounts).sort((a, b) => b[1] - a[1]);
   
@@ -72,12 +70,9 @@ export function AnnotationCard({ annotation, onJBrowseChange, isSelected, onTogg
                 >
                   {annotation.source_file_info.database}
                 </Badge>
-                <Badge variant="accent" className="text-xs">
-                  {annotation.source_file_info.pipeline?.name || annotation.source_file_info.provider}
+                <Badge variant="outline" className="text-xs">
+                  {annotation.source_file_info.provider}
                 </Badge>
-                {annotation.source_file_info.pipeline?.version && (
-                  <span className="text-xs text-muted-foreground">v{annotation.source_file_info.pipeline.version}</span>
-                )}
               </div>
               
               <h4 className="text-base italic font-semibold mb-1 group-hover:text-primary transition-colors">
@@ -92,28 +87,27 @@ export function AnnotationCard({ annotation, onJBrowseChange, isSelected, onTogg
 
             {/* Gene Counts */}
             {hasGeneCounts && (
-              <div className="flex items-center gap-3 px-3 py-2 bg-accent/5 rounded-lg border border-accent/20">
+              <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Dna className="h-3.5 w-3.5 text-accent" />
                   <span className="font-medium">Genes:</span>
                 </div>
                 <div className="flex items-center gap-4">
                   {codingGenes !== undefined && (
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-muted-foreground">Coding</span>
-                      <span className="text-sm font-semibold text-foreground">{codingGenes.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-primary">{codingGenes.toLocaleString()}</span>
                     </div>
                   )}
                   {nonCodingGenes !== undefined && (
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-muted-foreground">Non-coding</span>
-                      <span className="text-sm font-semibold text-foreground">{nonCodingGenes.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-secondary">{nonCodingGenes.toLocaleString()}</span>
                     </div>
                   )}
                   {pseudogenes !== undefined && (
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-muted-foreground">Pseudo</span>
-                      <span className="text-sm font-semibold text-foreground">{pseudogenes.toLocaleString()}</span>
+                      <span className="text-sm font-semibold text-accent">{pseudogenes.toLocaleString()}</span>
                     </div>
                   )}
                 </div>

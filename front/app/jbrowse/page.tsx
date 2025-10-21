@@ -9,8 +9,9 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Building2, Dna, FileText, ChevronDown, ChevronUp, Hash, ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import type { AssemblyRecord, AnnotationRecord } from "@/lib/api/types"
 import { Button } from "@/components/ui/button"
+import type { AssemblyRecord, AnnotationRecord } from "@/lib/api/types"
+import { useRouter } from "next/navigation"
 
 interface ChromosomeInterface {
   accession_version: string
@@ -29,7 +30,7 @@ function JBrowseContent() {
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
   const [isInitialized, setIsInitialized] = useState(false)
-
+  const router = useRouter()
   // Read URL parameters on client side
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -97,22 +98,11 @@ function JBrowseContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold">Genome Browser</h1>
-            <Link href="/">
-              <Button variant="ghost" size="sm" className="gap-2">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Home
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-      
-      <main className="container mx-auto px-4 py-6 space-y-6">
+    <div className="container mx-auto px-4 py-6 space-y-6">
+      <Button variant="ghost" className="gap-2" onClick={() => router.back()}>
+        <ArrowLeft className="h-4 w-4" />
+        Back
+      </Button>
         {/* Assembly and Annotations Info */}
         <Card className="overflow-hidden">
           <div 
@@ -280,7 +270,6 @@ function JBrowseContent() {
             />
           </Suspense>
         </Card>
-      </main>
     </div>
   )
 }

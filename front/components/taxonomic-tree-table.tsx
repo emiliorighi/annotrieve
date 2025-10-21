@@ -1,7 +1,15 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { TaxonRecord } from "@/lib/api/types"
 import { Badge } from "@/components/ui/badge"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu"
+import { Info } from "lucide-react"
 
 interface TreeNode {
   taxid: string
@@ -20,11 +28,7 @@ interface TaxonomicTreeTableProps {
 }
 
 export function TaxonomicTreeTable({ ancestors, currentTaxon, children, onTaxonClick }: TaxonomicTreeTableProps) {
-  // Expand all ancestors and current taxon by default to show full path
-  const initialExpanded = new Set([
-    ...ancestors.filter(a => a.taxid !== currentTaxon.taxid).map(a => a.taxid),
-    currentTaxon.taxid
-  ])
+  const router = useRouter()
 
   // Build the tree structure
   const buildTree = (): TreeNode[] => {
@@ -88,34 +92,42 @@ export function TaxonomicTreeTable({ ancestors, currentTaxon, children, onTaxonC
 
     return (
       <>
-        <tr 
-          className={`border-b hover:bg-muted/50 transition-colors cursor-pointer ${
-            isCurrent ? 'bg-primary/5' : ''
-          }`}
-          onClick={(e) => {
-            // Don't trigger if clicking the expand/collapse button
-            if ((e.target as HTMLElement).closest('button')) return
-            onTaxonClick?.(node.taxid)
-          }}
-        >
-          <td className="p-3">
-            <div className="flex items-center gap-2" style={{ paddingLeft: `${node.level * 24}px` }}>
-              <div className="flex items-center gap-2">
-                <span className={`font-medium ${isCurrent ? 'text-primary' : ''}`}>
-                  {node.scientific_name}
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <tr 
+              className={`border-b hover:bg-muted/50 transition-colors cursor-pointer ${
+                isCurrent ? 'bg-primary/5' : ''
+              }`}
+              onClick={(e) => {
+                // Don't trigger if clicking the expand/collapse button
+                onTaxonClick?.(node.taxid)
+              }}
+            >
+              <td className="p-3">
+                <div className="flex items-center gap-2" style={{ paddingLeft: `${node.level * 24}px` }}>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-medium ${isCurrent ? 'text-primary' : ''}`}>
+                      {node.scientific_name}
+                    </span>
+                    <Badge variant="outline" className="text-xs capitalize">
+                      {node.rank}
+                    </Badge>
+                  </div>
+                </div>
+              </td>
+              <td className="p-3 text-right">
+                <span className={`font-semibold ${isCurrent ? 'text-primary' : ''}`}>
+                  {node.annotations_count.toLocaleString()}
                 </span>
-                <Badge variant="outline" className="text-xs capitalize">
-                  {node.rank}
-                </Badge>
-              </div>
-            </div>
-          </td>
-          <td className="p-3 text-right">
-            <span className={`font-semibold ${isCurrent ? 'text-primary' : ''}`}>
-              {node.annotations_count.toLocaleString()}
-            </span>
-          </td>
-        </tr>
+              </td>
+            </tr>
+          </ContextMenuTrigger>
+          <ContextMenuContent>
+            <ContextMenuItem onClick={() => router.push(`/annotations/?taxon=${node.taxid}`)}>
+              View Taxon Details
+            </ContextMenuItem>
+          </ContextMenuContent>
+        </ContextMenu>
         {hasChildren && node.children?.map((child) => (
           <TreeRow 
             key={child.taxid} 
