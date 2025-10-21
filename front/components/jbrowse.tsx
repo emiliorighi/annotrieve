@@ -18,7 +18,7 @@ interface ChromosomeInterface {
 
 interface JBrowseLinearGenomeViewComponentProps {
   accession: string
-  annotationId?: string
+  annotationIds?: string[]
   selectedChromosome?: ChromosomeInterface | null
 }
 // Use relative URLs to leverage Next.js rewrites and avoid CORS issues
@@ -65,7 +65,7 @@ const configuration = {
   },
 }
 
-export default function JBrowseLinearGenomeViewComponent({ accession, annotationId, selectedChromosome }: JBrowseLinearGenomeViewComponentProps) {
+export default function JBrowseLinearGenomeViewComponent({ accession, annotationIds, selectedChromosome }: JBrowseLinearGenomeViewComponentProps) {
   const [viewState, setViewState] = useState<ViewModel>()
   const [chromosomes, setChromosomes] = useState<any[]>([])
   const [annotations, setAnnotations] = useState<any[]>([])
@@ -93,8 +93,8 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
         setChromosomes(chromosomeResults)
         setAssemblyName(annotationResults[0]?.assembly_name ?? '')
 
-        if (annotationId) {
-          setAnnotations(annotationResults.filter((annotation: any) => annotation.annotation_id === annotationId))
+        if (annotationIds && annotationIds.length > 0) {
+          setAnnotations(annotationResults.filter((annotation: any) => annotationIds.includes(annotation.annotation_id)))
         } else {
           setAnnotations(annotationResults)
         }
@@ -107,7 +107,7 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
 
     fetchData()
     return () => { cancelled = true }
-  }, [accession, annotationId])
+  }, [accession, annotationIds])
 
   // Memoize tracks to prevent recreation on every render
   const tracks = useMemo(() => {

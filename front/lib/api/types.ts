@@ -37,7 +37,7 @@ export interface Pagination<T> {
 
 export interface AnnotationRecord {
   md5_checksum?: string
-  annotation_id?: string
+  annotation_id: string
   name?: string
   organism_name?: string
   assembly_accession?: string

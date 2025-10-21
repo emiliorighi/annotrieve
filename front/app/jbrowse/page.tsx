@@ -25,7 +25,7 @@ function JBrowseContent() {
   const [annotationId, setAnnotationId] = useState<string>('')
   const [assembly, setAssembly] = useState<AssemblyRecord | null>(null)
   const [annotations, setAnnotations] = useState<AnnotationRecord[]>([])
-  const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | undefined>()
+  const [selectedAnnotationIds, setSelectedAnnotationIds] = useState<string[]>([])
   const [selectedChromosome, setSelectedChromosome] = useState<ChromosomeInterface | null>(null)
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
@@ -41,7 +41,7 @@ function JBrowseContent() {
       setAccession(accessionParam)
       if (annotationIdParam) {
         setAnnotationId(annotationIdParam)
-        setSelectedAnnotationId(annotationIdParam)
+        setSelectedAnnotationIds([annotationIdParam])
       }
       setIsInitialized(true)
     }
@@ -177,11 +177,11 @@ function JBrowseContent() {
                       return (
                         <button
                           key={annotation.md5_checksum}
-                          onClick={() => setSelectedAnnotationId(
-                            selectedAnnotationId === annotation.md5_checksum ? undefined : annotation.md5_checksum
+                          onClick={() => setSelectedAnnotationIds(
+                            selectedAnnotationIds.includes(annotation.annotation_id as string) ? selectedAnnotationIds.filter((id: string) => id !== annotation.annotation_id as string) : [...selectedAnnotationIds, annotation.annotation_id as string]
                           )}
                           className={`p-4 rounded-lg border text-left transition-all ${
-                            selectedAnnotationId === annotation.md5_checksum
+                            selectedAnnotationIds.includes(annotation.annotation_id as string)
                               ? 'border-primary bg-primary/5 shadow-sm'
                               : 'border-border hover:border-primary/50 hover:bg-muted/50'
                           }`}
@@ -265,7 +265,7 @@ function JBrowseContent() {
           >
             <JBrowseLinearGenomeViewComponent 
               accession={accession} 
-              annotationId={selectedAnnotationId}
+              annotationIds={selectedAnnotationIds}
               selectedChromosome={selectedChromosome}
             />
           </Suspense>

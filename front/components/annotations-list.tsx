@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FileText, Database, BarChart3, Settings2, X, ArrowDown, ArrowUp, Dna, Star } from "lucide-react"
+import { FileText, BarChart3, Settings2, X, ArrowDown, ArrowUp, Star } from "lucide-react"
 import { AnnotationsStatsDashboard } from "@/components/annotations-stats-dashboard"
 import { AnnotationsFiltersDialog } from "@/components/annotations-filters-dialog"
 import { AnnotationsPagination } from "@/components/annotations-pagination"
@@ -32,10 +32,8 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
   const [stats, setStats] = useState<any>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [viewMode, setViewMode] = useState<"list" | "statistics">("list")
-  const [mounted, setMounted] = useState(false)
   // Filter states
   const [biotypes, setBiotypes] = useState<string[]>([])
-  const [favIds, setFavIds] = useState<string[]>([])
   const [featureTypes, setFeatureTypes] = useState<string[]>([])
   const [pipelines, setPipelines] = useState<string[]>([])
   const [providers, setProviders] = useState<string[]>([])
@@ -57,13 +55,9 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false)
 
   // Zustand store
-  const { isSelected: isSelectedStore, getSelectedAnnotations } = useSelectedAnnotationsStore()
-  const isSelected = (id: string) => mounted ? isSelectedStore(id) : false
-
-  // Prevent hydration mismatch
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  const { isSelected: isSelectedStore, getSelectedAnnotations, getSelectionCount } = useSelectedAnnotationsStore()
+  const isSelected = (id: string) => isSelectedStore(id)
+  const favoritesCount = getSelectionCount()
 
   // Fetch filter options
   useEffect(() => {
@@ -94,12 +88,16 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
       }
     }
     fetchFilterOptions()
-  }, [filterType, filterObject, selectedAssemblyAccessions, mostRecentPerSpecies])
+  }, [filterType, filterObject, selectedAssemblyAccessions, mostRecentPerSpecies, showFavs, favoritesCount])
 
   const getBaseParams = () => {
     let params: Record<string, any> = {}
     if (showFavs) {
-      params = { ...params, md5_checksums: favIds.join(',') }
+      const favoriteAnnotations = getSelectedAnnotations()
+      const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
+      if (favoriteIds.length > 0) {
+        params = { ...params, md5_checksums: favoriteIds.join(',') }
+      }
     }
     if (filterType === "organism" || filterType === "taxon") {
       params = { ...params, taxids: filterObject?.taxid }
@@ -120,8 +118,17 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
         let params: Record<string, any> = { limit: itemsPerPage, offset: offset }
         if (showFavs) {
           const favoriteAnnotations = getSelectedAnnotations()
-          setFavIds(favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id))
-          params = { ...params, md5_checksums: favIds.join(',') }
+          const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
+          if (favoriteIds.length > 0) {
+            params = { ...params, md5_checksums: favoriteIds.join(',') }
+          } else {
+            // No favorites, return empty results
+            setAnnotations([])
+            setTotalAnnotations(0)
+            setStats(null)
+            setStatsLoading(false)
+            return
+          }
         }
         // Add base filters
         if (filterType === "organism" || filterType === "taxon") {
@@ -182,7 +189,7 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
       }
     }
     fetchData()
-  }, [filterType, filterObject, selectedAssemblyAccessions, biotypes, featureTypes, pipelines, providers, source, currentPage, itemsPerPage, sortByDate, mostRecentPerSpecies, showFavs, getSelectedAnnotations])
+  }, [filterType, filterObject, selectedAssemblyAccessions, biotypes, featureTypes, pipelines, providers, source, currentPage, itemsPerPage, sortByDate, mostRecentPerSpecies, showFavs, favoritesCount, getSelectedAnnotations])
 
 
   const clearAllFilters = () => {
@@ -251,7 +258,7 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
               <div>
                 <h3 className="font-semibold text-foreground">Viewing Favorite Annotations</h3>
                 <p className="text-sm text-muted-foreground">
-                  Showing {totalAnnotations} favorite annotation{totalAnnotations !== 1 ? 's' : ''}
+                  Showing {favoritesCount} favorite annotation{favoritesCount !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
@@ -367,12 +374,11 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
           <div className="flex items-center gap-1 w-fit">
             <Button
               variant="ghost"
-              size="lg"
               onClick={() => setViewMode("list")}
               className={cn(
                 "gap-2",
                 viewMode === "list"
-                  ? "text-primary"
+                  ? "text-primary border-primary border-b-2"
                   : "text-muted-foreground hover:text-foreground hover:bg-primary",
               )}
             >
@@ -381,12 +387,11 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
             </Button>
             <Button
               variant="ghost"
-              size="lg"
               onClick={() => setViewMode("statistics")}
               className={cn(
                 "gap-2",
                 viewMode === "statistics"
-                  ? "text-primary"
+                  ? "text-primary border-primary border-b-2"
                   : "text-muted-foreground hover:text-foreground hover:bg-primary",
               )}
             >
