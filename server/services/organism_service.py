@@ -6,7 +6,7 @@ from helpers import response as response_helper, query_visitors as query_visitor
 def get_organisms(filter: str = None, offset: int = 0, limit: int = 20, taxids: Optional[str] = None, sort_by: str = None, sort_order: str = 'desc'):
     organisms = Organism.objects()
     if taxids:
-        organisms = organisms.filter(taxid__in=taxids.split(',') if isinstance(taxids, str) else taxids)
+        organisms = organisms.filter(taxon_lineage__in=taxids.split(',') if isinstance(taxids, str) else taxids)
     if filter:
         q_filter = query_visitors_helper.organism_query(filter) if filter else None
         organisms = organisms.filter(q_filter)
