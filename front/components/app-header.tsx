@@ -6,10 +6,6 @@ import { SearchBar } from "@/components/search-bar"
 import { Badge } from "@/components/ui/badge"
 
 export function AppHeader() {
-  const handleFilterSelect = () => {
-    // This now does nothing as SearchBar handles navigation directly
-  }
-
   return (
     <header className="border-b bg-card sticky top-0 z-10">
       <div className="flex items-center py-4">
@@ -23,7 +19,7 @@ export function AppHeader() {
 
         {/* Center - Search bar (container aligned) */}
         <div className="flex-1 container mx-auto px-4">
-          <SearchBar onFilterSelect={handleFilterSelect} />
+          <SearchBar />
         </div>
 
         {/* Right side - Navigation links */}
