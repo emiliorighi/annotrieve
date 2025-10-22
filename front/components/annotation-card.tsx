@@ -8,7 +8,6 @@ import type { Annotation } from "@/lib/types"
 
 interface AnnotationCardProps {
   annotation: Annotation
-  onJBrowseChange?: (accession: string, annotationId: string) => void
   isSelected: boolean
 }
 
@@ -18,8 +17,8 @@ function convertToHumanReadableSize(file_size: any) {
   return (file_size / Math.pow(1024, index)).toFixed(2) + " " + units[index]
 }
 
-export function AnnotationCard({ annotation, onJBrowseChange, isSelected }: AnnotationCardProps) {
-  const rootCounts = annotation.features_summary?.root_types_counts ?? {};
+export function AnnotationCard({ annotation, isSelected }: AnnotationCardProps) {
+  const rootCounts = annotation.features_summary?.root_type_counts ?? {};
   const rootCountEntries = Object.entries(rootCounts).sort((a, b) => b[1] - a[1]);
   
   // Get top biotypes
@@ -114,17 +113,6 @@ export function AnnotationCard({ annotation, onJBrowseChange, isSelected }: Anno
               </div>
             )}
 
-            {/* Feature Stats Grid */}
-            {rootCountEntries.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {rootCountEntries.map(([type, count]) => (
-                  <div key={type} className="bg-gradient-to-br from-muted/50 to-muted/30 rounded-lg px-3 py-2.5 border border-border/50 hover:border-primary/30 transition-colors">
-                    <div className="text-xs font-medium text-muted-foreground mb-1 capitalize">{type}</div>
-                    <div className="text-lg font-bold text-foreground">{count.toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {/* Biotypes Tags */}
             {topBiotypes.length > 0 && (
@@ -158,7 +146,7 @@ export function AnnotationCard({ annotation, onJBrowseChange, isSelected }: Anno
 
           {/* Actions */}
           <div className="flex items-start pt-1">
-            <AnnotationActions annotation={annotation} onJBrowseChange={onJBrowseChange} />
+            <AnnotationActions annotation={annotation} />
           </div>
         </div>
       </div>

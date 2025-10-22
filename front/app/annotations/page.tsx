@@ -132,7 +132,6 @@ export default function AnnotationsPage() {
         filterType={filterType}
         filterObject={filterObject || {}}
         selectedAssemblyAccessions={selectedAssemblyAccessions}
-        onJBrowseChange={handleJBrowseChange}
       />
     </div>
   )

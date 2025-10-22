@@ -18,13 +18,10 @@ import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 
 interface AnnotationActionsProps {
   annotation: Annotation
-  onJBrowseChange?: (accession: string, annotationId: string) => void
 }
 
-export function AnnotationActions({ annotation, onJBrowseChange }: AnnotationActionsProps) {
-  const [streamDialogOpen, setStreamDialogOpen] = useState(false)
+export function AnnotationActions({ annotation }: AnnotationActionsProps) {
   const [overviewDialogOpen, setOverviewDialogOpen] = useState(false)
-  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
   

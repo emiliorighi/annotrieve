@@ -77,7 +77,7 @@ export interface Annotation {
     }
   }
   features_summary: {
-    root_types_counts: Record<string, number>
+    root_type_counts: Record<string, number>
     attribute_keys: string[]
     types: string[]
     sources: string[]
@@ -90,13 +90,22 @@ export interface Annotation {
   }
   features_statistics?: {
     coding_genes?: {
-      count?: number
+      count?: number,
+      transcripts?: {
+        types: Record<string, any>
+      }
     }
     non_coding_genes?: {
       count?: number
+      transcripts?: {
+        types: Record<string, any>
+      }
     }
     pseudogenes?: {
       count?: number
+      transcripts?: {
+        types: Record<string, any>
+      }
     }
   }
 }

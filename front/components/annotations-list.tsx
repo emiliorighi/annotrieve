@@ -4,11 +4,12 @@ import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FileText, BarChart3, Settings2, X, ArrowDown, ArrowUp, Star } from "lucide-react"
+import { FileText, BarChart3, Settings2, X, ArrowDown, ArrowUp, Star, GitCompare } from "lucide-react"
 import { AnnotationsStatsDashboard } from "@/components/annotations-stats-dashboard"
 import { AnnotationsFiltersDialog } from "@/components/annotations-filters-dialog"
 import { AnnotationsPagination } from "@/components/annotations-pagination"
 import { AnnotationCard } from "@/components/annotation-card"
+import { AnnotationsCompare } from "@/components/annotations-compare"
 import type { FilterType, Annotation } from "@/lib/types"
 import { listAnnotations, getAnnotationsStatsSummary, getAnnotationsFrequencies } from "@/lib/api/annotations"
 import { Button } from "./ui/button"
@@ -19,10 +20,9 @@ interface AnnotationsListProps {
   filterType: FilterType
   filterObject: Record<string, any>
   selectedAssemblyAccessions?: string[]
-  onJBrowseChange?: (accession: string, annotationId?: string) => void
 }
 
-export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions, onJBrowseChange }: AnnotationsListProps) {
+export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions }: AnnotationsListProps) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const showFavs = searchParams?.get('showFavs') === 'true'
@@ -31,7 +31,7 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
   const [totalAnnotations, setTotalAnnotations] = useState<number>(0)
   const [stats, setStats] = useState<any>(null)
   const [statsLoading, setStatsLoading] = useState(false)
-  const [viewMode, setViewMode] = useState<"list" | "statistics">("list")
+  const [viewMode, setViewMode] = useState<"list" | "statistics" | "compare">("list")
   // Filter states
   const [biotypes, setBiotypes] = useState<string[]>([])
   const [featureTypes, setFeatureTypes] = useState<string[]>([])
@@ -58,6 +58,13 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
   const { isSelected: isSelectedStore, getSelectedAnnotations, getSelectionCount } = useSelectedAnnotationsStore()
   const isSelected = (id: string) => isSelectedStore(id)
   const favoritesCount = getSelectionCount()
+
+  // Reset view mode when exiting favorites view while in compare mode
+  useEffect(() => {
+    if (!showFavs && viewMode === "compare") {
+      setViewMode("list")
+    }
+  }, [showFavs, viewMode])
 
   // Fetch filter options
   useEffect(() => {
@@ -120,7 +127,8 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
           const favoriteAnnotations = getSelectedAnnotations()
           const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
           if (favoriteIds.length > 0) {
-            params = { ...params, md5_checksums: favoriteIds.join(',') }
+            const limit = favoriteIds.length + 1
+            params = { ...params, md5_checksums: favoriteIds.join(','), limit: limit }
           } else {
             // No favorites, return empty results
             setAnnotations([])
@@ -398,6 +406,21 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
               <BarChart3 className="h-4 w-4" />
               Stats
             </Button>
+            {showFavs && (
+              <Button
+                variant="ghost"
+                onClick={() => setViewMode("compare")}
+                className={cn(
+                  "gap-2",
+                  viewMode === "compare"
+                    ? "text-primary border-primary border-b-2"
+                    : "text-muted-foreground hover:text-foreground hover:bg-primary",
+                )}
+              >
+                <GitCompare className="h-4 w-4" />
+                Compare
+              </Button>
+            )}
           </div>
           {/* <GeneCountCompactChart stats={stats} /> */}
         </div>
@@ -475,7 +498,6 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
                     isSelected={isSelected(annotation.annotation_id)}
                     key={annotation.annotation_id}
                     annotation={annotation}
-                    onJBrowseChange={onJBrowseChange}
                   />
                 ))}
               </div>
@@ -488,6 +510,13 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
       {viewMode === "statistics" && (
         <div className="">
           <AnnotationsStatsDashboard stats={stats} loading={statsLoading} />
+        </div>
+      )}
+
+      {/* Compare Tab */}
+      {viewMode === "compare" && showFavs && (
+        <div className="">
+          <AnnotationsCompare favoriteAnnotations={annotations} />
         </div>
       )}
     </div>
