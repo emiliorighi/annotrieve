@@ -160,18 +160,15 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
           params.latest_release_by = 'organism'
         }
 
+        // Add server-side sorting by release date
+        if (sortByDate !== "none") {
+          params.sort_by = 'source_file_info.release_date'
+          params.sort_order = sortByDate === "newest" ? 'desc' : 'asc'
+        }
+
         // Fetch annotations
         const res = await listAnnotations(params as any)
-        let fetchedAnnotations = (res as any)?.results as any
-
-        // Apply client-side sorting
-        if (sortByDate !== "none" && fetchedAnnotations?.length > 0) {
-          fetchedAnnotations.sort((a: Annotation, b: Annotation) => {
-            const dateA = new Date(a.source_file_info.release_date).getTime()
-            const dateB = new Date(b.source_file_info.release_date).getTime()
-            return sortByDate === "newest" ? dateB - dateA : dateA - dateB
-          })
-        }
+        const fetchedAnnotations = (res as any)?.results as any
 
         setAnnotations(fetchedAnnotations)
         setTotalAnnotations((res as any)?.total ?? 0)
