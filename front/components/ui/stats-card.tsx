@@ -52,28 +52,47 @@ interface StatsCardProps {
 
 export function StatsCard({ value, label, icon: Icon, color, bgColor, delay, padding, textSize, iconSize, iconWidth }: StatsCardProps) {
   const animatedValue = useAnimatedCounter(value)
+  const [isHovered, setIsHovered] = useState(false)
 
   return (
     <Card
-      className={`${padding} hover:shadow-lg transition-all duration-300 border-border/50 animate-in fade-in slide-in-from-bottom-4`}
+      className={`${padding} group relative overflow-hidden transition-all duration-300 border-border/50 hover:border-border hover:shadow-xl hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4 cursor-default`}
       style={{
         animationDelay: delay,
         animationDuration: '600ms',
         animationFillMode: 'both'
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-lg ${bgColor}`}>
-          <Icon className={`${iconSize} ${iconWidth} ${color}`} />
+      {/* Subtle gradient background on hover */}
+      <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-muted/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      
+      <div className="relative flex flex-col gap-4">
+        {/* Icon row */}
+        <div className="flex justify-start">
+          <div className={`p-3 rounded-xl flex items-center justify-center ${bgColor} transition-all duration-300 group-hover:scale-110 group-hover:shadow-md`}>
+            <Icon className={`${iconSize} ${iconWidth} ${color} transition-transform duration-300 ${isHovered ? 'scale-110' : ''}`} />
+          </div>
         </div>
-        <div className="flex-1">
-          <div className={`text-${textSize} font-bold text-foreground tabular-nums`}>
+        
+        {/* Content row */}
+        <div className="flex-1 min-w-0">
+          <div className={`${textSize} font-bold text-foreground tabular-nums tracking-tight mb-1 transition-colors duration-300`}>
             {animatedValue.toLocaleString()}
           </div>
-          <div className="text-sm text-muted-foreground font-medium">
+          <div className="text-sm text-muted-foreground font-medium transition-colors duration-300 group-hover:text-foreground/80">
             {label}
           </div>
         </div>
+
+        {/* Decorative element on the right edge */}
+        <div className={`absolute right-0 top-0 bottom-0 w-1 ${bgColor} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+      </div>
+
+      {/* Subtle shine effect on hover */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
       </div>
     </Card>
   )

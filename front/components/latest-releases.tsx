@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Calendar, Database } from "lucide-react"
+import { Calendar, Database, Clock } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { SectionHeader } from "@/components/ui/section-header"
 import { listAssemblies } from "@/lib/api/assemblies"
 import type { AssemblyRecord } from "@/lib/api/types"
 
@@ -38,15 +39,15 @@ export function LatestReleases() {
     }
 
     return (
-        <section className="container mx-auto px-4 py-12">
-            <div className="text-center mb-10">
-                <h2 className="text-3xl font-bold text-foreground mb-3">
-                    Latest Assemblies
-                </h2>
-                <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                    Discover the most recently released genome assemblies from our collection.
-                </p>
-            </div>
+        <div className="container mx-auto px-4 py-16">
+            <SectionHeader
+                title="Latest Assemblies"
+                description="Discover the most recently released genome assemblies from our collection."
+                icon={Clock}
+                iconColor="text-green-600"
+                iconBgColor="bg-green-500/10"
+                align="center"
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 {latestAssemblies.map((assembly, index) => (
@@ -123,7 +124,7 @@ export function LatestReleases() {
                     </Card>
                 ))}
             </div>
-        </section>
+        </div>
     )
 }
 

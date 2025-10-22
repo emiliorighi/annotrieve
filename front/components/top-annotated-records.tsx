@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, Dna, Database, Loader2 } from "lucide-react"
+import { SectionHeader } from "@/components/ui/section-header"
+import { TrendingUp, Dna, Database, Loader2, Trophy } from "lucide-react"
 import { listOrganisms } from "@/lib/api/organisms"
 import { listAssemblies } from "@/lib/api/assemblies"
 import { listTaxons } from "@/lib/api/taxons"
@@ -92,13 +93,15 @@ export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-6">
-      <div className="text-center mb-12">
-        <h2 className="text-3xl font-bold mb-3">Most Annotated Records</h2>
-        <p className="text-muted-foreground text-lg">
-          Explore the most annotated records available in the portal
-        </p>
-      </div>
+    <div className="container mx-auto px-4 py-16">
+      <SectionHeader
+        title="Most Annotated Records"
+        description="Explore the organisms, taxonomic groups, and assemblies with the highest number of annotations in our database."
+        icon={Trophy}
+        iconColor="text-amber-600"
+        iconBgColor="bg-amber-500/10"
+        align="center"
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Top Species */}

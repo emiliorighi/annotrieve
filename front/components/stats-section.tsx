@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Database, Dna, FileText } from "lucide-react"
+import { Database, Dna, FileText, BarChart3 } from "lucide-react"
 import { StatsCard } from "@/components/ui/stats-card"
+import { SectionHeader } from "@/components/ui/section-header"
 import { listAnnotations } from "@/lib/api/annotations"
 import { listAssemblies } from "@/lib/api/assemblies"
 import { listOrganisms } from "@/lib/api/organisms"
@@ -45,18 +46,17 @@ export function StatsSection() {
   }
 
   return (
-    <section className="container mx-auto px-4 py-12">
-      <div className="text-center mb-10">
-        <h2 className="text-3xl font-bold text-foreground mb-3">
-          Database Overview
-        </h2>
-        <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-          Explore our comprehensive collection of genome annotations from Ensembl and NCBI, 
-          covering thousands of eukaryotic species and assemblies.
-        </p>
-      </div>
+    <div className="container mx-auto px-4 py-16">
+      <SectionHeader
+        title="Database Overview"
+        description="Explore our comprehensive collection of genome annotations from Ensembl and NCBI, covering thousands of eukaryotic species and assemblies."
+        icon={BarChart3}
+        iconColor="text-blue-600"
+        iconBgColor="bg-blue-500/10"
+        align="center"
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
         <StatsCard
           value={stats.totalAnnotations}
           label="Annotations"
@@ -65,7 +65,7 @@ export function StatsSection() {
           bgColor="bg-blue-500/10"
           delay="0ms"
           padding="p-6"
-          textSize="text-3xl"
+          textSize="text-4xl"
           iconSize="h-6"
           iconWidth="w-6"
         />
@@ -77,7 +77,7 @@ export function StatsSection() {
           bgColor="bg-green-500/10"
           delay="150ms"
           padding="p-6"
-          textSize="text-3xl"
+          textSize="text-4xl"
           iconSize="h-6"
           iconWidth="w-6"
         />
@@ -89,12 +89,12 @@ export function StatsSection() {
           bgColor="bg-purple-500/10"
           delay="300ms"
           padding="p-6"
-          textSize="text-3xl"
+          textSize="text-4xl"
           iconSize="h-6"
           iconWidth="w-6"
         />
       </div>
-    </section>
+    </div>
   )
 }
 
