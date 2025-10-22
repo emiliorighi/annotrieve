@@ -9,8 +9,9 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Card } from "@/components/ui/card"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
-import { X, Download, Star, FileText, Eye } from "lucide-react"
+import { X, Download, Star, FileText, Eye, GitCompare, Info } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface FavoritesModalProps {
@@ -59,21 +60,38 @@ export function FavoritesModal({ open, onOpenChange }: FavoritesModalProps) {
           </div>
         ) : (
           <div className="space-y-4">
+            {/* Compare Feature Hint */}
+            {favorites.length >= 2 && (
+              <Card className="p-4 bg-blue-500/10 border-blue-500/20">
+                <div className="flex items-start gap-3">
+                  <GitCompare className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-foreground mb-1">Compare Your Favorites</h4>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Select up to 10 annotations from your favorites list and compare their statistics side-by-side with interactive charts.
+                    </p>
+                    <Button 
+                      variant="default" 
+                      size="sm"
+                      onClick={() => {
+                        router.push('/annotations/?showFavs=true&viewMode=compare')
+                        onOpenChange(false)
+                      }}
+                      className="gap-2"
+                    >
+                      <GitCompare className="h-4 w-4" />
+                      View All
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
+
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <p className="text-sm text-muted-foreground">
                   {favorites.length} annotation{favorites.length !== 1 ? 's' : ''} saved
                 </p>
-                <Button 
-                  variant="default" 
-                  size="sm" 
-                  onClick={() => {
-                    router.push('/annotations/?showFavs=true')
-                    onOpenChange(false)
-                  }}
-                >
-                  View All Favorites
-                </Button>
               </div>
               <Button 
                 variant="outline" 
