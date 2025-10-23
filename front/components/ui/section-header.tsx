@@ -4,7 +4,7 @@ import { LucideIcon } from "lucide-react"
 
 interface SectionHeaderProps {
   title: string
-  description: string
+  description?: string
   icon?: LucideIcon
   iconColor?: string
   iconBgColor?: string

@@ -4,8 +4,11 @@ import Link from "next/link"
 import { Github } from "lucide-react"
 import { SearchBar } from "@/components/search-bar"
 import { Badge } from "@/components/ui/badge"
+import { useBetaBanner } from "@/components/beta-banner-provider"
 
 export function AppHeader() {
+  const { toggleBanner } = useBetaBanner()
+
   return (
     <header className="border-b bg-card sticky top-0 z-10">
       <div className="flex items-center py-4">
@@ -13,7 +16,17 @@ export function AppHeader() {
         <div className="px-6">
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
             <h1 className="text-2xl font-bold text-foreground whitespace-nowrap">Annotrieve</h1>
-            <Badge variant="secondary" className="text-xs font-semibold">BETA</Badge>
+            <Badge 
+              variant="secondary" 
+              className="text-xs font-semibold cursor-pointer hover:bg-secondary/80 transition-colors"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                toggleBanner()
+              }}
+            >
+              BETA
+            </Badge>
           </Link>
         </div>
 

@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { AppHeader } from "@/components/app-header";
 import { FavoritesFloatingButton } from "@/components/favorites-floating-button";
+import { BetaBannerProvider } from "@/components/beta-banner-provider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -30,13 +31,15 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <div className="min-h-screen flex flex-col">
-          <AppHeader />
-          <main className="flex-1">
-            {children}
-          </main>
-          <FavoritesFloatingButton />
-        </div>
+        <BetaBannerProvider>
+          <div className="min-h-screen flex flex-col">
+            <AppHeader />
+            <main className="flex-1">
+              {children}
+            </main>
+            <FavoritesFloatingButton />
+          </div>
+        </BetaBannerProvider>
       </body>
     </html>
   );

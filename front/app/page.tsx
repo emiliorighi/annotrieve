@@ -5,6 +5,7 @@ import { StatsSection } from "@/components/stats-section"
 import { LatestReleases } from "@/components/latest-releases"
 import { TaxonomicExplorer } from "@/components/taxonomic-explorer"
 import { TopAnnotations } from "@/components/top-annotated-records"
+import { DatabaseFrequencies } from "@/components/database-frequencies"
 import { SectionWrapper } from "@/components/ui/section-wrapper"
 
 export default function Home() {
@@ -22,24 +23,32 @@ export default function Home() {
         </div>
 
       </SectionWrapper>
-      
-      <SectionWrapper id="latest-releases" backgroundVariant="muted">
+
+      <SectionWrapper id="database-sources" backgroundVariant="muted">
+        <div className="py-16">
+          <DatabaseFrequencies />
+        </div>
+      </SectionWrapper>
+
+      <SectionWrapper id="latest-releases" backgroundVariant="default">
         <div className="py-16">
           <LatestReleases />
         </div>
       </SectionWrapper>
       
-      <SectionWrapper id="taxonomic-explorer" backgroundVariant="default">
+      <SectionWrapper id="taxonomic-explorer" backgroundVariant="muted">
         <div className="py-16">
           <TaxonomicExplorer />
         </div>
       </SectionWrapper>
       
-      <SectionWrapper id="top-annotations" backgroundVariant="muted">
+      <SectionWrapper id="top-annotations" backgroundVariant="default">
         <div className="py-16">
           <TopAnnotations onFilterSelect={handleFilterSelect} />
         </div>
       </SectionWrapper>
+      
+
     </>
   )
 }
