@@ -33,9 +33,6 @@ def import_annotations():
 
     print("Starting import annotations job...")
     annotations_to_process = annotation_service.fetch_annotations(URLS_TO_FETCH)
-
-    stats_service.clean_up_empty_models()
-
     if DEV:
         annotations_to_process = random.sample(annotations_to_process, 10)
 

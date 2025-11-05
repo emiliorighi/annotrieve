@@ -9,7 +9,6 @@ from mongoengine import (
     EmbeddedDocumentField,
     URLField,
     DateTimeField,
-    DictField,
 )
 
 def drop_all_collections():
@@ -26,6 +25,10 @@ class GenomeAssembly(DynamicDocument):
     paired_assembly_accession = StringField() #if the assembly is a pair, the accession of the paired assembly
     assembly_name = StringField(required=True)
     source_database = StringField() #GenBank (INSDC), RefSeq
+    assembly_level = StringField() #chromosome, contig, scaffold, complete genome, etc.
+    assembly_status = StringField() #current, suppressed.
+    assembly_type = StringField() #haploid etc.
+    refseq_category = StringField() #reference genome, etc.
     taxid = StringField(required=True)
     organism_name = StringField(required=True)
     taxon_lineage = ListField(StringField())

@@ -95,6 +95,7 @@ def save_chromosomes(chromosomes_tuples: list[tuple[str, list[AssemblyReportSequ
         try:
             GenomicSequence.objects.insert(batch)
         except Exception as e:
+            print(f"Error upserting chromosome batch: {e}")
             #delete the assemblies and chromosomes with errors
             GenomeAssembly.objects(assembly_accession__in=related_assembly_accessions).delete()
             GenomicSequence.objects(assembly_accession__in=related_assembly_accessions).delete()
@@ -277,8 +278,6 @@ def create_ftp_path(accession: str, assembly_name: str) -> str:
     assembly_name = assembly_name.replace(' ', '_')
     return f"https://ftp.ncbi.nlm.nih.gov/genomes/all/{accession[0:3]}/{accession[4:7]}/{accession[7:10]}/{accession[10:13]}/{accession}_{assembly_name}/{accession}_{assembly_name}_genomic.fna.gz"
 
-
-
 def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list[str]]) -> GenomeAssembly:
     assembly_stats = assembly_dict.get('assembly_stats', dict())
     assembly_info = assembly_dict.get('assembly_info', dict())
@@ -288,6 +287,10 @@ def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list
         paired_assembly_accession=assembly_dict.get('paired_accession'),
         assembly_name=assembly_info.get('assembly_name'),
         organism_name=organism_info.get('organism_name'),
+        assembly_level=assembly_info.get('assembly_level'),
+        assembly_status=assembly_info.get('assembly_status'),
+        assembly_type=assembly_info.get('assembly_type'),
+        refseq_category=assembly_info.get('refseq_category'),
         taxid=str(organism_info.get('tax_id')),
         download_url=create_ftp_path(assembly_dict.get('accession'), assembly_info.get('assembly_name')),
         assembly_stats=AssemblyStats(**assembly_stats),

@@ -1,6 +1,6 @@
 import re
 from helpers import pysam_helper
-from db.models import AnnotationSequenceMap, GenomicSequence, GenomeAnnotation
+from db.models import AnnotationSequenceMap, GenomicSequence, GenomeAnnotation, GenomeAssembly
 
 def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str):
     """
@@ -10,8 +10,14 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
     chromosomes = GenomicSequence.objects(assembly_accession=parsed_annotation.assembly_accession)
     
     if chromosomes.count() == 0:
-        raise Exception(f"Error fetching chromosomes for {parsed_annotation.assembly_accession}, it does not exist in the database")
-    
+        #should the assembly have chromosomes?
+        assembly = GenomeAssembly.objects(assembly_accession=parsed_annotation.assembly_accession).first()
+        if assembly.assembly_level == 'Chromosome' or assembly.assembly_level == 'Complete Genome':
+            raise Exception(f"Error fetching chromosomes for {parsed_annotation.assembly_accession} with name {assembly.assembly_name} and level {assembly.assembly_level}, the chromosomes are not present in the database")
+        else:
+            #skip the alias mapping for contig/scaffold level assemblies
+            return
+
     chr_aliases_dict = {} #dict with all possible combinations of aliases for the chromosomes
     chr_map = {} #dict uid to chr
     for chr in chromosomes:
