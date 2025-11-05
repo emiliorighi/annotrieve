@@ -7,11 +7,13 @@ import asyncio
 import aiohttp
 from typing import Iterator
 
+
 def get_existing_accessions(accessions: list[str]) -> list[str]:
     """
     Get all the accessions that already exist in the database
     """
     return GenomeAssembly.objects(assembly_accession__in=accessions).scalar('assembly_accession')
+
 
 def get_assembly_report_path(accession: str, assembly_name: str) -> str:
     assembly_name = assembly_name.replace(' ', '_')
@@ -95,7 +97,6 @@ def save_chromosomes(chromosomes_tuples: list[tuple[str, list[AssemblyReportSequ
         try:
             GenomicSequence.objects.insert(batch)
         except Exception as e:
-            print(f"Error upserting chromosome batch: {e}")
             #delete the assemblies and chromosomes with errors
             GenomeAssembly.objects(assembly_accession__in=related_assembly_accessions).delete()
             GenomicSequence.objects(assembly_accession__in=related_assembly_accessions).delete()

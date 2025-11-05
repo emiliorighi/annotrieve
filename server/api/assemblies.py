@@ -11,6 +11,10 @@ async def get_assemblies(commons: Dict[str, Any] = Depends(params_helper.common_
     params = params_helper.handle_request_params(commons, payload)
     return assemblies_service.get_assemblies(**params)
 
+@router.get("/assemblies/update/{auth_key}")
+async def update_assemblies(auth_key: str):
+    return assemblies_service.trigger_assemblies_update(auth_key)
+
 @router.get("/assemblies/frequencies/{field}")
 @router.post("/assemblies/frequencies/{field}")
 async def get_assemblies_frequencies(field: str, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
