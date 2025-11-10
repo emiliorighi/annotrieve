@@ -4,7 +4,7 @@ from services import annotations_service
 from helpers import parameters as params_helper
 import inspect
 from helpers import query_visitors as query_visitors_helper
-
+from jobs.import_annotations import import_annotations
 router = APIRouter()
 
 @router.get("/annotations/import/{auth_key}")
@@ -14,6 +14,13 @@ async def trigger_import_annotations(auth_key: str):
     """
     return annotations_service.trigger_import_annotations(auth_key)
 
+@router.get("/annotations/fields/update/{auth_key}")
+async def trigger_annotation_fields_update(auth_key: str):
+    """
+    Trigger annotation fields update
+    """
+    return annotations_service.trigger_annotation_fields_update(auth_key)
+
 @router.get("/annotations")
 @router.post("/annotations")
 async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
@@ -22,18 +29,7 @@ async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common
     """
     params = params_helper.handle_request_params(commons, payload)
     
-    # Get valid parameters from the service function signature
-    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
-    
-    # Filter out invalid parameters
-    invalid_params = set(params.keys()) - valid_params
-    if invalid_params:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
-        )
-    
-    return annotations_service.get_annotations(**params)
+    return annotations_service.get_annotations(params)
 
 
 @router.get("/annotations/stats/summary")
@@ -44,22 +40,11 @@ async def get_annotations_stats_summary(response: Response, commons: Dict[str, A
     """
     params = params_helper.handle_request_params(commons, payload)
     
-    # Get valid parameters from the service function signature
-    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
-    
-    # Filter out invalid parameters
-    invalid_params = set(params.keys()) - valid_params
-    if invalid_params:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
-        )
-    
     # Add cache control headers (nginx will respect these)
     response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
     response.headers["Vary"] = "Accept-Encoding"
     
-    return annotations_service.get_annotations(response_type='summary_stats', **params)
+    return annotations_service.get_annotations(params, response_type='summary_stats')
 
 @router.get("/annotations/frequencies")
 async def get_frequency_fields():
@@ -76,18 +61,7 @@ async def get_annotations_frequencies(field: str, commons: Dict[str, Any] = Depe
     """
     params = params_helper.handle_request_params(commons, payload)
     
-    # Get valid parameters from the service function signature
-    valid_params = set(inspect.signature(annotations_service.get_annotations).parameters.keys())
-    
-    # Filter out invalid parameters
-    invalid_params = set(params.keys()) - valid_params
-    if invalid_params:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid parameter(s): {', '.join(invalid_params)}"
-        )
-    
-    return annotations_service.get_annotations(response_type='frequencies', field=field, **params)
+    return annotations_service.get_annotations(params, response_type='frequencies', field=field)
 
 
 # @router.get("/annotations/download")

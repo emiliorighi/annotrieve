@@ -34,6 +34,7 @@ ALLOWED_FIELDS_MAP = {
     'taxid':'taxid',
     'organism_name':'organism_name',
     'database':'source_file_info.database',
+    'release_date':'source_file_info.release_date',
     'assembly_accession':'assembly_accession',
     'assembly_name':'assembly_name',
     'feature_type':'features_summary.types',
@@ -46,6 +47,10 @@ ALLOWED_FIELDS_MAP_ASSEMBLY = {
     'organism_name':'organism_name',
     'submitter':'submitter',
     'source_database':'source_database',
+    'assembly_level':'assembly_level',
+    'refseq_category':'refseq_category',
+    'assembly_status':'assembly_status',
+    'assembly_type':'assembly_type',
 }
 def get_frequencies(items:QuerySet, field:str, type:str = 'annotation'):
     if type == 'annotation':

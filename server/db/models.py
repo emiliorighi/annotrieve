@@ -123,6 +123,9 @@ class GenomeAnnotation(DynamicDocument):
     taxid = StringField(required=True)
     taxon_lineage = ListField(StringField(), required=True)
 
+    #MAPPED REGIONS
+    mapped_regions = ListField(StringField()) #Mapped seqid of the gff file (AnnotationSequenceMap ids)
+
     #SOURCE
     source_file_info = EmbeddedDocumentField(SourceFileInfo)
 

@@ -1,12 +1,12 @@
 from celery import shared_task
-from db.models import GenomeAssembly
+from db.models import GenomeAssembly, GenomeAnnotation, AnnotationSequenceMap
 from clients import ncbi_datasets as ncbi_datasets_client
 import os
 
 TMP_DIR = "/tmp"
 
-@shared_task(name='update_fields', ignore_result=False)
-def update_fields():
+@shared_task(name='update_assembly_fields', ignore_result=False)
+def update_assembly_fields():
     """
     Update the fields for the assemblies
     """
@@ -31,3 +31,14 @@ def update_fields():
         GenomeAssembly.objects(assembly_accession=assembly_accession).update(assembly_level=assembly_level, assembly_status=assembly_status, assembly_type=assembly_type, refseq_category=refseq_category)
     os.remove(assemblies_path)
     print("Updated assemblies fields")
+
+
+@shared_task(name='update_annotation_fields', ignore_result=False)
+def update_annotation_fields():
+    """
+    Update the fields for the annotations
+    """
+    annotations = GenomeAnnotation.objects()
+    for annotation in annotations:
+        mapped_regions = AnnotationSequenceMap.objects().scalar('sequence_id')
+        annotation.modify(mapped_regions=mapped_regions)

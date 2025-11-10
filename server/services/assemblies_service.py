@@ -4,13 +4,26 @@ from helpers import response as response_helper, query_visitors as query_visitor
 from fastapi.responses import StreamingResponse
 import io
 import os
-from jobs.updates import update_fields
+from jobs.updates import update_assembly_fields
 
 
-def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: str = None, offset: int = 0, limit: int = 20, sort_by: str = None, sort_order: str = None, field: str = None, submitters: str = None, response_type: str = 'metadata'):
+def get_assemblies(filter: str = None, 
+                    taxids: str = None, 
+                    assembly_accessions: str = None, 
+                    offset: int = 0, 
+                    limit: int = 20, 
+                    sort_by: str = None, 
+                    sort_order: str = None, 
+                    field: str = None, 
+                    submitters: str = None, 
+                    response_type: str = 'metadata',
+                    assembly_levels: str = None,
+                    refseq_categories: str = None,
+                    assembly_statuses: str = None,
+                    assembly_types: str = None
+                    ):
     try:
-        print(f"field: {field}")
-        print(f"response_type: {response_type}")
+
         query = {}
         if taxids:
             query['taxon_lineage__in'] = taxids.split(',') if isinstance(taxids, str) else taxids
@@ -18,6 +31,14 @@ def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: 
             query['assembly_accession__in'] = assembly_accessions.split(',') if isinstance(assembly_accessions, str) else assembly_accessions
         if submitters:
             query['submitter__in'] = [submitters]
+        if assembly_levels:
+            query['assembly_level__in'] = assembly_levels.split(',') if isinstance(assembly_levels, str) else assembly_levels
+        if refseq_categories:
+            query['refseq_category__in'] = refseq_categories.split(',') if isinstance(refseq_categories, str) else refseq_categories
+        if assembly_statuses:
+            query['assembly_status__in'] = assembly_statuses.split(',') if isinstance(assembly_statuses, str) else assembly_statuses
+        if assembly_types:
+            query['assembly_type__in'] = assembly_types.split(',') if isinstance(assembly_types, str) else assembly_types
         assemblies = GenomeAssembly.objects(**query)
         
         q_filter =  query_visitors_helper.assembly_query(filter) if filter else None
@@ -40,7 +61,7 @@ def get_assemblies(filter: str = None, taxids: str = None, assembly_accessions: 
 def trigger_assemblies_update(auth_key: str):
     if auth_key != os.getenv('AUTH_KEY'):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    update_fields.delay()
+    update_assembly_fields.delay()
     return {"message": "Assemblies update task triggered"}
 
 

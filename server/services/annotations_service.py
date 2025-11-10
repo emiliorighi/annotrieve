@@ -11,75 +11,20 @@ from fastapi import HTTPException
 from typing import Optional
 import os
 from jobs.import_annotations import import_annotations
+from jobs.updates import update_annotation_fields
 import statistics
 
 
 NO_VALUE_KEY = "no_value"
-
-def get_annotations(
-    filter:str = None, #text search on assembly, taxonomy or annotation id
-    taxids: Optional[str] = None, 
-    db_sources: Optional[str] = None, #GenBank, RefSeq, Ensembl
-    feature_sources: Optional[str] = None, #second column in the gff file
-    assembly_accessions: Optional[str] = None,
-    biotypes: Optional[str] = None, #biotype present in the 9th column in the gff file
-    feature_types: Optional[str] = None,# third column in the gff file
-    has_stats: Optional[bool] = None, #True, False, None for all
-    pipelines: Optional[str] = None, #pipeline name
-    providers: Optional[str] = None, #annotation provider list separated by comma
-    md5_checksums: Optional[str] = None, 
-    offset: int = 0, limit: int = 20, 
-    response_type: str = 'metadata', #metadata, download_info, download_file
-    latest_release_by: str = None, #organism, assembly, taxon / None for no grouping
-    field: str = None, #field to get frequencies or statistics
-    sort_by: str = None,
-    sort_order: str = None,
-    release_date_from: str = None,
-    release_date_to: str = None,
-    fields: Optional[str] = None,
-    include_csi_index: bool = True,
-    include_metadata: bool = True,
-):
+def get_annotations(args: dict, field: str = None, response_type: str = 'metadata'):
     try:
 
-        if latest_release_by and latest_release_by not in ['organism', 'assembly']:
-            raise HTTPException(status_code=400, detail=f"Invalid latest_release_by: {latest_release_by}, valid values are: organism, assembly, taxon")
-        
-        mongoengine_query = annotation_helper.query_params_to_mongoengine_query(
-            taxids=taxids,
-            db_sources=db_sources,
-            assembly_accessions=assembly_accessions,
-            md5_checksums=md5_checksums,
-            feature_sources=feature_sources,
-            biotypes=biotypes,
-            feature_types=feature_types,
-            has_stats=has_stats,
-            pipelines=pipelines,
-            providers=providers,
-            release_date_from=release_date_from,
-            release_date_to=release_date_to,
-        )
-        annotations = GenomeAnnotation.objects(**mongoengine_query).exclude('id')
-        
-        if filter:
-            annotations = annotations.filter(query_visitors_helper.annotation_query(filter))
-        if latest_release_by:
-            pymongo_query = annotations.aggregate(
-                *annotation_helper.get_latest_release_by_group_pipeline(latest_release_by)
-                )
-            #query again to get the queryset object
-            annotations = GenomeAnnotation.objects(_id__in=[doc['_id'] for doc in pymongo_query]).exclude('id')
-        if sort_by:
-            sort = '-' + sort_by if sort_order == 'desc' else sort_by
-            annotations = annotations.order_by(sort)
+        #pop limit, offset and fields from args
+        limit = args.pop('limit', 20)
+        offset = args.pop('offset', 0)
+        fields = args.pop('fields', None)
+        annotations = get_annotation_records(**args)
         total = annotations.count()
-        offset, limit = params_helper.handle_pagination_params(offset, limit, total)
-
-        # if response_type == 'download_info':
-        #     return response_helper.download_summary_response(annotations, total)
-        # elif response_type == 'download_file':
-        #     return response_helper.download_file_response(annotations, include_csi_index=include_csi_index, include_metadata=include_metadata)
-        
         if response_type == 'frequencies':
             return query_visitors_helper.get_frequencies(annotations, field, type='annotation')
         elif response_type == 'summary_stats':
@@ -95,12 +40,85 @@ def get_annotations(
         print(e)
         raise HTTPException(status_code=500, detail=f"Error fetching annotations: {e}")
 
+def get_annotation_records(
+    filter:str = None, #text search on assembly, taxonomy or annotation id
+    taxids: Optional[str] = None, 
+    db_sources: Optional[str] = None, #GenBank, RefSeq, Ensembl
+    feature_sources: Optional[str] = None, #second column in the gff file
+    assembly_accessions: Optional[str] = None,
+    biotypes: Optional[str] = None, #biotype present in the 9th column in the gff file
+    feature_types: Optional[str] = None,# third column in the gff file
+    has_stats: Optional[bool] = None, #True, False, None for all
+    pipelines: Optional[str] = None, #pipeline name
+    providers: Optional[str] = None, #annotation provider list separated by comma
+    md5_checksums: Optional[str] = None, 
+    latest_release_by: str = None, #organism, assembly, taxon / None for no grouping
+    refseq_categories: str = None, #true
+    assembly_levels: str = None,
+    assembly_statuses: str = None,
+    assembly_types: str = None,
+    sort_by: str = None,
+    sort_order: str = None,
+    release_date_from: str = None,
+    release_date_to: str = None,
+):
+
+    mongoengine_query = annotation_helper.query_params_to_mongoengine_query(
+        taxids=taxids,
+        db_sources=db_sources,
+        assembly_accessions=assembly_accessions,
+        md5_checksums=md5_checksums,
+        feature_sources=feature_sources,
+        biotypes=biotypes,
+        feature_types=feature_types,
+        has_stats=has_stats,
+        pipelines=pipelines,
+        providers=providers,
+        release_date_from=release_date_from,
+        release_date_to=release_date_to,
+    )
+    annotations = GenomeAnnotation.objects(**mongoengine_query).exclude('id')
+    #check if any assembly related param is present
+    if any([refseq_categories, assembly_levels, assembly_statuses, assembly_types]):
+        query = {}
+        if refseq_categories:
+            query['refseq_category__in'] = refseq_categories.split(',') if isinstance(refseq_categories, str) else refseq_categories
+        if assembly_levels:
+            query['assembly_level__in'] = assembly_levels.split(',') if isinstance(assembly_levels, str) else assembly_levels
+        if assembly_statuses:
+            query['assembly_status__in'] = assembly_statuses.split(',') if isinstance(assembly_statuses, str) else assembly_statuses
+        if assembly_types:
+            query['assembly_type__in'] = assembly_types.split(',') if isinstance(assembly_types, str) else assembly_types
+        #fetch assemblies from the assemblies collection
+        assemblies = GenomeAssembly.objects(**query).scalar('assembly_accession')
+        annotations = annotations.filter(assembly_accession__in=assemblies)
+    if filter:
+        annotations = annotations.filter(query_visitors_helper.annotation_query(filter))
+    if latest_release_by:
+        pymongo_query = annotations.aggregate(
+            *annotation_helper.get_latest_release_by_group_pipeline(latest_release_by)
+            )
+        #query again to get the queryset object
+        annotations = GenomeAnnotation.objects(_id__in=[doc['_id'] for doc in pymongo_query]).exclude('id')
+    if sort_by:
+        sort = '-' + sort_by if sort_order == 'desc' else sort_by
+        annotations = annotations.order_by(sort)
+    return annotations
+
+
+
 def get_annotation(md5_checksum):
     annotation = GenomeAnnotation.objects(annotation_id=md5_checksum).first()
     if not annotation:
         raise HTTPException(status_code=404, detail=f"Annotation {md5_checksum} not found")
     return annotation
 
+
+def trigger_annotation_fields_update(auth_key: str):
+    if auth_key != os.getenv('AUTH_KEY'):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    update_annotation_fields.delay()
+    return {"message": "Annotation fields update task triggered"}
 
 def get_annotations_summary_stats(annotations):
     """

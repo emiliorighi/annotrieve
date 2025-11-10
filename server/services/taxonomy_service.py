@@ -9,7 +9,6 @@ def get_taxon_nodes(filter: str = None, rank: str = None, offset: int = 0, limit
         query['rank'] = rank
     if taxids:
         query['taxid__in'] = taxids.split(',') if isinstance(taxids, str) else taxids
-    print(query)
     taxon_nodes = TaxonNode.objects(**query) if query else TaxonNode.objects()
     if filter:
         q_filter = query_visitors_helper.taxon_query(filter) if filter else None

@@ -56,6 +56,7 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
             raise Exception("No sequences to save found")
         
         AnnotationSequenceMap.objects.insert(sequences_to_save)
+        parsed_annotation.mapped_regions=[sequence_map.sequence_id for sequence_map in sequences_to_save]
     except Exception as e:
         raise e
 

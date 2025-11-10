@@ -32,6 +32,7 @@ class AssemblyStats(EmbeddedDocument):
     genome_coverage = StringField()
     number_of_organelles = IntField()
 
+
 class PipelineInfo(EmbeddedDocument):
     name = StringField()
     version = StringField()
@@ -65,7 +66,7 @@ class FeatureOverview(EmbeddedDocument):
     has_biotype = BooleanField() # Whether the GFF file has a biotype attr
     has_cds = BooleanField() # Whether the GFF file has a CDS feature
     has_exon = BooleanField() # Whether the GFF file has an exon feature
-
+    
 class GeneLengthStats(EmbeddedDocument):
     min = IntField()
     max = IntField()
