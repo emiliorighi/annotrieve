@@ -40,5 +40,7 @@ def update_annotation_fields():
     """
     annotations = GenomeAnnotation.objects()
     for annotation in annotations:
-        mapped_regions = AnnotationSequenceMap.objects().scalar('sequence_id')
+        mapped_regions = AnnotationSequenceMap.objects(annotation_id=annotation.annotation_id).scalar('sequence_id')
+        if not mapped_regions:
+            continue
         annotation.modify(mapped_regions=mapped_regions)
