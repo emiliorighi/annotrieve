@@ -8,9 +8,11 @@ import { Badge } from "@/components/ui/badge"
 import { SectionHeader } from "@/components/ui/section-header"
 import { listAssemblies } from "@/lib/api/assemblies"
 import type { AssemblyRecord } from "@/lib/api/types"
+import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 
 export function LatestReleases() {
     const router = useRouter()
+    const { setSelectedAssemblyAccessions } = useAnnotationsFiltersStore()
     const [latestAssemblies, setLatestAssemblies] = useState<AssemblyRecord[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
@@ -53,7 +55,10 @@ export function LatestReleases() {
                 {latestAssemblies.map((assembly, index) => (
                     <Card
                         key={assembly.assembly_accession}
-                        onClick={() => router.push(`/annotations/?assembly=${assembly.assembly_accession}`)}
+                        onClick={() => {
+                            setSelectedAssemblyAccessions([assembly.assembly_accession])
+                            router.push('/annotations/')
+                        }}
                         className="group relative overflow-hidden p-6 hover:shadow-xl hover:scale-105 transition-all duration-300 border-border/50 cursor-pointer animate-in fade-in slide-in-from-bottom-4 bg-gradient-to-br from-card to-card/50"
                         style={{
                             animationDelay: `${index * 100}ms`,

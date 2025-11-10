@@ -8,6 +8,7 @@ interface SearchHistory {
   resultSubtitle: string
   annotationCount: number
   routerPath: string
+  resultId?: string // Optional ID for setting filters (taxid or assembly_accession)
   timestamp: number
 }
 

@@ -5,7 +5,15 @@ export interface FetchAnnotationsParams extends Query {
   filter?: string
   taxids?: string
   sources?: string
+  db_sources?: string
   assembly_accessions?: string
+  assembly_levels?: string
+  assembly_statuses?: string
+  refseq_categories?: string
+  biotypes?: string
+  feature_types?: string
+  pipelines?: string
+  providers?: string
   sort_by?: 'assembly_accession' | 'assembly_name' | 'organism_name' | 'source_file_info.release_date'
   sort_order?: 'asc' | 'desc'
   latest_release_by?: 'organism' | 'assembly'

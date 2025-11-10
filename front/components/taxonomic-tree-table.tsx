@@ -9,6 +9,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu"
+import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 import { Info } from "lucide-react"
 
 interface TreeNode {
@@ -29,6 +30,7 @@ interface TaxonomicTreeTableProps {
 
 export function TaxonomicTreeTable({ ancestors, currentTaxon, children, onTaxonClick }: TaxonomicTreeTableProps) {
   const router = useRouter()
+  const { setSelectedTaxids } = useAnnotationsFiltersStore()
 
   // Build the tree structure
   const buildTree = (): TreeNode[] => {
@@ -123,7 +125,10 @@ export function TaxonomicTreeTable({ ancestors, currentTaxon, children, onTaxonC
             </tr>
           </ContextMenuTrigger>
           <ContextMenuContent>
-            <ContextMenuItem onClick={() => router.push(`/annotations/?taxon=${node.taxid}`)}>
+            <ContextMenuItem onClick={() => {
+              setSelectedTaxids([node.taxid])
+              router.push('/annotations/')
+            }}>
               View Taxon Details
             </ContextMenuItem>
           </ContextMenuContent>

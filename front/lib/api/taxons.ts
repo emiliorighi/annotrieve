@@ -4,8 +4,11 @@ import type { TaxonRecord, Pagination } from './types'
 export interface FetchTaxonsParams extends Query {
   filter?: string
   taxids?: string
+  rank?: string
   limit?: number
   offset?: number
+  sort_by?: string
+  sort_order?: string
 }
 
 export function listTaxons(params: FetchTaxonsParams) {

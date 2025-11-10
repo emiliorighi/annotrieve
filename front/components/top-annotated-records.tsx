@@ -11,6 +11,7 @@ import { listAssemblies } from "@/lib/api/assemblies"
 import { listTaxons } from "@/lib/api/taxons"
 import type { OrganismRecord, AssemblyRecord, TaxonRecord } from "@/lib/api/types"
 import type { FilterType } from "@/lib/types"
+import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 
 interface TopAnnotationsProps {
   onFilterSelect: (type: FilterType, object: any) => void
@@ -18,21 +19,22 @@ interface TopAnnotationsProps {
 
 export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
   const router = useRouter()
+  const { setSelectedTaxids, setSelectedAssemblyAccessions } = useAnnotationsFiltersStore()
   const [topOrganisms, setTopOrganisms] = useState<OrganismRecord[]>([])
   const [topAssemblies, setTopAssemblies] = useState<AssemblyRecord[]>([])
   const [topTaxons, setTopTaxons] = useState<TaxonRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   const handleCardClick = (type: FilterType, item: any) => {
-    const paramKey = type === 'assembly' ? 'assembly' 
-      : type === 'organism' ? 'organism' 
-      : 'taxon'
+    // Set filter in store based on type
+    if (type === 'assembly') {
+      setSelectedAssemblyAccessions([item.assembly_accession])
+    } else {
+      // For organism or taxon, use taxid
+      setSelectedTaxids([item.taxid])
+    }
     
-    const paramValue = type === 'assembly' 
-      ? item.assembly_accession 
-      : item.taxid
-    
-    router.push(`/annotations/?${paramKey}=${paramValue}`)
+    router.push('/annotations/')
   }
 
   useEffect(() => {

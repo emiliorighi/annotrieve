@@ -7,6 +7,9 @@ export interface FetchAssembliesParams extends Query {
   sources?: string
   names?: string
   assembly_accessions?: string
+  assembly_levels?: string
+  assembly_statuses?: string
+  refseq_categories?: string
   limit?: number
   offset?: number
   sort_by?: string
