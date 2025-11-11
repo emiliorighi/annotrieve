@@ -36,6 +36,10 @@ async def get_taxons(commons: CommonQueryParams = Depends(), payload: Optional[d
 async def get_taxon(taxid: str):
     return taxonomy_service.get_taxon_node(taxid).to_mongo().to_dict()
 
+@router.get("/taxons/frequencies/rank")
+async def get_rank_frequencies():
+    return taxonomy_service.get_rank_frequencies()
+
 @router.get("/taxons/{taxid}/children")
 async def get_taxon_children(taxid: str):
     return taxonomy_service.get_taxon_node_children(taxid)

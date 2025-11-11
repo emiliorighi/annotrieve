@@ -19,6 +19,10 @@ def get_taxon_nodes(filter: str = None, rank: str = None, offset: int = 0, limit
     taxon_nodes = taxon_nodes.exclude('id').skip(offset).limit(limit).as_pymongo()
     return response_helper.json_response_with_pagination(taxon_nodes, taxon_nodes.count(), offset, limit)
 
+def get_rank_frequencies():
+    ranks = TaxonNode.objects().item_frequencies('rank')
+    return ranks
+
 def get_taxon_node(taxid: str):
     taxon_node = TaxonNode.objects(taxid=taxid).exclude('id').first()
     if not taxon_node:
