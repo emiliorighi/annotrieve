@@ -1,390 +1,310 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { FileText, BarChart3, Settings2, X, ArrowDown, ArrowUp, Star, GitCompare } from "lucide-react"
+import { FileText, BarChart3, X, ArrowDown, ArrowUp, Star, GitCompare, Filter } from "lucide-react"
 import { AnnotationsStatsDashboard } from "@/components/annotations-stats-dashboard"
-import { AnnotationsFiltersDialog } from "@/components/annotations-filters-dialog"
 import { AnnotationsPagination } from "@/components/annotations-pagination"
 import { AnnotationCard } from "@/components/annotation-card"
 import { AnnotationsCompare } from "@/components/annotations-compare"
-import type { FilterType, Annotation } from "@/lib/types"
-import { listAnnotations, getAnnotationsStatsSummary, getAnnotationsFrequencies } from "@/lib/api/annotations"
+import type { Annotation } from "@/lib/types"
 import { Button } from "./ui/button"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
+import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { useUIStore } from "@/lib/stores/ui"
 import { cn } from "@/lib/utils"
 
-interface AnnotationsListProps {
-  filterType: FilterType
-  filterObject: Record<string, any>
-  selectedAssemblyAccessions?: string[]
-}
-
-export function AnnotationsList({ filterType, filterObject, selectedAssemblyAccessions }: AnnotationsListProps) {
+export function AnnotationsList() {
+  // Get sidebar state from UI store
+  const { isSidebarOpen, toggleSidebar } = useUIStore()
   const searchParams = useSearchParams()
   const router = useRouter()
   const showFavs = searchParams?.get('showFavs') === 'true'
   
-  const [annotations, setAnnotations] = useState<Annotation[]>([])
-  const [totalAnnotations, setTotalAnnotations] = useState<number>(0)
-  const [stats, setStats] = useState<any>(null)
-  const [statsLoading, setStatsLoading] = useState(false)
+  // Use store for filters and annotations - use selectors to prevent unnecessary re-renders
+  const annotations = useAnnotationsFiltersStore((state) => state.annotations)
+  const totalAnnotations = useAnnotationsFiltersStore((state) => state.totalAnnotations)
+  const loading = useAnnotationsFiltersStore((state) => state.loading)
+  const stats = useAnnotationsFiltersStore((state) => state.stats)
+  const statsLoading = useAnnotationsFiltersStore((state) => state.statsLoading)
+  const currentPage = useAnnotationsFiltersStore((state) => state.page)
+  const itemsPerPage = useAnnotationsFiltersStore((state) => state.itemsPerPage)
+  const sortByDate = useAnnotationsFiltersStore((state) => state.sortByDate)
+  const selectedTaxids = useAnnotationsFiltersStore((state) => state.selectedTaxids)
+  const selectedAssemblyAccessions = useAnnotationsFiltersStore((state) => state.selectedAssemblyAccessions)
+  const selectedAssemblyLevels = useAnnotationsFiltersStore((state) => state.selectedAssemblyLevels)
+  const selectedAssemblyStatuses = useAnnotationsFiltersStore((state) => state.selectedAssemblyStatuses)
+  const selectedRefseqCategories = useAnnotationsFiltersStore((state) => state.selectedRefseqCategories)
+  const biotypes = useAnnotationsFiltersStore((state) => state.biotypes)
+  const featureTypes = useAnnotationsFiltersStore((state) => state.featureTypes)
+  const pipelines = useAnnotationsFiltersStore((state) => state.pipelines)
+  const providers = useAnnotationsFiltersStore((state) => state.providers)
+  const source = useAnnotationsFiltersStore((state) => state.source)
+  const mostRecentPerSpecies = useAnnotationsFiltersStore((state) => state.mostRecentPerSpecies)
+  const setAnnotationsPage = useAnnotationsFiltersStore((state) => state.setAnnotationsPage)
+  const setAnnotationsSortByDate = useAnnotationsFiltersStore((state) => state.setAnnotationsSortByDate)
+  const fetchAnnotations = useAnnotationsFiltersStore((state) => state.fetchAnnotations)
+  const fetchAnnotationsStats = useAnnotationsFiltersStore((state) => state.fetchAnnotationsStats)
+
   const [viewMode, setViewMode] = useState<"list" | "statistics" | "compare">("list")
-  // Filter states
-  const [biotypes, setBiotypes] = useState<string[]>([])
-  const [featureTypes, setFeatureTypes] = useState<string[]>([])
-  const [pipelines, setPipelines] = useState<string[]>([])
-  const [providers, setProviders] = useState<string[]>([])
-  const [source, setSource] = useState<string>("all")
-  const [sortByDate, setSortByDate] = useState<"newest" | "oldest" | "none">("none")
-  const [mostRecentPerSpecies, setMostRecentPerSpecies] = useState<boolean>(false)
-  // Filter options
-  const [biotypeOptions, setBiotypeOptions] = useState<string[]>([])
-  const [featureTypeOptions, setFeatureTypeOptions] = useState<string[]>([])
-  const [pipelineOptions, setPipelineOptions] = useState<string[]>([])
-  const [providerOptions, setProviderOptions] = useState<string[]>([])
-  const [sourceOptions, setSourceOptions] = useState<string[]>([])
+  const [hasLoadedStats, setHasLoadedStats] = useState(false)
 
-  // Pagination states
-  const [currentPage, setCurrentPage] = useState<number>(1)
-  const [itemsPerPage] = useState<number>(10)
-
-  // Dialog state
-  const [filtersDialogOpen, setFiltersDialogOpen] = useState(false)
-
-  // Zustand store
+  // Zustand store for favorites
   const { isSelected: isSelectedStore, getSelectedAnnotations, getSelectionCount } = useSelectedAnnotationsStore()
   const isSelected = (id: string) => isSelectedStore(id)
   const favoritesCount = getSelectionCount()
 
-  // Reset view mode when exiting favorites view while in compare mode
+
+  // Track the last fetch to prevent duplicates
+  const lastFetchRef = useRef<string | null>(null)
+  
+  // Fetch annotations when filters, pagination, or sorting changes
   useEffect(() => {
-    if (!showFavs && viewMode === "compare") {
-      setViewMode("list")
-    }
-  }, [showFavs, viewMode])
-
-  // Fetch filter options
-  useEffect(() => {
-    async function fetchFilterOptions() {
-      try {
-        const baseParams = getBaseParams()
-
-        // Apply most recent per species filter to options as well
-        if (mostRecentPerSpecies) {
-          baseParams.latest_release_by = 'organism'
-        }
-
-        const [biotypesRes, featureTypesRes, pipelinesRes, providersRes, sourcesRes] = await Promise.all([
-          getAnnotationsFrequencies('biotype', baseParams),
-          getAnnotationsFrequencies('feature_type', baseParams),
-          getAnnotationsFrequencies('pipeline', baseParams),
-          getAnnotationsFrequencies('provider', baseParams),
-          getAnnotationsFrequencies('database', baseParams)
-        ])
-
-        setBiotypeOptions(Object.keys(biotypesRes).filter(key => key !== 'no_value').sort())
-        setFeatureTypeOptions(Object.keys(featureTypesRes).filter(key => key !== 'no_value').sort())
-        setPipelineOptions(Object.keys(pipelinesRes).filter(key => key !== 'no_value').sort())
-        setProviderOptions(Object.keys(providersRes).filter(key => key !== 'no_value').sort())
-        setSourceOptions(Object.keys(sourcesRes).filter(key => key !== 'no_value').sort())
-      } catch (error) {
-        console.error("Error fetching filter options:", error)
-      }
-    }
-    fetchFilterOptions()
-  }, [filterType, filterObject, selectedAssemblyAccessions, mostRecentPerSpecies, showFavs, favoritesCount])
-
-  const getBaseParams = () => {
-    let params: Record<string, any> = {}
+    // In favorites view, only depend on favoritesCount, not filter params
     if (showFavs) {
       const favoriteAnnotations = getSelectedAnnotations()
       const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
+      const fetchKey = JSON.stringify({
+        showFavs: true,
+        favoritesCount,
+        favoriteIds: favoriteIds.sort(), // Sort for consistent key
+      })
+      
+      // Skip if this exact fetch was already initiated
+      if (lastFetchRef.current === fetchKey) {
+        return
+      }
+      
+      lastFetchRef.current = fetchKey
+      
       if (favoriteIds.length > 0) {
-        params = { ...params, md5_checksums: favoriteIds.join(',') }
+        fetchAnnotations(true, favoriteIds)
+      } else {
+        fetchAnnotations(false)
       }
+      return
     }
-    if (filterType === "organism" || filterType === "taxon") {
-      params = { ...params, taxids: filterObject?.taxid }
-      if (selectedAssemblyAccessions && selectedAssemblyAccessions.length > 0) {
-        params = { ...params, assembly_accessions: selectedAssemblyAccessions.join(',') }
-      }
-    } else if (filterType === "assembly") {
-      params = { ...params, assembly_accessions: filterObject?.assembly_accession || filterObject?.assemblyAccession }
+    
+    // In normal view, use all filter parameters
+    const fetchKey = JSON.stringify({
+      selectedTaxids,
+      selectedAssemblyAccessions,
+      selectedAssemblyLevels,
+      selectedAssemblyStatuses,
+      selectedRefseqCategories,
+      biotypes,
+      featureTypes,
+      pipelines,
+      providers,
+      source,
+      mostRecentPerSpecies,
+      currentPage,
+      itemsPerPage,
+      sortByDate,
+      showFavs: false,
+    })
+    
+    // Skip if this exact fetch was already initiated
+    if (lastFetchRef.current === fetchKey) {
+      return
     }
-    return params
-  }
+    
+    lastFetchRef.current = fetchKey
+    fetchAnnotations(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    selectedTaxids,
+    selectedAssemblyAccessions,
+    selectedAssemblyLevels,
+    selectedAssemblyStatuses,
+    selectedRefseqCategories,
+    biotypes,
+    featureTypes,
+    pipelines,
+    providers,
+    source,
+    mostRecentPerSpecies,
+    currentPage,
+    itemsPerPage,
+    sortByDate,
+    showFavs,
+    favoritesCount,
+    // Note: fetchAnnotations and getSelectedAnnotations are stable Zustand functions
+    // We exclude them from deps to prevent unnecessary re-runs, but they're safe to use
+  ])
 
+  // Track the last stats fetch to prevent duplicates
+  const lastStatsFetchRef = useRef<string | null>(null)
+  
+  // Fetch stats when statistics tab is opened (lazy load)
+  // Also refresh stats when filters change while on statistics tab
   useEffect(() => {
-    async function fetchData() {
-      try {
-
-        const offset = (currentPage - 1) * itemsPerPage
-        let params: Record<string, any> = { limit: itemsPerPage, offset: offset }
-        if (showFavs) {
-          const favoriteAnnotations = getSelectedAnnotations()
-          const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
-          if (favoriteIds.length > 0) {
-            const limit = favoriteIds.length + 1
-            params = { ...params, md5_checksums: favoriteIds.join(','), limit: limit }
-          } else {
-            // No favorites, return empty results
-            setAnnotations([])
-            setTotalAnnotations(0)
-            setStats(null)
-            setStatsLoading(false)
-            return
-          }
-        }
-        // Add base filters
-        if (filterType === "organism" || filterType === "taxon") {
-          params = { ...params, taxids: filterObject?.taxid }
-          if (selectedAssemblyAccessions && selectedAssemblyAccessions.length > 0) {
-            params = { ...params, assembly_accessions: selectedAssemblyAccessions.join(',') }
-          }
-        } else if (filterType === "assembly") {
-          params = { ...params, assembly_accessions: filterObject?.assembly_accession || filterObject?.assemblyAccession }
-        }
-
-        // Add new filters
-        if (biotypes.length > 0) params.biotypes = biotypes.join(',')
-        if (featureTypes.length > 0) params.feature_types = featureTypes.join(',')
-        if (pipelines.length > 0) params.pipelines = pipelines.join(',')
-        if (providers.length > 0) params.providers = providers.join(',')
-        if (source && source !== "all") params.db_sources = source
-
-        // Add most recent per species filter (backend)
-        if (mostRecentPerSpecies) {
-          params.latest_release_by = 'organism'
-        }
-
-        // Add server-side sorting by release date
-        if (sortByDate !== "none") {
-          params.sort_by = 'source_file_info.release_date'
-          params.sort_order = sortByDate === "newest" ? 'desc' : 'asc'
-        }
-
-        // Fetch annotations
-        const res = await listAnnotations(params as any)
-        const fetchedAnnotations = (res as any)?.results as any
-
-        setAnnotations(fetchedAnnotations)
-        setTotalAnnotations((res as any)?.total ?? 0)
-
-        // Fetch stats summary
-        setStatsLoading(true)
-        try {
-          const statsParams = { ...params }
-          delete statsParams.limit
-          delete statsParams.offset
-          // Keep latest_release_by in stats params
-          const statsRes = await getAnnotationsStatsSummary(statsParams as any)
-          setStats(statsRes)
-        } catch (statsError) {
-          console.error("Error fetching stats:", statsError)
-          setStats(null)
-        } finally {
-          setStatsLoading(false)
-        }
-      } catch (e) {
-        setAnnotations([])
-        setStats(null)
+    if (viewMode !== "statistics") {
+      // Reset loaded flag when switching away from stats tab
+      if (hasLoadedStats) {
+        setHasLoadedStats(false)
+        lastStatsFetchRef.current = null
       }
+      return
     }
-    fetchData()
-  }, [filterType, filterObject, selectedAssemblyAccessions, biotypes, featureTypes, pipelines, providers, source, currentPage, itemsPerPage, sortByDate, mostRecentPerSpecies, showFavs, favoritesCount, getSelectedAnnotations])
-
-
-  const clearAllFilters = () => {
-    setBiotypes([])
-    setFeatureTypes([])
-    setPipelines([])
-    setProviders([])
-    setSource("all")
-    setMostRecentPerSpecies(false)
-    setCurrentPage(1)
-  }
-
-  const hasActiveFilters = biotypes.length > 0 || featureTypes.length > 0 || pipelines.length > 0 || providers.length > 0 || (source && source !== "all") || mostRecentPerSpecies
+    
+    // In favorites view, only use favorite IDs for stats
+    if (showFavs) {
+      const favoriteAnnotations = getSelectedAnnotations()
+      const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
+      const statsFiltersKey = JSON.stringify({
+        showFavs: true,
+        favoritesCount,
+        favoriteIds: favoriteIds.sort(), // Sort for consistent key
+      })
+      
+      // Skip if this exact stats fetch was already initiated
+      if (lastStatsFetchRef.current === statsFiltersKey) {
+        return
+      }
+      
+      lastStatsFetchRef.current = statsFiltersKey
+      setHasLoadedStats(true)
+      fetchAnnotationsStats(true, favoriteIds)
+      return
+    }
+    
+    // In normal view, use all filter parameters for stats
+    const statsFiltersKey = JSON.stringify({
+      showFavs: false,
+      selectedTaxids,
+      selectedAssemblyAccessions,
+      selectedAssemblyLevels,
+      selectedAssemblyStatuses,
+      selectedRefseqCategories,
+      biotypes,
+      featureTypes,
+      pipelines,
+      providers,
+      source,
+      mostRecentPerSpecies,
+    })
+    
+    // Skip if this exact stats fetch was already initiated
+    if (lastStatsFetchRef.current === statsFiltersKey) {
+      return
+    }
+    
+    lastStatsFetchRef.current = statsFiltersKey
+    setHasLoadedStats(true)
+    fetchAnnotationsStats(false, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    viewMode,
+    showFavs,
+    favoritesCount,
+    selectedTaxids,
+    selectedAssemblyAccessions,
+    selectedAssemblyLevels,
+    selectedAssemblyStatuses,
+    selectedRefseqCategories,
+    biotypes,
+    featureTypes,
+    pipelines,
+    providers,
+    source,
+    mostRecentPerSpecies,
+    // Note: fetchAnnotationsStats and getSelectedAnnotations are stable Zustand functions
+    // We exclude them from deps to prevent unnecessary re-runs
+  ])
 
   // Pagination handlers
   const totalPages = Math.ceil(totalAnnotations / itemsPerPage)
 
   const handlePreviousPage = () => {
-    setCurrentPage(prev => Math.max(1, prev - 1))
+    setAnnotationsPage(Math.max(1, currentPage - 1))
   }
 
   const handleNextPage = () => {
-    setCurrentPage(prev => Math.min(totalPages, prev + 1))
+    setAnnotationsPage(Math.min(totalPages, currentPage + 1))
   }
 
   const handlePageClick = (page: number) => {
-    setCurrentPage(page)
+    setAnnotationsPage(page)
   }
 
-  const handleFilterChange = () => {
-    setCurrentPage(1)
+  const handleSortByDate = () => {
+    if (sortByDate === "none") {
+      setAnnotationsSortByDate("newest")
+    } else if (sortByDate === "newest") {
+      setAnnotationsSortByDate("oldest")
+    } else {
+      setAnnotationsSortByDate("none")
+    }
   }
 
   return (
-    <div className="space-y-6">
-      {/* Filters Dialog */}
-      <AnnotationsFiltersDialog
-        open={filtersDialogOpen}
-        onOpenChange={setFiltersDialogOpen}
-        biotypes={biotypes}
-        setBiotypes={setBiotypes}
-        featureTypes={featureTypes}
-        setFeatureTypes={setFeatureTypes}
-        pipelines={pipelines}
-        setPipelines={setPipelines}
-        providers={providers}
-        setProviders={setProviders}
-        source={source}
-        setSource={setSource}
-        mostRecentPerSpecies={mostRecentPerSpecies}
-        setMostRecentPerSpecies={setMostRecentPerSpecies}
-        biotypeOptions={biotypeOptions}
-        featureTypeOptions={featureTypeOptions}
-        pipelineOptions={pipelineOptions}
-        providerOptions={providerOptions}
-        sourceOptions={sourceOptions}
-        onFilterChange={handleFilterChange}
-        onClearAll={clearAllFilters}
-        currentHitCount={totalAnnotations}
-      />
-        {/* Favorites View Banner */}
-        {showFavs && (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 flex items-center justify-between">
+    <div className="flex flex-col h-full">
+      {/* Favorites Banner - shown when in favorites view */}
+      {showFavs && (
+        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-border bg-primary/5">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <Star className="h-5 w-5 text-yellow-500 fill-current" />
+              <Star className="h-5 w-5 text-primary fill-primary" />
               <div>
-                <h3 className="font-semibold text-foreground">Viewing Favorite Annotations</h3>
+                <h2 className="text-lg font-semibold text-foreground">Favorite Annotations</h2>
                 <p className="text-sm text-muted-foreground">
-                  Showing {favoritesCount} favorite annotation{favoritesCount !== 1 ? 's' : ''}
+                  Viewing {totalAnnotations} favorite annotation{totalAnnotations !== 1 ? 's' : ''}
                 </p>
               </div>
             </div>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => router.push('/annotations/')}
+              onClick={() => router.push('/annotations')}
             >
-              <X className="h-4 w-4 mr-2" />
-              Exit Favorites View
+              Back to All Annotations
             </Button>
           </div>
-        )}
-
-        {/* Row 1: Title and Filters Button */}
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-4xl font-bold text-foreground">
-              Annotations
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              <span className="font-semibold text-foreground">{totalAnnotations}</span> annotation{totalAnnotations !== 1 ? 's' : ''} available
-            </p>
-          </div>
-
-          <Button
-            variant="outline"
-            size="lg"
-            onClick={() => setFiltersDialogOpen(true)}
-            className="gap-2"
-          >
-            <Settings2 className="h-4 w-4" />
-            Filters
-            {hasActiveFilters && (
-              <Badge variant="secondary" className="ml-1 text-xs px-1.5 py-0.5">
-                {biotypes.length + featureTypes.length + pipelines.length + providers.length + (source && source !== "all" ? 1 : 0) + (mostRecentPerSpecies ? 1 : 0)}
-              </Badge>
-            )}
-          </Button>
         </div>
+      )}
 
-          {/* Active Filters Display */}
-          {hasActiveFilters && (
-            <>
-              <div className="flex items-center gap-2 p-4 flex-wrap bg-muted/20 rounded-lg">
-                <span className="text-xs text-muted-foreground">Active Filters:</span>
-                {source && source !== "all" && (
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    Source: {source}
-                  </Badge>
-                )}
-                {biotypes.slice(0, 2).map((biotype) => (
-                  <Badge key={biotype} variant="secondary" className="text-xs px-2 py-0.5">
-                    Biotype: {biotype}
-                  </Badge>
-                ))}
-                {biotypes.length > 2 && (
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    Biotypes: +{biotypes.length - 2} more
-                  </Badge>
-                )}
-                {featureTypes.slice(0, 2).map((featureType) => (
-                  <Badge key={featureType} variant="secondary" className="text-xs px-2 py-0.5">
-                    Feature: {featureType}
-                  </Badge>
-                ))}
-                {featureTypes.length > 2 && (
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    Features: +{featureTypes.length - 2} more
-                  </Badge>
-                )}
-                {pipelines.slice(0, 2).map((pipeline) => (
-                  <Badge key={pipeline} variant="secondary" className="text-xs px-2 py-0.5">
-                    Pipeline: {pipeline}
-                  </Badge>
-                ))}
-                {pipelines.length > 2 && (
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    Pipelines: +{pipelines.length - 2} more
-                  </Badge>
-                )}
-                {providers.slice(0, 2).map((provider) => (
-                  <Badge key={provider} variant="secondary" className="text-xs px-2 py-0.5">
-                    Provider: {provider}
-                  </Badge>
-                ))}
-                {providers.length > 2 && (
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    Providers: +{providers.length - 2} more
-                  </Badge>
-                )}
-                {mostRecentPerSpecies && (
-                  <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                    Filter: Most Recent per Species
-                  </Badge>
-                )}
+      {/* Header - matches sidebar header structure exactly */}
+      <div className="flex-shrink-0">
+        {/* Title Row - identical to sidebar: px-6 pt-6 pb-4 */}
+        <div className={`px-6 ${showFavs ? 'pt-4' : 'pt-6'} pb-4 flex items-center gap-4`}>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
+              {/* Toggle sidebar button - shown when sidebar is closed, hidden in favorites view */}
+              {!isSidebarOpen && !showFavs && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={clearAllFilters}
-                  className="h-6 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={toggleSidebar}
+                  className="h-7 w-7 p-0 -ml-2"
+                  title="Show filters"
                 >
-                  <X className="h-3 w-3 mr-1" />
-                  Clear
+                  <Filter className="h-4 w-4" />
                 </Button>
-              </div>
-            </>
-          )}
+              )}
+              Annotations
+            </h1>
+          </div>
+          <div className="flex">
+              <Badge className="text-md" variant="secondary">{totalAnnotations.toLocaleString()}</Badge>
+          </div>
+        </div>
+      </div>
 
-
-        {/* Row 4: View Mode Toggle */}
-        <div className="flex items-center justify-between border-b border-border">
-          <div className="flex items-center gap-1 w-fit">
+      {/* View Mode Toggle - full width border, tabs aligned with sidebar tabs */}
+      <div className="flex-shrink-0 border-b border-border">
+        <div className="px-6">
+          <div className="flex items-center gap-0 w-fit">
             <Button
               variant="ghost"
               onClick={() => setViewMode("list")}
               className={cn(
-                "gap-2",
+                "gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm",
                 viewMode === "list"
-                  ? "text-primary border-primary border-b-2"
-                  : "text-muted-foreground hover:text-foreground hover:bg-primary",
+                  ? "text-primary border-primary bg-transparent shadow-none"
+                  : "text-muted-foreground hover:text-foreground hover:bg-transparent",
               )}
             >
               <FileText className="h-4 w-4" />
@@ -392,128 +312,116 @@ export function AnnotationsList({ filterType, filterObject, selectedAssemblyAcce
             </Button>
             <Button
               variant="ghost"
-              onClick={() => setViewMode("statistics")}
+              onClick={() => {
+                setViewMode("statistics")
+                // Stats will be fetched by the useEffect when viewMode changes
+              }}
               className={cn(
-                "gap-2",
+                "gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm",
                 viewMode === "statistics"
-                  ? "text-primary border-primary border-b-2"
-                  : "text-muted-foreground hover:text-foreground hover:bg-primary",
+                  ? "text-primary border-primary bg-transparent shadow-none"
+                  : "text-muted-foreground hover:text-foreground hover:bg-transparent",
               )}
             >
               <BarChart3 className="h-4 w-4" />
               Stats
             </Button>
-            {showFavs && (
-              <Button
-                variant="ghost"
-                onClick={() => setViewMode("compare")}
-                className={cn(
-                  "gap-2",
-                  viewMode === "compare"
-                    ? "text-primary border-primary border-b-2"
-                    : "text-muted-foreground hover:text-foreground hover:bg-primary",
-                )}
-              >
-                <GitCompare className="h-4 w-4" />
-                Compare
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              onClick={() => setViewMode("compare")}
+              className={cn(
+                "gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm",
+                viewMode === "compare"
+                  ? "text-primary border-primary bg-transparent shadow-none"
+                  : "text-muted-foreground hover:text-foreground hover:bg-transparent",
+              )}
+            >
+              <GitCompare className="h-4 w-4" />
+              Compare
+            </Button>
           </div>
-          {/* <GeneCountCompactChart stats={stats} /> */}
         </div>
+      </div>
 
-      {/* List Tab */}
-      {viewMode === "list" && (
-        <div className="">
-          {annotations.length === 0 ? (
-            <Card className="p-12 border-2 border-dashed">
-              <div className="text-center text-muted-foreground">
-                <FileText className="h-12 w-12 opacity-50 mx-auto mb-3" />
-                <h4 className="text-lg font-semibold text-foreground mb-2">No Annotations Found</h4>
-                <p className="text-sm max-w-md mx-auto mb-4">
-                  No annotations match your current filter criteria.
-                </p>
-                {hasActiveFilters && (
-                  <Button variant="outline" size="sm" onClick={clearAllFilters}>
-                    <X className="h-4 w-4 mr-2" />
-                    Clear Filters
-                  </Button>
-                )}
-              </div>
-            </Card>
-          ) : (
-            <div className="">
-              {/* Compact Control Bar */}
-              <div className="pb-6 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
+      {/* Content Area */}
+      {viewMode === "compare" ? (
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+          <AnnotationsCompare favoriteAnnotations={annotations as any} showFavs={showFavs} totalAnnotations={totalAnnotations} />
+        </div>
+      ) : (
+        <div className="px-6 py-6">
+          {/* List Tab */}
+          {viewMode === "list" && (
+            <div className="space-y-6">
+              {annotations.length === 0 ? (
+                <Card className="p-12 border-2 border-dashed">
+                  <div className="text-center text-muted-foreground">
+                    <FileText className="h-12 w-12 opacity-50 mx-auto mb-3" />
+                    <h4 className="text-lg font-semibold text-foreground mb-2">No Annotations Found</h4>
+                    <p className="text-sm max-w-md mx-auto mb-4">
+                      No annotations match your current filter criteria.
+                    </p>
+                  </div>
+                </Card>
+              ) : (
+                <div className="space-y-6">
+                  {/* Sort Control */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={handleSortByDate}
+                        className="gap-2"
+                      >
+                        {sortByDate === "newest" ? (
+                          <>
+                            <ArrowDown className="h-3 w-3" />
+                            Newest Release Date
+                          </>
+                        ) : sortByDate === "oldest" ? (
+                          <>
+                            <ArrowUp className="h-3 w-3" />
+                            Oldest Release Date
+                          </>
+                        ) : (
+                          <>
+                            <ArrowDown className="h-3 w-3 opacity-50" />
+                            Sort By Release Date
+                          </>
+                        )}
+                      </Button>
+                    </div>
 
-                  <Button
-                    variant="outline"
-                    size="lg"
-                    onClick={() => {
-                      if (sortByDate === "none") {
-                        setSortByDate("newest")
-                      } else if (sortByDate === "newest") {
-                        setSortByDate("oldest")
-                      } else {
-                        setSortByDate("none")
-                      }
-                    }}
-                    className="gap-2"
-                  >
-                    {sortByDate === "newest" ? (
-                      <>
-                        <ArrowDown className="h-3 w-3" />
-                        Newest Release Date
-                      </>
-                    ) : sortByDate === "oldest" ? (
-                      <>
-                        <ArrowUp className="h-3 w-3" />
-                        Oldest Release Date
-                      </>
-                    ) : (
-                      <>
-                        <ArrowDown className="h-3 w-3 opacity-50" />
-                        Sort By Release Date
-                      </>
-                    )}
-                  </Button>
+                    <AnnotationsPagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      onPreviousPage={handlePreviousPage}
+                      onNextPage={handleNextPage}
+                      onPageClick={handlePageClick}
+                    />
+                  </div>
+
+                  <div className="grid gap-4">
+                    {annotations.map((annotation) => (
+                      <AnnotationCard
+                        isSelected={isSelected(annotation.annotation_id || annotation.md5_checksum || '')}
+                        key={annotation.annotation_id || annotation.md5_checksum || ''}
+                        annotation={annotation as any}
+                      />
+                    ))}
+                  </div>
                 </div>
-
-                <AnnotationsPagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPreviousPage={handlePreviousPage}
-                  onNextPage={handleNextPage}
-                  onPageClick={handlePageClick}
-                />
-              </div>
-
-              <div className="grid gap-3">
-                {annotations.map((annotation) => (
-                  <AnnotationCard
-                    isSelected={isSelected(annotation.annotation_id)}
-                    key={annotation.annotation_id}
-                    annotation={annotation}
-                  />
-                ))}
-              </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {/* Dashboard Tab */}
-      {viewMode === "statistics" && (
-        <div className="">
-          <AnnotationsStatsDashboard stats={stats} loading={statsLoading} />
-        </div>
-      )}
-
-      {/* Compare Tab */}
-      {viewMode === "compare" && showFavs && (
-        <div className="">
-          <AnnotationsCompare favoriteAnnotations={annotations} />
+          {/* Dashboard Tab */}
+          {viewMode === "statistics" && (
+            <div>
+              <AnnotationsStatsDashboard stats={stats || null} loading={statsLoading} />
+            </div>
+          )}
         </div>
       )}
     </div>

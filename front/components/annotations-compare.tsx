@@ -1,15 +1,17 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { BarChart3, X, AlertCircle, ChevronDown } from "lucide-react"
+import { BarChart3, X, AlertCircle, ChevronDown, Loader2 } from "lucide-react"
 import type { Annotation } from "@/lib/types"
-import { getAnnotationsStatsSummary } from "@/lib/api/annotations"
+import { getAnnotationsStatsSummary, listAnnotations } from "@/lib/api/annotations"
+import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 import { Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
@@ -37,13 +39,181 @@ ChartJS.register(
 
 interface AnnotationsCompareProps {
   favoriteAnnotations: Annotation[]
+  showFavs?: boolean,
+  totalAnnotations: number
 }
 
-export function AnnotationsCompare({ favoriteAnnotations }: AnnotationsCompareProps) {
+export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, totalAnnotations }: AnnotationsCompareProps) {
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([])
   const [comparisonStats, setComparisonStats] = useState<Record<string, any>>({})
   const [loadingStats, setLoadingStats] = useState<Record<string, boolean>>({})
+  
+  // Lazy loading state
+  const [loadedAnnotations, setLoadedAnnotations] = useState<Annotation[]>([])
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [currentOffset, setCurrentOffset] = useState(0)
+  const itemsPerPage = 20
+  const observerTarget = useRef<HTMLDivElement>(null)
+  
   const MAX_COMPARISON = 10
+
+  // Get store state and actions
+  const buildAnnotationsParams = useAnnotationsFiltersStore((state) => state.buildAnnotationsParams)
+  const totalAnnotationsFromStore = useAnnotationsFiltersStore((state) => state.totalAnnotations)
+  
+  // Get filter state to detect changes (for resetting loaded annotations)
+  const selectedTaxids = useAnnotationsFiltersStore((state) => state.selectedTaxids)
+  const selectedAssemblyAccessions = useAnnotationsFiltersStore((state) => state.selectedAssemblyAccessions)
+  const selectedAssemblyLevels = useAnnotationsFiltersStore((state) => state.selectedAssemblyLevels)
+  const selectedAssemblyStatuses = useAnnotationsFiltersStore((state) => state.selectedAssemblyStatuses)
+  const selectedRefseqCategories = useAnnotationsFiltersStore((state) => state.selectedRefseqCategories)
+  const biotypes = useAnnotationsFiltersStore((state) => state.biotypes)
+  const featureTypes = useAnnotationsFiltersStore((state) => state.featureTypes)
+  const pipelines = useAnnotationsFiltersStore((state) => state.pipelines)
+  const providers = useAnnotationsFiltersStore((state) => state.providers)
+  const source = useAnnotationsFiltersStore((state) => state.source)
+  const mostRecentPerSpecies = useAnnotationsFiltersStore((state) => state.mostRecentPerSpecies)
+  const sortByDate = useAnnotationsFiltersStore((state) => state.sortByDate)
+
+  // Use totalAnnotations from props (favorites view) or store (normal view)
+  const effectiveTotalAnnotations = showFavs ? totalAnnotations : totalAnnotationsFromStore
+
+  // Use loaded annotations or favorite annotations based on view mode
+  const displayAnnotations = showFavs ? favoriteAnnotations : loadedAnnotations
+  const allAnnotationsForStats = displayAnnotations // All annotations we have loaded
+
+  // Fetch annotations - can be used for both initial load and loading more
+  const loadAnnotations = useCallback(async (offset: number, reset: boolean = false) => {
+    if (showFavs || loadingMore) return
+
+    setLoadingMore(true)
+    try {
+      const params = buildAnnotationsParams(false, [])
+      params.limit = itemsPerPage
+      params.offset = offset
+
+      const res = await listAnnotations(params as any)
+      const fetchedAnnotations = (res as any)?.results || []
+      const total = (res as any)?.total ?? 0
+
+      if (fetchedAnnotations.length > 0) {
+        setLoadedAnnotations(prev => {
+          if (reset) {
+            // Reset mode: replace all annotations
+            return fetchedAnnotations
+          } else {
+            // Append mode: add new annotations, avoiding duplicates
+            const existingIds = new Set(prev.map(a => a.annotation_id))
+            const newAnnotations = fetchedAnnotations.filter((a: Annotation) => !existingIds.has(a.annotation_id))
+            return [...prev, ...newAnnotations]
+          }
+        })
+        setCurrentOffset(offset + fetchedAnnotations.length)
+        setHasMore(offset + fetchedAnnotations.length < total)
+      } else {
+        setHasMore(false)
+      }
+    } catch (error) {
+      console.error('Error loading annotations:', error)
+      setHasMore(false)
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [showFavs, loadingMore, buildAnnotationsParams])
+
+  // Fetch more annotations for lazy loading
+  const loadMoreAnnotations = useCallback(() => {
+    if (showFavs || loadingMore || !hasMore) return
+    loadAnnotations(currentOffset, false)
+  }, [showFavs, loadingMore, hasMore, currentOffset, loadAnnotations])
+
+  // Create a filter key to detect filter changes
+  const filterKey = JSON.stringify({
+    selectedTaxids,
+    selectedAssemblyAccessions,
+    selectedAssemblyLevels,
+    selectedAssemblyStatuses,
+    selectedRefseqCategories,
+    biotypes,
+    featureTypes,
+    pipelines,
+    providers,
+    source,
+    mostRecentPerSpecies,
+    sortByDate,
+  })
+
+  // Track previous filter key to detect filter changes
+  const prevFilterKeyRef = useRef<string | null>(null)
+
+  // Reset selected annotations when switching between favorites and default view
+  useEffect(() => {
+    setSelectedForComparison([])
+    setComparisonStats({})
+    setLoadingStats({})
+    // Reset filter key ref when view changes
+    prevFilterKeyRef.current = null
+  }, [showFavs])
+
+  // Reset selected annotations when filters change (only in non-favorites view)
+  useEffect(() => {
+    // Skip on initial mount or if in favorites view
+    if (showFavs || prevFilterKeyRef.current === null) {
+      prevFilterKeyRef.current = filterKey
+      return
+    }
+
+    // Only reset if filter key actually changed
+    if (prevFilterKeyRef.current !== filterKey) {
+      setSelectedForComparison([])
+      setComparisonStats({})
+      setLoadingStats({})
+      prevFilterKeyRef.current = filterKey
+    }
+  }, [filterKey, showFavs])
+
+  // Initial load and reset when view mode or filters change
+  useEffect(() => {
+    if (showFavs) {
+      // In favorites view, use the prop directly
+      setLoadedAnnotations(favoriteAnnotations)
+      setHasMore(false)
+      setCurrentOffset(0)
+    } else {
+      // In normal view, reset and load initial batch
+      setLoadedAnnotations([])
+      setCurrentOffset(0)
+      setHasMore(true)
+      loadAnnotations(0, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFavs, favoriteAnnotations.length, filterKey])
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (showFavs || !hasMore) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadMoreAnnotations()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    const currentTarget = observerTarget.current
+    if (currentTarget) {
+      observer.observe(currentTarget)
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget)
+      }
+    }
+  }, [hasMore, loadingMore, showFavs, loadMoreAnnotations])
 
   // Fetch stats for selected annotations
   useEffect(() => {
@@ -53,7 +223,8 @@ export function AnnotationsCompare({ favoriteAnnotations }: AnnotationsComparePr
         
         setLoadingStats(prev => ({ ...prev, [annotationId]: true }))
         try {
-          const annotation = favoriteAnnotations.find(a => a.annotation_id === annotationId)
+          // Find annotation in loaded annotations or favorite annotations
+          const annotation = allAnnotationsForStats.find(a => a.annotation_id === annotationId)
           if (annotation) {
             const stats = await getAnnotationsStatsSummary({ 
               md5_checksums: annotationId,
@@ -73,7 +244,7 @@ export function AnnotationsCompare({ favoriteAnnotations }: AnnotationsComparePr
     if (selectedForComparison.length > 0) {
       fetchComparisonStats()
     }
-  }, [selectedForComparison, favoriteAnnotations])
+  }, [selectedForComparison, allAnnotationsForStats, comparisonStats])
 
   const handleToggleAnnotation = (annotationId: string) => {
     setSelectedForComparison(prev => {
@@ -88,21 +259,25 @@ export function AnnotationsCompare({ favoriteAnnotations }: AnnotationsComparePr
     })
   }
 
-  useEffect(() => {
-    if (favoriteAnnotations.length > 0) {
-      setSelectedForComparison(favoriteAnnotations.slice(0, MAX_COMPARISON).map(a => a.annotation_id))
-    }
-  }, [favoriteAnnotations])
-
   const handleClearSelection = () => {
     setSelectedForComparison([])
+    setComparisonStats({})
+    setLoadingStats({})
   }
 
-  const selectedAnnotations = favoriteAnnotations.filter(a => 
+  const handleSelectFirst10 = () => {
+    if (displayAnnotations.length > 0) {
+      const first10Ids = displayAnnotations.slice(0, MAX_COMPARISON).map(a => a.annotation_id)
+      setSelectedForComparison(first10Ids)
+    }
+  }
+
+  const selectedAnnotations = displayAnnotations.filter(a => 
     selectedForComparison.includes(a.annotation_id)
   )
 
   // Create mapping for organism names with duplicates
+  // Use all loaded annotations for proper labeling
   const createOrganismLabelMap = (annotations: Annotation[]) => {
     const organismCounts: Record<string, number> = {}
     const labelMap: Record<string, string> = {}
@@ -121,134 +296,173 @@ export function AnnotationsCompare({ favoriteAnnotations }: AnnotationsComparePr
     return labelMap
   }
 
-  // Create label map for all favorite annotations (not just selected ones)
-  const organismLabelMap = createOrganismLabelMap(favoriteAnnotations)
+  // Create label map for all loaded annotations
+  const organismLabelMap = createOrganismLabelMap(displayAnnotations)
 
   return (
-    <div className="space-y-6">
-      {/* Selection Instructions */}
-      <Card className="p-4 bg-blue-500/10 border-blue-500/20">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <h3 className="font-semibold text-foreground mb-1">Compare Annotations</h3>
-            <p className="text-sm text-muted-foreground">
-              Select up to {MAX_COMPARISON} annotations from your favorites to compare their statistics.
+    <div className="flex flex-col lg:flex-row gap-6 h-full px-6 py-6">
+      {/* Left Column - Annotation Selection List */}
+      <div className="lg:w-1/3 xl:w-1/4 flex flex-col min-w-0 border-r border-border pr-6">
+        {/* Header */}
+        <div className="flex-shrink-0 mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-lg font-semibold text-foreground">Annotations</h3>
+            <div className="flex items-center gap-2">
               {selectedForComparison.length > 0 && (
-                <span className="font-semibold text-foreground ml-1">
-                  ({selectedForComparison.length}/{MAX_COMPARISON} selected)
-                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearSelection}
+                  className="h-7 text-xs"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear
+                </Button>
               )}
-            </p>
+              {displayAnnotations.length > 0 && selectedForComparison.length === 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSelectFirst10}
+                  className="h-7 text-xs"
+                >
+                  Select First {MAX_COMPARISON}
+                </Button>
+              )}
+            </div>
           </div>
-          {selectedForComparison.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClearSelection}
-              className="flex-shrink-0"
-            >
-              <X className="h-4 w-4 mr-1" />
-              Clear Selection
-            </Button>
+          <p className="text-xs text-muted-foreground mb-2">
+            Select up to {MAX_COMPARISON} to compare
+            {selectedForComparison.length > 0 && (
+              <span className="font-semibold text-foreground ml-1">
+                ({selectedForComparison.length}/{MAX_COMPARISON})
+              </span>
+            )}
+          </p>
+          {!showFavs && (
+            <div className="text-xs text-muted-foreground">
+              {displayAnnotations.length > 0 && effectiveTotalAnnotations > 0 && (
+                <>Loaded {displayAnnotations.length} of {effectiveTotalAnnotations}</>
+              )}
+            </div>
           )}
         </div>
-      </Card>
 
-      {/* Annotation Selection List */}
-      <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-foreground">Available Annotations</h3>
-        {favoriteAnnotations.length === 0 ? (
-          <Card className="p-8 border-2 border-dashed">
+        {/* Annotation List - Scrollable */}
+        <div className="flex-1 overflow-y-auto min-h-0 -mr-6 pr-6">
+          {displayAnnotations.length === 0 && !loadingMore ? (
+            <Card className="p-6 border-2 border-dashed">
+              <div className="text-center text-muted-foreground">
+                <BarChart3 className="h-8 w-8 opacity-50 mx-auto mb-2" />
+                <p className="text-xs">No annotations available</p>
+              </div>
+            </Card>
+          ) : (
+            <div className="space-y-2">
+              {displayAnnotations.map((annotation) => {
+                const isSelected = selectedForComparison.includes(annotation.annotation_id)
+                const isDisabled = !isSelected && selectedForComparison.length >= MAX_COMPARISON
+
+                return (
+                  <Card
+                    key={annotation.annotation_id}
+                    className={`p-2.5 cursor-pointer transition-all ${
+                      isSelected
+                        ? 'border-primary bg-primary/5 shadow-sm'
+                        : isDisabled
+                        ? 'opacity-50 cursor-not-allowed'
+                        : 'hover:border-primary/50 hover:bg-muted/50'
+                    }`}
+                    onClick={() => !isDisabled && handleToggleAnnotation(annotation.annotation_id)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        checked={isSelected}
+                        disabled={isDisabled}
+                        onCheckedChange={() => !isDisabled && handleToggleAnnotation(annotation.annotation_id)}
+                        className="mt-0.5 h-4 w-4"
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
+                      />
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 
+                            className="text-sm font-medium text-foreground leading-tight"
+                            title={organismLabelMap[annotation.annotation_id]}
+                          >
+                            {organismLabelMap[annotation.annotation_id]}
+                          </h4>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            {annotation.source_file_info.database}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate" title={`${annotation.assembly_name} (${annotation.assembly_accession})`}>
+                          {annotation.assembly_name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground/80 font-mono truncate" title={annotation.assembly_accession}>
+                          {annotation.assembly_accession}
+                        </p>
+                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
+                          <span>{new Date(annotation.source_file_info.release_date).toLocaleDateString()}</span>
+                          {annotation.source_file_info.provider && (
+                            <span>• {annotation.source_file_info.provider}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )
+              })}
+              
+              {/* Loading indicator and observer target for infinite scroll */}
+              {!showFavs && (
+                <div ref={observerTarget} className="flex justify-center items-center py-4">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Loading more annotations...</span>
+                    </div>
+                  )}
+                  {!hasMore && displayAnnotations.length > 0 && (
+                    <p className="text-xs text-muted-foreground">No more annotations to load</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Right Column - Comparison Stats */}
+      <div className="lg:w-2/3 xl:w-3/4 flex flex-col min-w-0">
+        {selectedForComparison.length >= 2 ? (
+          <ComparisonChartsSection 
+            selectedAnnotations={selectedAnnotations}
+            comparisonStats={comparisonStats}
+            loadingStats={loadingStats}
+            organismLabelMap={organismLabelMap}
+          />
+        ) : selectedForComparison.length === 1 ? (
+          <Card className="p-12 border-2 border-dashed">
             <div className="text-center text-muted-foreground">
               <BarChart3 className="h-12 w-12 opacity-50 mx-auto mb-3" />
-              <p className="text-sm">No favorite annotations available for comparison.</p>
+              <p className="text-sm font-medium text-foreground mb-1">Select More Annotations</p>
+              <p className="text-xs">
+                Select at least 2 annotations to view comparison charts.
+              </p>
             </div>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {favoriteAnnotations.map((annotation) => {
-              const isSelected = selectedForComparison.includes(annotation.annotation_id)
-              const isDisabled = !isSelected && selectedForComparison.length >= MAX_COMPARISON
-
-              return (
-                <Card
-                  key={annotation.annotation_id}
-                  className={`p-4 cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-primary bg-primary/5'
-                      : isDisabled
-                      ? 'opacity-50 cursor-not-allowed'
-                      : 'hover:border-primary/50'
-                  }`}
-                  onClick={() => !isDisabled && handleToggleAnnotation(annotation.annotation_id)}
-                >
-                  <div className="flex items-start gap-3">
-                    <Checkbox
-                      checked={isSelected}
-                      disabled={isDisabled}
-                      onCheckedChange={() => !isDisabled && handleToggleAnnotation(annotation.annotation_id)}
-                      className="mt-1"
-                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => e.stopPropagation()}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-foreground mb-1">
-                            <span 
-                              title={`This label will be used in the comparison charts to distinguish between multiple annotations from the same organism.`}
-                              className="cursor-help"
-                            >
-                              {organismLabelMap[annotation.annotation_id]}
-                            </span>
-                          </h4>
-                          <p className="text-sm text-muted-foreground">
-                            {annotation.assembly_name} ({annotation.assembly_accession})
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="text-xs">
-                          {annotation.source_file_info.database}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        <span>Released: {new Date(annotation.source_file_info.release_date).toLocaleDateString()}</span>
-                        {annotation.source_file_info.pipeline && (
-                          <span>• Pipeline: {annotation.source_file_info.pipeline.name}</span>
-                        )}
-                        {annotation.source_file_info.provider && (
-                          <span>• Provider: {annotation.source_file_info.provider}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              )
-            })}
-          </div>
+          <Card className="p-12 border-2 border-dashed">
+            <div className="text-center text-muted-foreground">
+              <AlertCircle className="h-12 w-12 opacity-50 mx-auto mb-3" />
+              <p className="text-sm font-medium text-foreground mb-1">No Annotations Selected</p>
+              <p className="text-xs">
+                Select annotations from the list to compare their statistics.
+              </p>
+            </div>
+          </Card>
         )}
       </div>
-
-      {/* Comparison Charts */}
-      {selectedForComparison.length >= 2 && (
-        <ComparisonChartsSection 
-          selectedAnnotations={selectedAnnotations}
-          comparisonStats={comparisonStats}
-          loadingStats={loadingStats}
-          organismLabelMap={organismLabelMap}
-        />
-      )}
-
-      {/* Instructions when less than 2 selected */}
-      {selectedForComparison.length < 2 && selectedForComparison.length > 0 && (
-        <Card className="p-8 border-2 border-dashed">
-          <div className="text-center text-muted-foreground">
-            <BarChart3 className="h-12 w-12 opacity-50 mx-auto mb-3" />
-            <p className="text-sm">
-              Select at least 2 annotations to view comparison charts.
-            </p>
-          </div>
-        </Card>
-      )}
     </div>
   )
 }
@@ -338,27 +552,27 @@ function ComparisonChartsSection({
   const [isGffSectionOpen, setIsGffSectionOpen] = useState(false)
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col h-full overflow-y-auto space-y-6">
       {isLoading && (
-        <Card className="p-6 bg-blue-500/10 border-blue-500/20">
-          <div className="flex items-center gap-3">
-            <BarChart3 className="h-5 w-5 text-blue-500 animate-pulse" />
-            <p className="text-sm text-muted-foreground">Loading statistics...</p>
+        <Card className="p-4 bg-blue-500/10 border-blue-500/20 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-blue-500 animate-pulse" />
+            <p className="text-xs text-muted-foreground">Loading statistics...</p>
           </div>
         </Card>
       )}
 
       {/* GFF Structure Section - Collapsible */}
       <Collapsible open={isGffSectionOpen} onOpenChange={setIsGffSectionOpen}>
-        <Card className="p-5">
+        <Card className="p-4 flex-shrink-0">
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="w-full justify-between p-0 hover:bg-transparent">
-              <h4 className="text-lg font-semibold text-foreground">GFF Structure Overlap</h4>
-              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${isGffSectionOpen ? 'transform rotate-180' : ''}`} />
+            <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
+              <h4 className="text-base font-semibold text-foreground">GFF Structure Overlap</h4>
+              <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isGffSectionOpen ? 'transform rotate-180' : ''}`} />
             </Button>
           </CollapsibleTrigger>
-          <CollapsibleContent className="mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CollapsibleContent className="mt-3">
+            <div className="grid grid-cols-1 gap-3">
               <OverlapCard
                 title="Common Biotypes"
                 items={overlappingBiotypes}
@@ -386,7 +600,7 @@ function ComparisonChartsSection({
 
       {/* Gene Categories Comparison */}
       {!isLoading && (hasCodingGenes || hasNonCodingGenes || hasPseudogenes) && (
-        <div className="space-y-6">
+        <div className="space-y-4 flex-shrink-0">
           <GroupedGeneComparisonChart
             geneData={geneData}
             hasCodingGenes={hasCodingGenes}
@@ -394,9 +608,6 @@ function ComparisonChartsSection({
             hasPseudogenes={hasPseudogenes}
             organismLabelMap={organismLabelMap}
           />
-          <div/>
-
-          <div className="space-y-6" />
 
           <TranscriptTypeStackedBarChart
             transcriptData={transcriptData}
@@ -405,8 +616,6 @@ function ComparisonChartsSection({
             hasPseudogenes={hasPseudogenes}
             organismLabelMap={organismLabelMap}
           />
-          <div/>
-          <div className="space-y-6" />
 
           <TranscriptTypeHeatmap
             transcriptData={transcriptData}
@@ -436,23 +645,23 @@ function OverlapCard({
   const hasMore = items.length > 10
 
   return (
-    <Card className="p-4 bg-muted/30">
-      <div className="mb-3">
-        <h5 className="font-semibold text-foreground mb-1">{title}</h5>
-        <p className="text-xs text-muted-foreground">
-          {items.length} item{items.length !== 1 ? 's' : ''} present in all {totalAnnotations} annotation{totalAnnotations !== 1 ? 's' : ''}
+    <Card className="p-3 bg-muted/30">
+      <div className="mb-2">
+        <h5 className="text-sm font-semibold text-foreground mb-0.5">{title}</h5>
+        <p className="text-[10px] text-muted-foreground">
+          {items.length} item{items.length !== 1 ? 's' : ''} in all {totalAnnotations} annotation{totalAnnotations !== 1 ? 's' : ''}
         </p>
       </div>
       
       {items.length === 0 ? (
-        <div className="text-sm text-muted-foreground italic py-2">
+        <div className="text-xs text-muted-foreground italic py-1">
           No common items found
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1">
             {displayItems.map((item, idx) => (
-              <Badge key={idx} variant="secondary" className="text-xs">
+              <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                 {item}
               </Badge>
             ))}
@@ -463,7 +672,7 @@ function OverlapCard({
               variant="ghost"
               size="sm"
               onClick={() => setExpanded(!expanded)}
-              className="mt-3 h-7 text-xs"
+              className="mt-2 h-6 text-[10px]"
             >
               {expanded ? 'Show Less' : `Show ${items.length - 10} More`}
             </Button>
@@ -624,16 +833,16 @@ function GroupedGeneComparisonChart({
   }
 
   return (
-    <Card className="p-6 mb-4">
-      <div className="mb-4">
-        <h4 className="font-semibold text-lg text-foreground mb-2">
+    <Card className="p-4 flex-shrink-0">
+      <div className="mb-3">
+        <h4 className="font-semibold text-base text-foreground mb-1">
           Gene Category Comparison
         </h4>
-        <p className="text-sm text-muted-foreground mb-4">
-          Compare gene metrics across different categories. Select a metric to visualize and click on legend items to filter specific annotations.
+        <p className="text-xs text-muted-foreground mb-3">
+          Compare gene metrics across different categories.
         </p>
         <Select value={metricType} onValueChange={(value: any) => setMetricType(value)}>
-          <SelectTrigger className="w-[180px] h-8 text-xs">
+          <SelectTrigger className="w-[160px] h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -644,7 +853,7 @@ function GroupedGeneComparisonChart({
         </Select>
       </div>
       
-      <div className="h-[400px]">
+      <div className="h-[300px]">
         <Bar data={chartData} options={options} />
       </div>
     </Card>
@@ -694,20 +903,20 @@ function TranscriptTypeStackedBarChart({
   
   if (types.length === 0) {
     return (
-      <Card className="p-5">
-        <div className="flex items-center gap-2 mb-4">
+      <Card className="p-4 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           {hasCodingGenes && (
-            <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-8 text-xs">Coding Genes</Button>
+            <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>
           )}
           {hasPseudogenes && (
-            <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-8 text-xs">Pseudogenes</Button>
+            <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>
           )}
           {hasNonCodingGenes && (
-            <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-8 text-xs">Non-coding Genes</Button>
+            <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>
           )}
         </div>
-        <div className="flex items-center justify-center h-[300px]">
-          <p className="text-sm text-muted-foreground italic">No transcript type data available</p>
+        <div className="flex items-center justify-center h-[200px]">
+          <p className="text-xs text-muted-foreground italic">No transcript type data available</p>
         </div>
       </Card>
     )
@@ -791,25 +1000,25 @@ function TranscriptTypeStackedBarChart({
   }
 
   return (
-    <Card className="p-5">
-      <div className="mb-4">
-        <h4 className="font-semibold text-lg text-foreground mb-2">Transcript Type Distribution - Stacked View</h4>
-        <p className="text-sm text-muted-foreground mb-4">
-          Compare the total transcript count and composition across annotations. Each bar shows the relative proportion of different transcript types.
+    <Card className="p-4 flex-shrink-0">
+      <div className="mb-3">
+        <h4 className="font-semibold text-base text-foreground mb-1">Transcript Type Distribution - Stacked</h4>
+        <p className="text-xs text-muted-foreground mb-3">
+          Compare transcript count and composition across annotations.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {hasCodingGenes && (
-            <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-8 text-xs">Coding Genes</Button>
+            <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>
           )}
           {hasPseudogenes && (
-            <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-8 text-xs">Pseudogenes</Button>
+            <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>
           )}
           {hasNonCodingGenes && (
-            <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-8 text-xs">Non-coding Genes</Button>
+            <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>
           )}
         </div>
       </div>
-      <div className="h-[400px]">
+      <div className="h-[300px]">
         <Bar data={chartData} options={options} />
       </div>
     </Card>
@@ -860,15 +1069,15 @@ function TranscriptTypeHeatmap({
   
   if (types.length === 0) {
     return (
-      <Card className="p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            {hasCodingGenes && <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-8 text-xs">Coding Genes</Button>}
-            {hasPseudogenes && <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-8 text-xs">Pseudogenes</Button>}
-            {hasNonCodingGenes && <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-8 text-xs">Non-coding Genes</Button>}
+      <Card className="p-4 flex-shrink-0">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {hasCodingGenes && <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>}
+            {hasPseudogenes && <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>}
+            {hasNonCodingGenes && <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>}
           </div>
           <Select value={metricField} onValueChange={(value: any) => setMetricField(value)}>
-            <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[140px] h-7 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="count">Count</SelectItem>
               <SelectItem value="mean_length">Mean Length</SelectItem>
@@ -882,8 +1091,8 @@ function TranscriptTypeHeatmap({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center justify-center h-[300px]">
-          <p className="text-sm text-muted-foreground italic">No transcript type data available</p>
+        <div className="flex items-center justify-center h-[200px]">
+          <p className="text-xs text-muted-foreground italic">No transcript type data available</p>
         </div>
       </Card>
     )
@@ -923,20 +1132,20 @@ function TranscriptTypeHeatmap({
   }
 
   return (
-    <Card className="p-5">
-      <div className="mb-4">
-        <h4 className="font-semibold text-lg text-foreground mb-2">Transcript Type Distribution - Detailed Heatmap</h4>
-        <p className="text-sm text-muted-foreground mb-4">
-          Detailed matrix view of transcript types across annotations. Color intensity represents the selected metric value. Switch metrics to explore different aspects of the data.
+    <Card className="p-4 flex-shrink-0">
+      <div className="mb-3">
+        <h4 className="font-semibold text-base text-foreground mb-1">Transcript Type Heatmap</h4>
+        <p className="text-xs text-muted-foreground mb-3">
+          Detailed matrix view of transcript types. Color intensity represents the selected metric.
         </p>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {hasCodingGenes && <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-8 text-xs">Coding Genes</Button>}
-            {hasPseudogenes && <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-8 text-xs">Pseudogenes</Button>}
-            {hasNonCodingGenes && <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-8 text-xs">Non-coding Genes</Button>}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {hasCodingGenes && <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>}
+            {hasPseudogenes && <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>}
+            {hasNonCodingGenes && <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>}
           </div>
           <Select value={metricField} onValueChange={(value: any) => setMetricField(value)}>
-            <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-[140px] h-7 text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="count">Count</SelectItem>
               <SelectItem value="mean_length">Mean Length</SelectItem>
@@ -951,13 +1160,13 @@ function TranscriptTypeHeatmap({
           </Select>
         </div>
       </div>
-      <div className="overflow-auto max-h-[500px] border border-border rounded-md">
+      <div className="overflow-auto max-h-[400px] border border-border rounded-md">
         <table className="w-full text-xs border-collapse">
           <thead className="sticky top-0 bg-background z-10">
-            <tr className="h-[50px]">
-              <th className="border border-border p-2 text-left font-semibold bg-muted sticky left-0 z-20">Annotation</th>
+            <tr className="h-10">
+              <th className="border border-border p-1.5 text-left text-xs font-semibold bg-muted sticky left-0 z-20">Annotation</th>
               {types.map(type => (
-                <th key={type} className="border border-border p-2 font-semibold bg-muted">
+                <th key={type} className="border border-border p-1.5 text-xs font-semibold bg-muted">
                   {type}
                 </th>
               ))}
@@ -968,7 +1177,7 @@ function TranscriptTypeHeatmap({
               const annotationLabel = organismLabelMap[data.annotation.annotation_id]
               return (
                 <tr key={idx}>
-                  <td className="border border-border p-2 font-medium bg-muted sticky left-0 z-10">{annotationLabel}</td>
+                  <td className="border border-border p-1.5 text-xs font-medium bg-muted sticky left-0 z-10">{annotationLabel}</td>
                   {types.map(type => {
                     const typeData = data[geneKey]?.[type]
                     let value = 0
@@ -1011,7 +1220,7 @@ function TranscriptTypeHeatmap({
                     return (
                       <td 
                         key={type}
-                        className="border border-border p-2 text-center"
+                        className="border border-border p-1.5 text-center text-xs"
                         style={{ backgroundColor: bgColor, color: textColor }}
                         title={`${annotationLabel} - ${type}: ${displayValue}`}
                       >

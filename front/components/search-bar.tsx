@@ -14,6 +14,7 @@ import { listTaxons } from "@/lib/api/taxons"
 import { INSDCSearchModal } from "@/components/insdc-search-sidebar"
 import { useINSDCSearchHistoryStore } from "@/lib/stores/insdc-search-history"
 import { useSearchHistoryStore } from "@/lib/stores/search-history"
+import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 import { History, Clock } from "lucide-react"
 
 /** Debounce a value, returning the debounced version. */
@@ -29,7 +30,8 @@ function useDebouncedValue<T>(value: T, delay = 300) {
 export function SearchBar() {
   const router = useRouter()
   const { getRecentSearches: getRecentINSDCSearches } = useINSDCSearchHistoryStore()
-  const { addToHistory: addToSearchHistory, getRecentSearches: getRecentLocalSearches } = useSearchHistoryStore()
+  const { addToHistory, getRecentSearches: getRecentLocalSearches } = useSearchHistoryStore()
+  const { selectedAssemblyAccessions, selectedTaxids, setSelectedTaxids, setSelectedAssemblyAccessions } = useAnnotationsFiltersStore()
 
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebouncedValue(query, 300) // debounce INPUT, not selection
@@ -63,10 +65,11 @@ export function SearchBar() {
     async function run(currentReqId: number) {
       if (debouncedQuery.trim().length < 2) {
         setResults([])
-        setIsOpen(false)
         setSelectedIndex(0)
         setShowNoResults(false)
         setIsSearching(false)
+        // Don't automatically close dropdown - let user interaction (click outside, onFocus) handle it
+        // This allows recent searches to remain visible when query is cleared
         return
       }
 
@@ -194,25 +197,32 @@ export function SearchBar() {
   // Immediate selection (no debounce)
   const handleSelect = useCallback(
     (result: SearchResult) => {
-      // Navigate to annotations page with appropriate query parameter
-      const paramKey = result.type === 'assembly' ? 'assembly'
-        : result.type === 'organism' ? 'organism'
-          : 'taxon'
+      // Set filter in store based on result type
+      if (result.type === 'assembly') {
+        const accession = (result.relatedObject as any).assembly_accession
+        setSelectedAssemblyAccessions([...selectedAssemblyAccessions, accession])
+      } else {
+        // For organism or taxon, use taxid
+        const taxid = (result.relatedObject as any).taxid
+        setSelectedTaxids([...selectedTaxids, taxid])
+      }
 
-      const paramValue = result.type === 'assembly'
+      const routerPath = '/annotations/'
+
+      // Extract ID for search history
+      const resultId = result.type === 'assembly'
         ? (result.relatedObject as any).assembly_accession
         : (result.relatedObject as any).taxid
 
-      const routerPath = `/annotations/?${paramKey}=${paramValue}`
-
       // Add to search history
-      addToSearchHistory({
+      addToHistory({
         query: query.trim(),
         resultType: result.type,
         resultName: result.name,
         resultSubtitle: result.subtitle || '',
         annotationCount: result.annotationCount || 0,
-        routerPath
+        routerPath,
+        resultId // Store the ID for setting filters later
       })
 
       router.push(routerPath)
@@ -222,7 +232,7 @@ export function SearchBar() {
       setIsOpen(false)
       setSelectedIndex(0)
     },
-    [router, addToSearchHistory, query]
+    [router, addToHistory, query, setSelectedTaxids, setSelectedAssemblyAccessions]
   )
 
   const getTypeColor = (type: string) => {
@@ -293,13 +303,53 @@ export function SearchBar() {
                         </span>
                       </div>
                     </div>
-                    {recentLocalSearches.map((search, index) => (
+                    {recentLocalSearches.map((search, index) => {
+                      const handleRecentSearchClick = () => {
+                        // Set filter in store - prefer resultId, fallback to parsing routerPath for backward compatibility
+                        let resultId = search.resultId
+                        
+                        // If no resultId, try to parse from routerPath (backward compatibility)
+                        if (!resultId && search.routerPath && search.routerPath.includes('?')) {
+                          try {
+                            // Parse URL parameters from routerPath
+                            const urlParts = search.routerPath.split('?')
+                            if (urlParts.length > 1) {
+                              const params = new URLSearchParams(urlParts[1])
+                              const assemblyParam = params.get('assembly')
+                              const taxonParam = params.get('taxon')
+                              const organismParam = params.get('organism')
+                              
+                              if (assemblyParam) {
+                                resultId = assemblyParam
+                              } else if (taxonParam) {
+                                resultId = taxonParam
+                              } else if (organismParam) {
+                                resultId = organismParam
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Error parsing routerPath:', error)
+                          }
+                        }
+                        
+                        // Set filter based on type and resultId
+                        if (resultId) {
+                          if (search.resultType === 'assembly') {
+                            setSelectedAssemblyAccessions([...selectedAssemblyAccessions, resultId])
+                          } else {
+                            // For organism or taxon, use taxid
+                            setSelectedTaxids([...selectedTaxids, resultId])
+                          }
+                        }
+                        
+                        router.push('/annotations/')
+                        setIsOpen(false)
+                      }
+                      
+                      return (
                       <button
                         key={`local-${search.routerPath}-${index}`}
-                        onClick={() => {
-                          router.push(search.routerPath)
-                          setIsOpen(false)
-                        }}
+                        onClick={handleRecentSearchClick}
                         className="w-full px-4 py-3 flex items-start gap-3 hover:bg-accent/50 transition-colors text-left border-b border-border/20"
                       >
                         <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -320,7 +370,8 @@ export function SearchBar() {
                           {search.annotationCount} annotations
                         </div>
                       </button>
-                    ))}
+                      )
+                    })}
                   </>
                 )}
 
@@ -335,13 +386,20 @@ export function SearchBar() {
                         </span>
                       </div>
                     </div>
-                    {recentINSDCSearches.map((search, index) => (
+                    {recentINSDCSearches.map((search, index) => {
+                      // Extract taxid from routerPath (format: /annotations/?taxon=TAXID or /annotations/?organism=TAXID)
+                      const handleINSDCClick = () => {
+                        if (search.matchedTaxId) {
+                          setSelectedTaxids([...selectedTaxids, search.matchedTaxId])
+                        }
+                        router.push('/annotations/')
+                        setIsOpen(false)
+                      }
+                      
+                      return (
                       <button
                         key={`insdc-${search.matchedTaxId}-${index}`}
-                        onClick={() => {
-                          router.push(search.routerPath)
-                          setIsOpen(false)
-                        }}
+                        onClick={handleINSDCClick}
                         className="w-full px-4 py-3 flex items-start gap-3 hover:bg-accent/50 transition-colors text-left border-b border-border/20"
                       >
                         <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -359,7 +417,8 @@ export function SearchBar() {
                           </p>
                         </div>
                       </button>
-                    ))}
+                      )
+                    })}
                   </>
                 )}
               </>
@@ -411,13 +470,19 @@ export function SearchBar() {
                       </div>
                     </div>
                     
-                    {matchingINSDCSearches.map((search, index) => (
+                    {matchingINSDCSearches.map((search, index) => {
+                      const handleMatchingINSDCClick = () => {
+                        if (search.matchedTaxId) {
+                          setSelectedTaxids([...selectedTaxids, search.matchedTaxId])
+                        }
+                        router.push('/annotations/')
+                        setIsOpen(false)
+                      }
+                      
+                      return (
                       <button
                         key={`matching-insdc-${search.matchedTaxId}-${index}`}
-                        onClick={() => {
-                          router.push(search.routerPath)
-                          setIsOpen(false)
-                        }}
+                        onClick={handleMatchingINSDCClick}
                         className="w-full px-4 py-3 flex items-start gap-3 hover:bg-accent/50 transition-colors text-left border-b border-border/20"
                       >
                         <Clock className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
@@ -435,7 +500,8 @@ export function SearchBar() {
                           </p>
                         </div>
                       </button>
-                    ))}
+                      )
+                    })}
 
                     {/* INSDC Search Button at bottom */}
                     <div className="border-t border-border/50 p-3 bg-muted/30">
