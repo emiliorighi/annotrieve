@@ -13,7 +13,21 @@ import os
 from jobs.import_annotations import import_annotations
 from jobs.updates import update_annotation_fields
 import statistics
+import io
+from datetime import datetime
 
+FIELD_TSV_MAP = {
+    'annotation_id': 'annotation_id',
+    'assembly_accession': 'assembly_accession',
+    'assembly_name': 'assembly_name',
+    'organism_name': 'organism_name',
+    'taxid': 'taxid',
+    'database': 'source_file_info__database',
+    'provider': 'source_file_info__provider',
+    'source_url': 'source_file_info__url_path',
+    'bgzip_path': 'indexed_file_info__bgzipped_path',
+    'csi_path': 'indexed_file_info__csi_path',
+}
 
 NO_VALUE_KEY = "no_value"
 def get_annotations(args: dict, field: str = None, response_type: str = 'metadata'):
@@ -29,6 +43,8 @@ def get_annotations(args: dict, field: str = None, response_type: str = 'metadat
             return query_visitors_helper.get_frequencies(annotations, field, type='annotation')
         elif response_type == 'summary_stats':
             return get_annotations_summary_stats(annotations)
+        elif response_type == 'tsv':
+            return stream_annotation_tsv(annotations)
         else:
             if fields:
                 annotations = annotations.only(*fields.split(','))
@@ -39,6 +55,18 @@ def get_annotations(args: dict, field: str = None, response_type: str = 'metadat
     except Exception as e:
         print(e)
         raise HTTPException(status_code=500, detail=f"Error fetching annotations: {e}")
+
+def stream_annotation_tsv(annotations):
+    tsv_data = io.StringIO()
+    tsv_data.write("\t".join(FIELD_TSV_MAP.keys()))
+    tsv_data.write("\n")
+    for annotation in annotations.scalar(*FIELD_TSV_MAP.values()):
+        tsv_data.write("\t".join(annotation))
+        tsv_data.write("\n")
+    tsv_data.seek(0)
+    return StreamingResponse(tsv_data, media_type='text/tab-separated-values', headers={
+        "Content-Disposition": f'attachment; filename="annotations_{datetime.now().strftime("%Y%m%d_%H%M%S")}.tsv"',
+    })
 
 def get_annotation_records(
     filter:str = None, #text search on assembly, taxonomy or annotation id
@@ -105,7 +133,11 @@ def get_annotation_records(
         annotations = annotations.order_by(sort)
     return annotations
 
-
+def get_annotation_metadata(md5_checksum):
+    annotation = GenomeAnnotation.objects(annotation_id=md5_checksum).exclude('id').first()
+    if not annotation:
+        raise HTTPException(status_code=404, detail=f"Annotation {md5_checksum} not found")
+    return annotation.to_mongo().to_dict()
 
 def get_annotation(md5_checksum):
     annotation = GenomeAnnotation.objects(annotation_id=md5_checksum).first()

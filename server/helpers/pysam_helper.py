@@ -26,6 +26,12 @@ def stream_contigs(file_path:str, index_format:str="csi"):
         for contig in file.contigs:
             yield contig + '\n'
 
+
+def stream_contigs_names(file_path:str, index_format:str="csi"):
+    with pysam.TabixFile(file_path, index=f"{file_path}.{index_format}") as file:
+        for contig in file.contigs:
+            yield contig
+
 def stream_tabix_gff_file(file_path:str, index_format:str="csi"):
     
     with pysam.TabixFile(file_path, index=f"{file_path}.{index_format}") as file:

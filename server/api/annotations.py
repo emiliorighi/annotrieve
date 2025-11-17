@@ -32,6 +32,17 @@ async def get_annotations(commons: Dict[str, Any] = Depends(params_helper.common
     return annotations_service.get_annotations(params)
 
 
+@router.get("/annotations/report")
+@router.post("/annotations/report")
+async def get_annotations_report(commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+    """
+    Get annotations report
+    """
+    params = params_helper.handle_request_params(commons, payload)
+    return annotations_service.get_annotations(params, response_type='tsv')
+
+
+
 @router.get("/annotations/stats/summary")
 @router.post("/annotations/stats/summary")
 async def get_annotations_stats_summary(response: Response, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
@@ -124,8 +135,7 @@ async def get_annotation(md5_checksum: str):
     """
     Get annotation metadata
     """
-    annotation = annotations_service.get_annotation(md5_checksum)
-    return annotation.to_mongo().to_dict()
+    return annotations_service.get_annotation_metadata(md5_checksum)
 
 @router.post("/annotations/{md5_checksum}/stats")
 async def update_annotation_stats(md5_checksum: str, payload: Optional[Dict[str, Any]] = Body(None)):

@@ -42,8 +42,9 @@ def resolve_sequence_id(region:str| int, md5_checksum:str, file_path:str):
     #resolve aliases to sequence_id
     gff_region = AnnotationSequenceMap.objects(annotation_id=md5_checksum, aliases__in=[region, region_str]).first()
     if not gff_region:
+        print(f"Region '{region}' not found in annotation {md5_checksum}")
         #check if the region is present in the contigs
-        for contig in pysam_helper.stream_contigs(file_path):
+        for contig in pysam_helper.stream_contigs_names(file_path):
             if region == contig:
                 seq_id = region
                 break
