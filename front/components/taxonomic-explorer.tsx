@@ -7,7 +7,12 @@ import { getTaxon, getTaxonChildren, getTaxonAncestors } from "@/lib/api/taxons"
 import type { TaxonRecord } from "@/lib/api/types"
 import { Network } from "lucide-react"
 
-export function TaxonomicExplorer() {
+interface TaxonomicExplorerProps {
+  title?: string
+  description?: string
+}
+
+export function TaxonomicExplorer({ title, description }: TaxonomicExplorerProps) {
   const [currentTaxon, setCurrentTaxon] = useState<TaxonRecord | null>(null)
   const [ancestors, setAncestors] = useState<TaxonRecord[]>([])
   const [children, setChildren] = useState<TaxonRecord[]>([])
@@ -73,13 +78,13 @@ export function TaxonomicExplorer() {
             </div>
             <div>
               <h2 className="text-3xl font-bold text-foreground">
-                Taxonomic Tree
+                {title ?? "Taxonomic Tree"}
               </h2>
             </div>
           </div>
           
           <p className="text-lg text-muted-foreground leading-relaxed">
-            Navigate through the tree of life, exploring the hierarchical classification of all eukaryotic organisms in our database.
+            {description ?? "Navigate through the tree of life, exploring the hierarchical classification of all eukaryotic organisms in our database."}
           </p>
 
           <div className="pt-4 space-y-3">
@@ -109,10 +114,8 @@ export function TaxonomicExplorer() {
           <Card className="overflow-hidden border-border/50 shadow-lg hover:shadow-xl transition-shadow duration-300">
             <div className="h-[500px] overflow-y-auto">
               <TaxonomicTreeTable
-                ancestors={ancestors}
-                currentTaxon={currentTaxon}
-                children={children}
-                onTaxonClick={handleTaxonClick}
+                rootTaxid={String(currentTaxon.taxid)}
+                onNodeClick={handleTaxonClick}
               />
             </div>
           </Card>

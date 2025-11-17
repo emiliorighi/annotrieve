@@ -100,18 +100,18 @@ export function WikiSummary({ searchTerm, className = "" }: WikiSummaryProps) {
 
   return (
     <div className="border rounded-lg p-6 bg-muted/30">
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col gap-4">
         {summary.thumbnail && (
           <img
             src={summary.thumbnail.source}
             alt={summary.title}
-            className="w-32 h-32 object-cover rounded-lg border flex-shrink-0"
+            className="w-full h-[200px] object-cover rounded-lg border flex-shrink-0"
             loading="lazy"
           />
         )}
         <div className="flex-1 min-w-0">
           <p className="text-muted-foreground leading-relaxed text-sm">
-            {summary.extract}
+            {summary.extract.length > 100 ? summary.extract.slice(0, 100) + "..." : summary.extract}
           </p>
           <a
             href={summary.content_urls.desktop.page}

@@ -5,14 +5,18 @@ import { useRouter } from "next/navigation"
 import { Calendar, Database, Clock } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { SectionHeader } from "@/components/ui/section-header"
 import { listAssemblies } from "@/lib/api/assemblies"
 import type { AssemblyRecord } from "@/lib/api/types"
-import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { SectionHeader } from "@/components/ui/section-header"
+import { buildEntityDetailsUrl } from "@/lib/utils"
 
-export function LatestReleases() {
+interface LatestReleasesProps {
+  title?: string
+  description?: string
+}
+
+export function LatestReleases({ title, description }: LatestReleasesProps) {
     const router = useRouter()
-    const { setSelectedAssemblyAccessions } = useAnnotationsFiltersStore()
     const [latestAssemblies, setLatestAssemblies] = useState<AssemblyRecord[]>([])
     const [isLoading, setIsLoading] = useState(true)
 
@@ -43,22 +47,19 @@ export function LatestReleases() {
     return (
         <div className="container mx-auto px-4 py-16">
             <SectionHeader
-                title="Latest Assemblies"
-                description="Discover the most recently released genome assemblies from our collection."
-                icon={Clock}
-                iconColor="text-green-600"
-                iconBgColor="bg-green-500/10"
-                align="center"
+              title={title ?? "Latest Assemblies"}
+              description={description ?? "Discover the most recently released genome assemblies from our collection."}
+              icon={Clock}
+              iconColor="text-green-600"
+              iconBgColor="bg-green-500/10"
+              align="center"
             />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                 {latestAssemblies.map((assembly, index) => (
                     <Card
                         key={assembly.assembly_accession}
-                        onClick={() => {
-                            setSelectedAssemblyAccessions([assembly.assembly_accession])
-                            router.push('/annotations/')
-                        }}
+                        onClick={() => router.push(buildEntityDetailsUrl("assembly", assembly.assembly_accession))}
                         className="group relative overflow-hidden p-6 hover:shadow-xl hover:scale-105 transition-all duration-300 border-border/50 cursor-pointer animate-in fade-in slide-in-from-bottom-4 bg-gradient-to-br from-card to-card/50"
                         style={{
                             animationDelay: `${index * 100}ms`,

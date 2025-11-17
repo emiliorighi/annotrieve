@@ -1,0 +1,72 @@
+"use client"
+
+import { useMemo } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { ArrowLeft } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { TaxonDetailsView } from "@/components/entity-details/taxon-details-view"
+import { AssemblyDetailsView } from "@/components/entity-details/assembly-details-view"
+
+export default function AnnotationsDetailsPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const taxonId = searchParams?.get("taxon")
+  const assemblyId = searchParams?.get("assembly")
+
+  const activeView = useMemo<"taxon" | "assembly" | null>(() => {
+    if (taxonId) {
+      return "taxon"
+    }
+    if (assemblyId) {
+      return "assembly"
+    }
+    return null
+  }, [taxonId, assemblyId])
+
+  const handleBack = () => {
+    router.push("/annotations")
+  }
+
+  return (
+    <div className="min-h-[calc(100vh-4rem)] bg-background">
+      <div className="mx-auto w-full max-w-6xl px-4 py-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleBack}
+            className="gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to annotations
+          </Button>
+        </div>
+
+        {activeView === "taxon" && taxonId && (
+          <TaxonDetailsView taxid={taxonId} onClose={handleBack} />
+        )}
+
+        {activeView === "assembly" && assemblyId && (
+          <AssemblyDetailsView accession={assemblyId} onClose={handleBack} />
+        )}
+
+        {!activeView && (
+          <Card className="p-8 text-center space-y-4">
+            <p className="text-lg font-semibold text-foreground">
+              Select an entity to view its details
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Provide a <code>?taxon=</code> or <code>?assembly=</code> query parameter to load a
+              taxon or assembly details page.
+            </p>
+            <Button onClick={handleBack} variant="outline" className="mx-auto">
+              Go back to annotations
+            </Button>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
+

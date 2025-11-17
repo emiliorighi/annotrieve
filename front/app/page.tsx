@@ -1,12 +1,12 @@
 "use client"
 
 import { Hero } from "@/components/hero"
-import { StatsSection } from "@/components/stats-section"
 import { LatestReleases } from "@/components/latest-releases"
-import { TaxonomicExplorer } from "@/components/taxonomic-explorer"
 import { TopAnnotations } from "@/components/top-annotated-records"
 import { DatabaseFrequencies } from "@/components/database-frequencies"
+import { FeaturesSection } from "@/components/features-section"
 import { SectionWrapper } from "@/components/ui/section-wrapper"
+
 
 export default function Home() {
   const handleFilterSelect = () => {
@@ -16,38 +16,46 @@ export default function Home() {
   return (
     <>
       <Hero />
-      
-      <SectionWrapper id="stats" backgroundVariant="default">
-        <div className="py-16">
-          <StatsSection />
-        </div>
 
+      <SectionWrapper id="features" backgroundVariant="muted">
+        <FeaturesSection
+          title="Features overview"
+          description={
+            <>
+              Explore annotations with our comprehensive suite of tools. From browsing genomes to comparing statistics, Annotrieve provides everything you need for eukaryotic annotation analysis.
+            </>
+          }
+        />
+      </SectionWrapper>
+      <SectionWrapper id="database-frequencies" backgroundVariant="default">
+        <DatabaseFrequencies
+          title="A central hub for annotations"
+          description={
+            <>
+              Annotrieve aggregates annotations weekly from{" "}
+              <span className="font-medium">Ensembl</span>,{" "}
+              <span className="font-medium">NCBI RefSeq</span>, and{" "}
+              <span className="font-medium">NCBI GenBank</span>. Explore the current distribution and download the raw TSVs.
+            </>
+          }
+        />
       </SectionWrapper>
 
-      <SectionWrapper id="database-sources" backgroundVariant="muted">
-        <div className="py-16">
-          <DatabaseFrequencies />
-        </div>
+
+      <SectionWrapper id="latest-releases" backgroundVariant="muted">
+        <LatestReleases
+          title="Explore recent releases"
+          description="Browse newly released assemblies and jump straight into their annotations."
+        />
       </SectionWrapper>
 
-      <SectionWrapper id="latest-releases" backgroundVariant="default">
-        <div className="py-16">
-          <LatestReleases />
-        </div>
-      </SectionWrapper>
-      
-      <SectionWrapper id="taxonomic-explorer" backgroundVariant="muted">
-        <div className="py-16">
-          <TaxonomicExplorer />
-        </div>
-      </SectionWrapper>
-      
       <SectionWrapper id="top-annotations" backgroundVariant="default">
-        <div className="py-16">
-          <TopAnnotations onFilterSelect={handleFilterSelect} />
-        </div>
+        <TopAnnotations
+          onFilterSelect={handleFilterSelect}
+          title="Top annotated records"
+          description="See organisms, classes, and assemblies with the most annotations and start exploring from there."
+        />
       </SectionWrapper>
-      
 
     </>
   )

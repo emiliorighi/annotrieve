@@ -3,11 +3,15 @@
 import { Button } from "@/components/ui/button"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { ReactNode } from "react"
 
 interface FilterChipProps {
   label: string
   value: string
   onRemove: () => void
+  icon?: ReactNode
+  onClick?: () => void
+  isActive?: boolean
   colorScheme: {
     bg: string
     bgHover: string
@@ -16,23 +20,32 @@ interface FilterChipProps {
   }
 }
 
-export function FilterChip({ label, value, onRemove, colorScheme }: FilterChipProps) {
+export function FilterChip({ label, onRemove, icon, onClick, colorScheme, isActive = false }: FilterChipProps) {
   return (
     <div
       className={cn(
-        "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs flex-shrink-0 transition-colors",
         colorScheme.bg,
         colorScheme.border,
         colorScheme.bgHover,
-        "transition-colors"
+        onClick && "cursor-pointer",
+        isActive && "border-primary bg-primary/10"
       )}
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-pressed={onClick ? isActive : undefined}
     >
-      <span className={cn("font-medium", colorScheme.text)}>{label}</span>
+      {icon && <span className="text-muted-foreground flex-shrink-0">{icon}</span>}
+      <span className={cn("font-medium whitespace-nowrap", colorScheme.text)}>{label}</span>
       <Button
         variant="ghost"
         size="sm"
-        className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
-        onClick={onRemove}
+        className="h-5 w-5 p-0 hover:bg-destructive/10 hover:text-destructive"
+        onClick={(event) => {
+          event.stopPropagation()
+          onRemove()
+        }}
         title="Remove filter"
       >
         <X className="h-3 w-3" />

@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,14 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {  Search, Loader2, CheckCircle2, XCircle, Dna, ChevronRight, ArrowRight, ArrowLeft } from "lucide-react"
+import {  Search, Loader2, CheckCircle2, XCircle, Dna, ChevronRight, ArrowRight, ArrowLeft, Database, FileText } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
-import { listTaxons } from "@/lib/api/taxons"
-import { listOrganisms } from "@/lib/api/organisms"
-import type { TaxonRecord, OrganismRecord } from "@/lib/api/types"
-import { useINSDCSearchHistoryStore } from "@/lib/stores/insdc-search-history"
+import { listTaxons, getTaxonAncestors } from "@/lib/api/taxons"
+import type { TaxonRecord } from "@/lib/api/types"
+import { buildEntityDetailsUrl } from "@/lib/utils"
 
 interface INSDCSearchModalProps {
   open: boolean
@@ -58,7 +57,6 @@ type Step = "form" | "results" | "organisms"
 
 export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSDCSearchModalProps) {
   const router = useRouter()
-  const { addToHistory } = useINSDCSearchHistoryStore()
   
   const [step, setStep] = useState<Step>("form")
   const [query, setQuery] = useState(initialQuery)
@@ -67,14 +65,17 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
   const [searchResults, setSearchResults] = useState<DatabaseSearchResult[]>([])
   const [taxonomyResults, setTaxonomyResults] = useState<TaxonomyResult[]>([])
   const [selectedTaxonomy, setSelectedTaxonomy] = useState<TaxonomyResult | null>(null)
+  const selectedTaxonomyRef = useRef<TaxonomyResult | null>(null)
   const [isMatching, setIsMatching] = useState(false)
   const [matchedTaxon, setMatchedTaxon] = useState<TaxonRecord | null>(null)
-  const [relatedOrganisms, setRelatedOrganisms] = useState<OrganismRecord[]>([])
+  const [ancestors, setAncestors] = useState<TaxonRecord[]>([])
   const [lastSearchedQuery, setLastSearchedQuery] = useState("")
   const [cooldownTime, setCooldownTime] = useState(0)
   
-  // Persist state when reopening
-  const [hasSearched, setHasSearched] = useState(false)
+  // Keep ref in sync with state
+  useEffect(() => {
+    selectedTaxonomyRef.current = selectedTaxonomy
+  }, [selectedTaxonomy])
 
   // Update query and reset when new initialQuery comes in
   useEffect(() => {
@@ -85,10 +86,11 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
       setSearchResults([])
       setTaxonomyResults([])
       setSelectedTaxonomy(null)
+      selectedTaxonomyRef.current = null
       setMatchedTaxon(null)
-      setRelatedOrganisms([])
+      setAncestors([])
+      setIsMatching(false)
       setCooldownTime(0)
-      setHasSearched(false)
       setLastSearchedQuery("")
     }
   }, [initialQuery])
@@ -109,6 +111,7 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
       setSearchResults([])
       setTaxonomyResults([])
       setSelectedTaxonomy(null)
+      selectedTaxonomyRef.current = null
     }
   }, [query, lastSearchedQuery])
 
@@ -225,6 +228,7 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
     setCooldownTime(3)
     setTaxonomyResults([]) // Clear previous results
     setSelectedTaxonomy(null) // Clear selection
+    selectedTaxonomyRef.current = null // Clear ref
     setStep("results") // Move to results step
 
     // Only search NCBI and ENA (DDBJ doesn't have public API)
@@ -233,7 +237,7 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
     const searchStatusResults: DatabaseSearchResult[] = []
     const allTaxonomyResults: TaxonomyResult[] = []
 
-    // Search through all databases (don't stop on first success)
+    // Search through databases, stop after first success
     for (const database of databasesToSearch) {
       // Add database to results with searching status
       const currentResult: DatabaseSearchResult = {
@@ -255,6 +259,9 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
           // Add taxonomy results
           allTaxonomyResults.push(...result.results)
           setTaxonomyResults([...allTaxonomyResults])
+          
+          // Stop searching after first successful result
+          break
         } else {
           currentResult.status = "error"
           currentResult.error = "Not found"
@@ -272,19 +279,29 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
 
   const handleSelectTaxonomy = (taxonomy: TaxonomyResult) => {
     setSelectedTaxonomy(taxonomy)
+    selectedTaxonomyRef.current = taxonomy
   }
 
   const handleFindClosestOrganism = async () => {
-    if (!selectedTaxonomy) return
+    // Use ref to get the latest selectedTaxonomy to avoid stale closures
+    const taxonomy = selectedTaxonomyRef.current
+    if (!taxonomy) {
+      console.warn("No taxonomy selected")
+      return
+    }
 
     setIsMatching(true)
     setStep("organisms") // Go directly to organisms step
+    
+    // Clear previous results
+    setMatchedTaxon(null)
+    setAncestors([])
 
     let foundTaxon: TaxonRecord | null = null
 
     // First try the exact taxid
     try {
-      const exactMatch = await listTaxons({ filter: selectedTaxonomy.taxId, limit: 1 })
+      const exactMatch = await listTaxons({ taxids: taxonomy.taxId })
       if (exactMatch.results && exactMatch.results.length > 0) {
         foundTaxon = exactMatch.results[0]
       }
@@ -293,10 +310,10 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
     }
 
     // If no exact match, traverse the lineage
-    if (!foundTaxon && selectedTaxonomy.lineageArray && selectedTaxonomy.lineageArray.length > 0) {
-      for (const ancestorTaxId of selectedTaxonomy.lineageArray) {
+    if (!foundTaxon && taxonomy.lineageArray && taxonomy.lineageArray.length > 0) {
+      for (const ancestorTaxId of taxonomy.lineageArray) {
         try {
-          const ancestorMatch = await listTaxons({ filter: ancestorTaxId, limit: 1 })
+          const ancestorMatch = await listTaxons({ taxids: ancestorTaxId })
           if (ancestorMatch.results && ancestorMatch.results.length > 0) {
             foundTaxon = ancestorMatch.results[0]
             console.log(`Found match in lineage: ${ancestorTaxId}`)
@@ -310,66 +327,35 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
       }
     }
 
-    // If we found a matching taxon, fetch related organisms
+    // If we found a matching taxon, fetch ancestors
     if (foundTaxon) {
       setMatchedTaxon(foundTaxon)
       
       try {
-        const organismsResponse = await listOrganisms({ 
-          taxids: String(foundTaxon.taxid),
-          limit: 20,
-          offset: 0
-        })
-        setRelatedOrganisms(organismsResponse.results || [])
+        const ancestorsResponse = await getTaxonAncestors(String(foundTaxon.taxid))
+        // Ancestors are typically returned from root to leaf, so reverse to show from leaf to root
+        setAncestors((ancestorsResponse.results || []))
       } catch (error) {
-        console.error("Failed to fetch organisms:", error)
-        setRelatedOrganisms([])
+        console.error("Failed to fetch ancestors:", error)
+        setAncestors([])
       }
     } else {
       // No match found
       setMatchedTaxon(null)
-      setRelatedOrganisms([])
+      setAncestors([])
     }
 
     setIsMatching(false)
   }
 
-  const handleSelectOrganism = (organism: OrganismRecord) => {
-    setHasSearched(true) // Mark as navigated
-    
-    const routerPath = `/annotations/?organism=${organism.taxid}`
-    
-    // Add to history
-    addToHistory({
-      query: query.trim(),
-      fieldType,
-      matchType: 'organism',
-      matchedName: organism.organism_name || organism.common_name || `TaxID ${organism.taxid}`,
-      matchedTaxId: String(organism.taxid),
-      routerPath
-    })
-    
-    router.push(routerPath)
+  const handleSelectAncestor = (taxon: TaxonRecord) => {
+    router.push(buildEntityDetailsUrl("taxon", String(taxon.taxid)))
     handleClose()
   }
 
-  const handleSelectMatchedTaxon = () => {
+  const handleViewTaxonDetails = () => {
     if (matchedTaxon) {
-      setHasSearched(true) // Mark as navigated
-      
-      const routerPath = `/annotations/?taxon=${matchedTaxon.taxid}`
-      
-      // Add to history
-      addToHistory({
-        query: query.trim(),
-        fieldType,
-        matchType: 'taxon',
-        matchedName: matchedTaxon.scientific_name || `TaxID ${matchedTaxon.taxid}`,
-        matchedTaxId: String(matchedTaxon.taxid),
-        routerPath
-      })
-      
-      router.push(routerPath)
+      router.push(buildEntityDetailsUrl("taxon", String(matchedTaxon.taxid)))
       handleClose()
     }
   }
@@ -379,16 +365,25 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
     // Keep state when closing - only reset when new initialQuery comes in
   }
 
+  const handleDialogChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      onOpenChange(true)
+    } else {
+      handleClose()
+    }
+  }
+
   const handleReset = () => {
     setStep("form")
     setQuery("")
     setSearchResults([])
     setTaxonomyResults([])
     setSelectedTaxonomy(null)
+    selectedTaxonomyRef.current = null
     setMatchedTaxon(null)
-    setRelatedOrganisms([])
+    setAncestors([])
+    setIsMatching(false)
     setCooldownTime(0)
-    setHasSearched(false)
     setLastSearchedQuery("")
   }
 
@@ -396,10 +391,12 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
     if (step === "organisms") {
       setStep("results")
       setMatchedTaxon(null)
-      setRelatedOrganisms([])
+      setAncestors([])
+      setIsMatching(false) // Reset matching state when going back
     } else if (step === "results") {
       setStep("form")
       setSelectedTaxonomy(null)
+      selectedTaxonomyRef.current = null
     }
   }
 
@@ -433,33 +430,34 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
 
 
   return (
-    <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent side="left" className="w-full sm:max-w-[600px] p-0 flex flex-col">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b">
-          <div className="flex items-center justify-between pr-8">
-            <div>
-              <SheetTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Search INSDC Databases
-              </SheetTitle>
-              <SheetDescription className="mt-1">
-                Find taxonomy records in external databases
-              </SheetDescription>
+    <Dialog open={open} onOpenChange={handleDialogChange}>
+      <DialogContent className="max-w-3xl w-full p-0 overflow-hidden">
+        <div className="flex flex-col h-full max-h-[90vh]">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <div className="flex items-center justify-between">
+              <div>
+                <DialogTitle className="flex items-center gap-2 text-lg font-semibold">
+                  <Search className="h-5 w-5" />
+                  Search INSDC Databases
+                </DialogTitle>
+                <DialogDescription className="mt-1">
+                  Find taxonomy records in external databases
+                </DialogDescription>
+              </div>
+              {(step === "results" || step === "organisms") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleReset}
+                  className="text-xs"
+                >
+                  New Search
+                </Button>
+              )}
             </div>
-            {(step === "results" || step === "organisms") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleReset}
-                className="text-xs"
-              >
-                New Search
-              </Button>
-            )}
-          </div>
-        </SheetHeader>
+          </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
           {/* Step Indicator */}
           <div className="px-6 py-4 border-b bg-muted/20">
             <div className="flex items-center justify-between">
@@ -690,29 +688,53 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
                   <div className="text-center space-y-2">
                     <p className="font-semibold text-foreground">Finding Closest Match</p>
                     <p className="text-sm text-muted-foreground max-w-xs">
-                      Searching through taxonomy lineage to find organisms in our database...
+                      Searching through taxonomy lineage to find a match in our database...
                     </p>
                   </div>
                 </div>
               )}
-
+              {/* Ancestor Breadcrumbs */}
+              {!isMatching && matchedTaxon && ancestors.length > 0 && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: '200ms' }}>
+                  <Label className="text-sm font-semibold">Taxonomic Lineage</Label>
+                  <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                    {ancestors.map((ancestor, index) => (
+                      <div key={ancestor.taxid} className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleSelectAncestor(ancestor)}
+                          className="px-2 py-1 rounded-md text-xs font-medium text-primary hover:bg-primary/10 transition-colors hover:underline"
+                        >
+                          {ancestor.scientific_name || `TaxID ${ancestor.taxid}`}
+                        </button>
+                        {index < ancestors.length - 1 && (
+                          <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                        )}
+                      </div>
+                    ))}
+                    {/* Add the matched taxon at the end */}
+                    <div className="flex items-center gap-1.5">
+                      <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                      <span className="px-2 py-1 rounded-md text-xs font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/20">
+                        {matchedTaxon.scientific_name || `TaxID ${matchedTaxon.taxid}`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* Matched Taxon Info */}
               {!isMatching && matchedTaxon && (
                 <div className="space-y-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <Label className="text-sm font-semibold">Matched Taxonomy Node</Label>
                   <Card 
                     className="p-4 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800 cursor-pointer hover:shadow-md transition-all group hover:border-green-300 dark:hover:border-green-700"
-                    onClick={handleSelectMatchedTaxon}
+                    onClick={handleViewTaxonDetails}
                   >
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          <h4 className="font-semibold text-foreground group-hover:text-green-700 dark:group-hover:text-green-400 transition-colors">
-                            {matchedTaxon.scientific_name}
-                          </h4>
-                        </div>
-                        <ChevronRight className="h-4 w-4 text-green-600 group-hover:translate-x-1 transition-transform" />
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        <h4 className="font-semibold text-foreground">
+                          {matchedTaxon.scientific_name}
+                        </h4>
                       </div>
                       <div className="space-y-1 text-xs">
                         <div className="flex items-center gap-2">
@@ -725,76 +747,35 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
                             <span className="font-medium text-foreground capitalize">{matchedTaxon.rank.toLowerCase()}</span>
                           </div>
                         )}
-                        {matchedTaxon.annotations_count !== undefined && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground">Total Annotations:</span>
-                            <span className="font-semibold text-green-700 dark:text-green-400">{matchedTaxon.annotations_count.toLocaleString()}</span>
+                      </div>
+                      
+                      {/* Counts with icons matching taxon-card.tsx */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs items-center pt-1">
+                        {matchedTaxon.organisms_count !== undefined && matchedTaxon.organisms_count > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground whitespace-nowrap" title={`Organisms: ${matchedTaxon.organisms_count}`}>
+                            <Dna className="w-3 h-3 text-green-500" />
+                            <span className="font-semibold text-foreground">{matchedTaxon.organisms_count.toLocaleString()}</span>
                           </div>
                         )}
-                      </div>
-                      <div className="pt-2 flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
-                        <span>View all annotations for this taxon</span>
+                        {matchedTaxon.assemblies_count !== undefined && matchedTaxon.assemblies_count > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground whitespace-nowrap" title={`Assemblies: ${matchedTaxon.assemblies_count}`}>
+                            <Database className="w-3 h-3 text-purple-500" />
+                            <span className="font-semibold text-foreground">{matchedTaxon.assemblies_count.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {matchedTaxon.annotations_count !== undefined && matchedTaxon.annotations_count > 0 && (
+                          <div className="flex items-center gap-1 text-muted-foreground whitespace-nowrap" title={`Annotations: ${matchedTaxon.annotations_count}`}>
+                            <FileText className="w-3 h-3 text-blue-500" />
+                            <span className="font-semibold text-foreground">{matchedTaxon.annotations_count.toLocaleString()}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </Card>
                 </div>
               )}
 
-              {/* Related Organisms */}
-              {!isMatching && relatedOrganisms.length > 0 && (
-                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700" style={{ animationDelay: '200ms' }}>
-                  <Label className="text-sm font-semibold">Related Organisms ({relatedOrganisms.length})</Label>
-                  <div className="space-y-2">
-                    {relatedOrganisms.map((organism, index) => (
-                      <Card
-                        key={organism.taxid}
-                        className="p-4 hover:shadow-md transition-all cursor-pointer group hover:border-primary/50 bg-background animate-in fade-in slide-in-from-left-2 duration-300"
-                        style={{ animationDelay: `${index * 50}ms` }}
-                        onClick={() => handleSelectOrganism(organism)}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Dna className="h-4 w-4 text-primary" />
-                              <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors italic">
-                                {organism.organism_name}
-                              </h4>
-                            </div>
-                            <div className="space-y-1 text-xs">
-                              {organism.common_name && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">Common Name:</span>
-                                  <span className="font-medium text-foreground">{organism.common_name}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <span className="text-muted-foreground">Taxonomy ID:</span>
-                                <span className="font-mono font-medium text-foreground">{organism.taxid}</span>
-                              </div>
-                              {organism.annotations_count !== undefined && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-muted-foreground">Annotations:</span>
-                                  <span className="font-semibold text-primary">{organism.annotations_count}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              )}
 
-              {/* No organisms found */}
-              {!isMatching && matchedTaxon && relatedOrganisms.length === 0 && (
-                <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-md animate-in fade-in duration-500">
-                  <p className="text-sm text-amber-600 dark:text-amber-400">
-                    No organisms found for this taxonomic node. Try searching for a different term.
-                  </p>
-                </div>
-              )}
 
               {/* No match found in lineage */}
               {!isMatching && !matchedTaxon && (
@@ -812,10 +793,10 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
             </div>
           )}
           </div>
-        </div>
+          </div>
 
-        {/* Footer Actions - Sticky at Bottom */}
-        <div className="px-6 py-4 border-t bg-background/95 backdrop-blur-sm">
+          {/* Footer Actions */}
+          <div className="px-6 py-4 border-t bg-background">
           {step === "form" && (
             <div className="flex gap-3">
               <Button
@@ -870,7 +851,7 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
                     </>
                   ) : (
                     <>
-                      Find Organisms
+                      Find cloreser taxon
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -906,9 +887,10 @@ export function INSDCSearchModal({ open, onOpenChange, initialQuery = "" }: INSD
               </Button>
             </div>
           )}
+          </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 

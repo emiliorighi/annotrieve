@@ -49,7 +49,7 @@ export function SectionWrapper({
     <section
       ref={sectionRef}
       id={id}
-      className={`relative ${backgroundClasses[backgroundVariant]} ${className}`}
+      className={`relative overflow-x-hidden py-16 ${backgroundClasses[backgroundVariant]} ${className}`}
     >
       {/* Decorative top border */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-border to-transparent" />

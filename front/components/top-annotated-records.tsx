@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { SectionHeader } from "@/components/ui/section-header"
 import { TrendingUp, Dna, Database, Loader2, Trophy } from "lucide-react"
 import { listOrganisms } from "@/lib/api/organisms"
 import { listAssemblies } from "@/lib/api/assemblies"
@@ -12,14 +11,18 @@ import { listTaxons } from "@/lib/api/taxons"
 import type { OrganismRecord, AssemblyRecord, TaxonRecord } from "@/lib/api/types"
 import type { FilterType } from "@/lib/types"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { SectionHeader } from "@/components/ui/section-header"
+import { buildEntityDetailsUrl } from "@/lib/utils"
 
 interface TopAnnotationsProps {
   onFilterSelect: (type: FilterType, object: any) => void
+  title?: string
+  description?: string
 }
 
-export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
+export function TopAnnotations({ onFilterSelect, title, description }: TopAnnotationsProps) {
   const router = useRouter()
-  const { setSelectedTaxids, setSelectedAssemblyAccessions } = useAnnotationsFiltersStore()
+  const { setSelectedTaxons, setSelectedAssemblies } = useAnnotationsFiltersStore()
   const [topOrganisms, setTopOrganisms] = useState<OrganismRecord[]>([])
   const [topAssemblies, setTopAssemblies] = useState<AssemblyRecord[]>([])
   const [topTaxons, setTopTaxons] = useState<TaxonRecord[]>([])
@@ -28,13 +31,19 @@ export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
   const handleCardClick = (type: FilterType, item: any) => {
     // Set filter in store based on type
     if (type === 'assembly') {
-      setSelectedAssemblyAccessions([item.assembly_accession])
-    } else {
-      // For organism or taxon, use taxid
-      setSelectedTaxids([item.taxid])
+      const assembly = item as AssemblyRecord
+      setSelectedAssemblies([assembly])
+      router.push(buildEntityDetailsUrl("assembly", assembly.assembly_accession))
+    } else if (type === 'taxon') {
+      // For organism or taxon, use taxon record
+      const taxon = item as TaxonRecord
+      setSelectedTaxons([taxon])
+      router.push(buildEntityDetailsUrl("taxon", String(taxon.taxid)))
+    } else if (type === 'organism') {
+      const organism = item as OrganismRecord
+      setSelectedTaxons([{ taxid: organism.taxid, scientific_name: organism.organism_name }])
+      router.push(buildEntityDetailsUrl("taxon", String(organism.taxid)))
     }
-    
-    router.push('/annotations/')
   }
 
   useEffect(() => {
@@ -97,8 +106,8 @@ export function TopAnnotations({ onFilterSelect }: TopAnnotationsProps) {
   return (
     <div className="container mx-auto px-4 py-16">
       <SectionHeader
-        title="Most Annotated Records"
-        description="Explore the organisms, taxonomic groups, and assemblies with the highest number of annotations in our database."
+        title={title ?? "Most Annotated Records"}
+        description={description ?? "Explore the organisms, taxonomic groups, and assemblies with the highest number of annotations in our database."}
         icon={Trophy}
         iconColor="text-amber-600"
         iconBgColor="bg-amber-500/10"

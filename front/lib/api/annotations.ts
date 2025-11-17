@@ -1,4 +1,4 @@
-import { apiGet, apiPost, type Query } from './base'
+import { apiGet, apiPost, buildQuery, type Query } from './base'
 import type { AnnotationRecord, Pagination } from './types'
 
 export interface FetchAnnotationsParams extends Query {
@@ -47,4 +47,50 @@ export function listAnnotationErrors(offset = 0, limit = 20) {
 
 export function downloadAnnotations(md5_checksums: string[]) {
   return apiPost<Blob>('/annotations/download', { md5_checksums }, {}, {}, 'blob')
+}
+
+export interface StreamGffParams extends Query {
+  region?: string
+  start?: number
+  end?: number
+  feature_type?: string
+  feature_source?: string
+  biotype?: string
+}
+
+export function streamAnnotationGff(
+  md5_checksum: string,
+  params?: StreamGffParams,
+  options?: RequestInit,
+): Promise<Response> {
+  const API_BASE = 'https://genome.crg.es/annotrieve/api/v0'
+  const url = `${API_BASE}/annotations/${md5_checksum}/gff${buildQuery(params || {})}`
+  const mergedHeaders = new Headers({ Accept: 'text/plain' })
+  if (options?.headers) {
+    const customHeaders = new Headers(options.headers as HeadersInit)
+    customHeaders.forEach((value, key) => {
+      mergedHeaders.set(key, value)
+    })
+  }
+  return fetch(url, {
+    method: 'GET',
+    ...options,
+    headers: mergedHeaders,
+  })
+}
+
+export interface MappedRegion {
+  sequence_id: string
+  annotation_id: string
+  aliases: string[]
+}
+
+export function getMappedRegions(md5_checksum: string, offset = 0, limit = 20) {
+  return apiGet<Pagination<MappedRegion>>(`/annotations/${md5_checksum}/contigs/aliases`, { offset, limit })
+}
+
+export function downloadContigs(md5_checksum: string): Promise<Response> {
+  const API_BASE = 'https://genome.crg.es/annotrieve/api/v0'
+  const url = `${API_BASE}/annotations/${md5_checksum}/contigs`
+  return fetch(url, { method: 'GET', headers: { 'Accept': 'text/plain' } })
 }

@@ -1,140 +1,359 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Label } from "@/components/ui/label"
-import { X, Network, Database, Sparkles, Search, Info, FilterX } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { listTaxons, getTaxon } from "@/lib/api/taxons"
-import { listAssemblies, getAssembliesStats, getAssembly } from "@/lib/api/assemblies"
+import { useState, useEffect, useRef, useCallback, useMemo, useLayoutEffect } from "react"
+import type { ReactNode, KeyboardEvent as ReactKeyboardEvent } from "react"
+import { Checkbox, Button, Label } from "@/components/ui"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ChevronDown, Loader2, ArrowRight } from "lucide-react"
+import { getAssembliesStats } from "@/lib/api/assemblies"
 import { getAnnotationsFrequencies } from "@/lib/api/annotations"
-import type { TaxonRecord, AssemblyRecord } from "@/lib/api/types"
-import { TaxonTab } from "@/components/annotations-sidebar-filters/taxon-tab"
-import { AssemblyTab } from "@/components/annotations-sidebar-filters/assembly-tab"
-import { MetadataTab } from "@/components/annotations-sidebar-filters/metadata-tab"
+import { getTaxon, getTaxonRankFrequencies, listTaxons } from "@/lib/api/taxons"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { AssemblyRecord, OrganismRecord, TaxonRecord } from "@/lib/api/types"
+import { cn } from "@/lib/utils"
+import { CompactTaxonomicTree } from "@/components/compact-taxonomic-tree"
+import { createAssemblySearchModel, createOrganismSearchModel, createTaxonSearchModel } from "@/lib/search-models"
+import { QuickSearchSection } from "@/components/annotations-sidebar-filters/components/quick-search-section"
+import { FilterAccordionSection } from "@/components/annotations-sidebar-filters/components/filter-accordion-section"
+import { sortRanks, formatRankLabel } from "@/components/annotations-sidebar-filters/utils"
+import { useUIStore } from "@/lib/stores/ui"
+import { CommonSearchResult } from "@/lib/types"
 
-interface AnnotationsSidebarFiltersProps {
-  // Optional close handler for mobile
-  onClose?: () => void
+const FILTER_PARAM_EXCLUDE_MAP: Record<string, string> = {
+  'biotype': 'biotypes',
+  'feature-types': 'feature_types',
+  'feature-sources': 'feature_sources',
+  'pipelines': 'pipelines',
+  'providers': 'providers',
+  'database-sources': 'db_sources',
+  'assembly-levels': 'assembly_levels',
+  'assembly-statuses': 'assembly_statuses',
+  'refseq-categories': 'refseq_categories'
 }
 
-export function AnnotationsSidebarFilters({
-  onClose
-}: AnnotationsSidebarFiltersProps) {
-  // Use store for filters
+const FILTER_FIELD_NAME_MAP: Record<string, string> = {
+  'biotype': 'biotype',
+  'feature-types': 'feature_type',
+  'feature-sources': 'feature_source',
+  'pipelines': 'pipeline',
+  'providers': 'provider',
+  'database-sources': 'database',
+  'assembly-levels': 'assembly_level',
+  'assembly-statuses': 'assembly_status',
+  'refseq-categories': 'refseq_category'
+}
+
+const TAXON_SORT_PARAMS = {
+  sort_by: 'annotations_count',
+  sort_order: 'desc'
+}
+
+interface CollapsibleSectionProps {
+  title: string
+  description?: string
+  isOpen: boolean
+  onToggle: () => void
+  isLoading?: boolean
+  btnAction?: () => void
+  btnText?: string
+  icon?: ReactNode
+  children: ReactNode
+}
+
+const COLLAPSIBLE_ANIMATION_DURATION = 300
+const COLLAPSIBLE_SKELETON_WIDTHS = ["w-5/6", "w-full", "w-2/3"] as const
+
+function usePersistentState<T>(key: string, defaultValue: T) {
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === "undefined") return defaultValue
+    try {
+      const storedValue = window.localStorage.getItem(key)
+      return storedValue !== null ? JSON.parse(storedValue) : defaultValue
+    } catch (error) {
+      console.warn(`Failed to read persistent state for ${key}:`, error)
+      return defaultValue
+    }
+  })
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value))
+    } catch (error) {
+      console.warn(`Failed to persist state for ${key}:`, error)
+    }
+  }, [key, value])
+
+  return [value, setValue] as const
+}
+
+function CollapsibleSection({
+  title,
+  description,
+  isOpen,
+  onToggle,
+  isLoading = false,
+  btnAction,
+  btnText,
+  icon,
+  children
+}: CollapsibleSectionProps) {
+  const contentId = `section-${title?.toString().toLowerCase().replace(/\s+/g, '-')}`
+  const chevronLabel = `${isOpen ? "Collapse" : "Expand"} ${title ?? "section"} section`
+  const [shouldRenderContent, setShouldRenderContent] = useState(isOpen)
+  const [contentHeight, setContentHeight] = useState(0)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
+
+    if (isOpen) {
+      setShouldRenderContent(true)
+    } else {
+      timeoutId = setTimeout(() => setShouldRenderContent(false), COLLAPSIBLE_ANIMATION_DURATION)
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [isOpen])
+
+  useLayoutEffect(() => {
+    if (!shouldRenderContent || !contentRef.current) return
+
+    const node = contentRef.current
+    const updateHeight = () => {
+      setContentHeight(node.scrollHeight)
+    }
+
+    updateHeight()
+
+    let resizeObserver: ResizeObserver | null = null
+    let resizeListenerAttached = false
+
+    const globalWindow = typeof window !== "undefined" ? window : undefined
+
+    if (globalWindow && "ResizeObserver" in globalWindow) {
+      resizeObserver = new ResizeObserver(() => updateHeight())
+      resizeObserver.observe(node)
+    } else if (globalWindow) {
+      ;(globalWindow as any).addEventListener("resize", updateHeight)
+      resizeListenerAttached = true
+    }
+
+    return () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+      } else if (resizeListenerAttached && globalWindow) {
+        ;(globalWindow as any).removeEventListener("resize", updateHeight)
+      }
+    }
+  }, [shouldRenderContent])
+
+  const handleHeaderKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+      event.preventDefault()
+      onToggle()
+    }
+  }, [onToggle])
+
+  return (
+    <div className="rounded-md border bg-card/60 overflow-hidden">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={handleHeaderKeyDown}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
+        className="group w-full flex items-center justify-between px-4 py-4 hover:bg-muted/60 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {icon && <span className="text-muted-foreground flex-shrink-0">{icon}</span>}
+          <span className="text-sm font-semibold truncate">{title}</span>
+        </div>
+        <div className="text-muted-foreground transition-transform duration-200 ease-in-out group-hover:text-foreground">
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+            role="img"
+            aria-label={chevronLabel}
+            focusable={false}
+          />
+        </div>
+      </div>
+
+      <div
+        id={contentId}
+        aria-hidden={!isOpen}
+        className="border-t bg-muted/60 shadow-inner border-border/80 overflow-hidden transition-[max-height] duration-300 ease-in-out"
+        style={{ maxHeight: isOpen ? `${contentHeight}px` : 0 }}
+      >
+        <div ref={contentRef} className="p-4 space-y-3">
+          {shouldRenderContent && (
+            <>
+              {description && (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
+                  {btnAction && (
+                    <Button variant="link" className="text-accent text-xs px-0 h-auto" onClick={btnAction}>
+                      {btnText}
+                      <ArrowRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  )}
+                </div>
+              )}
+              {isOpen && isLoading && (
+                <div className="space-y-2 py-1" role="status" aria-live="polite">
+                  {COLLAPSIBLE_SKELETON_WIDTHS.map((widthClass, index) => (
+                    <div
+                      key={`${widthClass}-${index}`}
+                      className={`h-3 rounded bg-muted-foreground/30 animate-pulse ${widthClass}`}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="space-y-3">
+                {children}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function AnnotationsSidebarFilters() {
+  const { openRightSidebar } = useUIStore()
   const store = useAnnotationsFiltersStore()
   const {
-    selectedTaxids,
-    selectedAssemblyAccessions,
+    selectedTaxons,
+    selectedAssemblies,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
-    selectedRefseqCategories,
+    onlyRefGenomes,
     biotypes,
     featureTypes,
+    featureSources,
     pipelines,
     providers,
-    source,
-    mostRecentPerSpecies,
-    setSelectedTaxids,
-    setSelectedAssemblyAccessions,
+    databaseSources,
+    setSelectedTaxons,
+    setSelectedAssemblies,
     setSelectedAssemblyLevels,
     setSelectedAssemblyStatuses,
-    setSelectedRefseqCategories,
+    setOnlyRefGenomes,
     setBiotypes,
     setFeatureTypes,
     setPipelines,
     setProviders,
-    setSource,
-    setMostRecentPerSpecies,
-    clearAllFilters,
-    buildAnnotationsParams,
-    browseAssemblies,
-    fetchBrowseAssemblies,
-    setBrowseAssembliesPage,
-    setBrowseAssembliesSort,
-    resetBrowseAssembliesPage,
+    setDatabaseSources,
   } = store
-  
-  const [activeTab, setActiveTab] = useState<"taxon" | "assembly" | "metadata">("taxon")
-  
-  // Reset browse assemblies page when filters change
-  // This ensures that when the user switches to the assembly tab, they start at page 1 with the new filters
-  useEffect(() => {
-    resetBrowseAssembliesPage()
-  }, [selectedTaxids, selectedAssemblyLevels, selectedAssemblyStatuses, selectedRefseqCategories, resetBrowseAssembliesPage])
 
-  // Taxon search
-  const [taxonSearchQuery, setTaxonSearchQuery] = useState("")
-  const [taxonSearchResults, setTaxonSearchResults] = useState<TaxonRecord[]>([])
-  const [taxonSearchLoading, setTaxonSearchLoading] = useState(false)
-  const [selectedTaxons, setSelectedTaxons] = useState<TaxonRecord[]>([])
 
-  // Assembly search
-  const [assemblySearchQuery, setAssemblySearchQuery] = useState("")
-  const [assemblySearchResults, setAssemblySearchResults] = useState<AssemblyRecord[]>([])
-  const [assemblySearchLoading, setAssemblySearchLoading] = useState(false)
-  const [selectedAssemblies, setSelectedAssemblies] = useState<AssemblyRecord[]>([])
+  // Taxonomy section
+  const [rankFrequencies, setRankFrequencies] = useState<Record<string, number>>({})
+  const [loadingRanks, setLoadingRanks] = useState(false)
+  const [selectedRank, setSelectedRank] = useState<string | null>(null)
+  const [rankTaxons, setRankTaxons] = useState<TaxonRecord[]>([])
+  const [loadingTaxons, setLoadingTaxons] = useState(false)
+  const [loadingMoreTaxons, setLoadingMoreTaxons] = useState(false)
+  const [hasMoreTaxons, setHasMoreTaxons] = useState(false)
+  const [taxonsOffset, setTaxonsOffset] = useState(0)
+  const [totalTaxons, setTotalTaxons] = useState(0)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const observerTargetRef = useRef<HTMLDivElement>(null)
+  const quickSearchModels = useMemo(
+    () => [
+      createOrganismSearchModel(5),
+      createTaxonSearchModel(5, { requireChildren: true }),
+      createAssemblySearchModel(5),
+    ],
+    []
+  )
 
-  // Filter options with counts
+  // Tree rank selection (separate from rank section)
+  const [treeSelectedRank, setTreeSelectedRank] = useState<string | null>(null)
+  const [treeRankRoots, setTreeRankRoots] = useState<TaxonRecord[]>([])
+  const [loadingTreeRankRoots, setLoadingTreeRankRoots] = useState(false)
+  const [treeRankRootsOffset, setTreeRankRootsOffset] = useState(0)
+  const [hasMoreTreeRankRoots, setHasMoreTreeRankRoots] = useState(false)
+  const [totalTreeRankRoots, setTotalTreeRankRoots] = useState(0)
+
+  // Assembly filters - lazy loaded
+  const [assemblyLevelOptions, setAssemblyLevelOptions] = useState<Record<string, number>>({})
+  const [assemblyStatusOptions, setAssemblyStatusOptions] = useState<Record<string, number>>({})
+  const [refseqCategoryOptions, setRefseqCategoryOptions] = useState<Record<string, number>>({})
+  const [assemblyFiltersLoaded, setAssemblyFiltersLoaded] = useState(false)
+  const [loadingAssemblyFilters, setLoadingAssemblyFilters] = useState(false)
+
+  // Metadata filters - lazy loaded
   const [biotypeOptions, setBiotypeOptions] = useState<Record<string, number>>({})
   const [featureTypeOptions, setFeatureTypeOptions] = useState<Record<string, number>>({})
   const [pipelineOptions, setPipelineOptions] = useState<Record<string, number>>({})
   const [providerOptions, setProviderOptions] = useState<Record<string, number>>({})
-  const [sourceOptions, setSourceOptions] = useState<Record<string, number>>({})
-  const [assemblyLevelOptions, setAssemblyLevelOptions] = useState<Record<string, number>>({})
-  const [assemblyStatusOptions, setAssemblyStatusOptions] = useState<Record<string, number>>({})
-  const [refseqCategoryOptions, setRefseqCategoryOptions] = useState<Record<string, number>>({})
-
-  // Track which sections have been loaded
-  const [loadedSections, setLoadedSections] = useState<Set<string>>(new Set())
-  // Track which section is currently loading
+  const [databaseSourcesOptions, setDatabaseSourcesOptions] = useState<Record<string, number>>({})
+  const [featureSourceOptions, setFeatureSourceOptions] = useState<Record<string, number>>({})
+  const [gffSummaryAccordionValue, setGffSummaryAccordionValue] = usePersistentState<string | null>("annotations-sidebar:gff-summary-open", null)
+  const [gffSourceAccordionValue, setGffSourceAccordionValue] = usePersistentState<string | null>("annotations-sidebar:gff-source-open", null)
   const [loadingSection, setLoadingSection] = useState<string | null>(null)
-
-  // Accordion state for metadata tab
-  const [metadataAccordionValue, setMetadataAccordionValue] = useState<string | undefined>(undefined)
-  // Accordion state for assembly tab
-  const [assemblyAccordionValue, setAssemblyAccordionValue] = useState<string | undefined>(undefined)
-  // Expanded nodes for taxonomic tree
-  const [expandedTaxonNodes, setExpandedTaxonNodes] = useState<Set<string>>(new Set())
-
-  // Browse assemblies state from store
-  const {
-    assemblies: browseAssembliesList,
-    total: browseAssembliesTotal,
-    loading: browseAssembliesLoading,
-    page: browseAssembliesPage,
-    itemsPerPage: browseAssembliesItemsPerPage,
-    sortBy: browseAssembliesSortBy,
-    sortOrder: browseAssembliesSortOrder,
-  } = browseAssemblies
-
-  // Search queries for filter sections (keyed by section key)
   const [filterSectionSearchQueries, setFilterSectionSearchQueries] = useState<Record<string, string>>({})
+  const [isTaxonomySectionOpen, setIsTaxonomySectionOpen] = usePersistentState<boolean>("annotations-sidebar:taxonomy-open", false)
+  const [isAssemblySectionOpen, setIsAssemblySectionOpen] = usePersistentState<boolean>("annotations-sidebar:assemblies-open", false)
 
-  // Info modal state
+  const filterOptionSetters = useMemo<Record<string, (data: Record<string, number>) => void>>(
+    () => ({
+      'biotype': setBiotypeOptions,
+      'feature-types': setFeatureTypeOptions,
+      'feature-sources': setFeatureSourceOptions,
+      'pipelines': setPipelineOptions,
+      'providers': setProviderOptions,
+      'database-sources': setDatabaseSourcesOptions,
+      'assembly-levels': setAssemblyLevelOptions,
+      'assembly-statuses': setAssemblyStatusOptions,
+      'refseq-categories': setRefseqCategoryOptions
+    }),
+    [
+      setBiotypeOptions,
+      setFeatureTypeOptions,
+      setFeatureSourceOptions,
+      setPipelineOptions,
+      setProviderOptions,
+      setDatabaseSourcesOptions,
+      setAssemblyLevelOptions,
+      setAssemblyStatusOptions,
+      setRefseqCategoryOptions
+    ]
+  )
+
+  // Info modal
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
 
-  // Build filter params for API calls
-  const buildFilterParams = () => {
-    const params = buildAnnotationsParams()
+  // Cache for filter options to avoid redundant API calls
+  const filterCacheRef = useRef<Map<string, { data: Record<string, number>, timestamp: number }>>(new Map())
+  const CACHE_TTL = 30000 // 30 seconds
 
-    // Apply most recent per species filter to options as well
-    if (mostRecentPerSpecies) {
-      params.latest_release_by = 'organism'
-    }
+  // Build params for filter fetching
+  const buildFilterParams = useCallback((excludeField?: string) => {
+    const params: Record<string, any> = {}
 
-    // Add current filters to get accurate counts
-    if (selectedTaxids.length > 0) {
-      params.taxids = selectedTaxids.join(',')
+    if (selectedTaxons.length > 0) {
+      params.taxids = selectedTaxons.map(t => t.taxid).join(',')
     }
-    if (selectedAssemblyAccessions.length > 0) {
-      params.assembly_accessions = selectedAssemblyAccessions.join(',')
+    if (selectedAssemblies.length > 0) {
+      params.assembly_accessions = selectedAssemblies.map(a => a.assembly_accession).join(',')
+    }
+    if (selectedAssemblyLevels.length > 0) {
+      params.assembly_levels = selectedAssemblyLevels.join(',')
+    }
+    if (selectedAssemblyStatuses.length > 0) {
+      params.assembly_statuses = selectedAssemblyStatuses.join(',')
+    }
+    if (onlyRefGenomes) {
+      params.refseq_categories = 'reference genome'
     }
     if (biotypes.length > 0) {
       params.biotypes = biotypes.join(',')
@@ -142,850 +361,637 @@ export function AnnotationsSidebarFilters({
     if (featureTypes.length > 0) {
       params.feature_types = featureTypes.join(',')
     }
+    if (featureSources.length > 0) {
+      params.feature_sources = featureSources.join(',')
+    }
     if (pipelines.length > 0) {
       params.pipelines = pipelines.join(',')
     }
     if (providers.length > 0) {
       params.providers = providers.join(',')
     }
-    if (source && source !== "all") {
-      params.db_sources = source
+    if (databaseSources.length > 0) {
+      params.db_sources = databaseSources.join(',')
+    }
+
+    // Exclude the field being fetched to avoid circular dependency
+    if (excludeField) {
+      const paramToExclude = FILTER_PARAM_EXCLUDE_MAP[excludeField]
+      if (paramToExclude) {
+        delete params[paramToExclude]
+      }
     }
 
     return params
-  }
+  }, [
+    selectedTaxons,
+    selectedAssemblies,
+    selectedAssemblyLevels,
+    selectedAssemblyStatuses,
+    onlyRefGenomes,
+    biotypes,
+    featureTypes,
+    featureSources,
+    pipelines,
+    providers,
+    databaseSources
+  ])
 
-  // Build assembly params for assembly metadata frequencies
-  const buildAssemblyParams = () => {
-    const assemblyParams: Record<string, any> = {}
-    if (selectedTaxids.length > 0) {
-      assemblyParams.taxids = selectedTaxids.join(',')
-    }
-    if (selectedAssemblyAccessions.length > 0) {
-      assemblyParams.assembly_accessions = selectedAssemblyAccessions.join(',')
-    }
-    return assemblyParams
-  }
+  // Track pending loads to prevent duplicate requests
+  const pendingLoadsRef = useRef<Set<string>>(new Set())
 
-  // Lazy load filter options when accordion section is opened
-  // Always fetches with current filter values to ensure data is up-to-date
-  const loadFilterOptions = async (field: string, type: 'annotation' | 'assembly') => {
+  // Debounce filter reloads when parent filters change
+  const reloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const loadFilterOptions = useCallback(async (field: string, type: 'annotation' | 'assembly') => {
+    // Check cache first
+    const cacheKey = `${field}-${type}-${JSON.stringify(buildFilterParams(field))}`
+    const cached = filterCacheRef.current.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      filterOptionSetters[field]?.(cached.data)
+      return
+    }
+
+    // Prevent duplicate requests
+    if (pendingLoadsRef.current.has(cacheKey)) return
+    pendingLoadsRef.current.add(cacheKey)
+
     setLoadingSection(field)
     try {
-      const params = buildFilterParams()
-      const assemblyParams = buildAssemblyParams()
+      const params = buildFilterParams(field)
+      const apiFieldName = FILTER_FIELD_NAME_MAP[field] || field
 
       let result: Record<string, number> = {}
-
       if (type === 'annotation') {
-        // Map field names to API field names
-        const fieldMap: Record<string, string> = {
-          'biotypes': 'biotype',
-          'feature-types': 'feature_type',
-          'pipelines': 'pipeline',
-          'providers': 'provider',
-          'sources': 'database'
-        }
-        const apiField = fieldMap[field] || field
-        result = await getAnnotationsFrequencies(apiField, params).catch(() => ({}))
-      } else if (type === 'assembly') {
-        const fieldMap: Record<string, string> = {
-          'assembly-levels': 'assembly_level',
-          'assembly-statuses': 'assembly_status',
-          'refseq-categories': 'refseq_category'
-        }
-        const apiField = fieldMap[field] || field
-        result = await getAssembliesStats(assemblyParams, apiField).catch(() => ({}))
+        result = await getAnnotationsFrequencies(apiFieldName, params).catch(() => ({}))
+      } else {
+        result = await getAssembliesStats(params, apiFieldName).catch(() => ({}))
       }
 
-      // Update the appropriate state
-      switch (field) {
-        case 'biotypes':
-          setBiotypeOptions(result)
-          break
-        case 'feature-types':
-          setFeatureTypeOptions(result)
-          break
-        case 'pipelines':
-          setPipelineOptions(result)
-          break
-        case 'providers':
-          setProviderOptions(result)
-          break
-        case 'sources':
-          setSourceOptions(result)
-          break
-        case 'assembly-levels':
-          setAssemblyLevelOptions(result)
-          break
-        case 'assembly-statuses':
-          setAssemblyStatusOptions(result)
-          break
-        case 'refseq-categories':
-          setRefseqCategoryOptions(result)
-          break
-      }
+      // Cache the result
+      filterCacheRef.current.set(cacheKey, { data: result, timestamp: Date.now() })
 
-      // Mark section as loaded
-      setLoadedSections(prev => new Set(prev).add(field))
+      // Update state - only update if we got results (don't clear existing options)
+      if (Object.keys(result).length > 0) {
+        filterOptionSetters[field]?.(result)
+      }
     } catch (error) {
       console.error(`Error fetching filter options for ${field}:`, error)
     } finally {
       setLoadingSection(null)
+      pendingLoadsRef.current.delete(cacheKey)
     }
-  }
+  }, [buildFilterParams, filterOptionSetters])
 
-  // Handle accordion value change and trigger lazy loading
-  const handleMetadataAccordionChange = (value: string | undefined) => {
-    // Clear search query for the previously open section when closing
-    if (!value && metadataAccordionValue) {
+  // Load assembly filters once on mount (static, no parameters)
+  useEffect(() => {
+    if (!assemblyFiltersLoaded && !loadingAssemblyFilters) {
+      setLoadingAssemblyFilters(true)
+
+      // Fetch without any filter parameters (static frequencies)
+      Promise.all([
+        getAssembliesStats({}, 'assembly_level').catch(() => ({})),
+        getAssembliesStats({}, 'assembly_status').catch(() => ({})),
+        getAssembliesStats({}, 'refseq_category').catch(() => ({}))
+      ]).then(([levels, statuses, refseq]) => {
+        setAssemblyLevelOptions(levels || {})
+        setAssemblyStatusOptions(statuses || {})
+        setRefseqCategoryOptions(refseq || {})
+        setAssemblyFiltersLoaded(true)
+      }).catch((error) => {
+        console.error('Error loading assembly filters:', error)
+        setAssemblyFiltersLoaded(true)
+      }).finally(() => {
+        setLoadingAssemblyFilters(false)
+      })
+    }
+  }, [assemblyFiltersLoaded, loadingAssemblyFilters])
+
+  // Only reload metadata filters when parent filters (taxons/assemblies) change
+  // NOT when metadata filters themselves change, and NOT when assembly filter properties change
+  useEffect(() => {
+    const openSection = gffSummaryAccordionValue || gffSourceAccordionValue
+    if (!openSection) return
+
+    if (reloadTimeoutRef.current) {
+      clearTimeout(reloadTimeoutRef.current)
+    }
+
+    reloadTimeoutRef.current = setTimeout(() => {
+      // Clear cache for the open metadata section
+      filterCacheRef.current.forEach((_, key) => {
+        if (key === openSection) {
+          filterCacheRef.current.delete(key)
+        }
+      })
+
+      // Reload the open metadata section
+      loadFilterOptions(openSection, 'annotation')
+    }, 500) // 500ms debounce
+
+    return () => {
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current)
+      }
+    }
+    // Only depend on taxons and assemblies (the actual records), NOT on filter properties or metadata filters
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTaxons, selectedAssemblies, gffSummaryAccordionValue, gffSourceAccordionValue, loadFilterOptions])
+
+  // Load rank frequencies
+  useEffect(() => {
+    if (Object.keys(rankFrequencies).length === 0 && !loadingRanks) {
+      setLoadingRanks(true)
+      getTaxonRankFrequencies()
+        .then(data => setRankFrequencies(data || {}))
+        .catch(() => setRankFrequencies({}))
+        .finally(() => setLoadingRanks(false))
+    }
+  }, [rankFrequencies, loadingRanks])
+
+  // Load taxons when rank is selected
+  useEffect(() => {
+    if (!selectedRank) {
+      setRankTaxons([])
+      setHasMoreTaxons(false)
+      setTaxonsOffset(0)
+      setTotalTaxons(0)
+      return
+    }
+
+    setLoadingTaxons(true)
+    setTaxonsOffset(0)
+    const limit = 50
+
+    listTaxons({ rank: selectedRank, limit, offset: 0, ...TAXON_SORT_PARAMS })
+      .then(response => {
+        const results = (response as any)?.results || []
+        const total = (response as any)?.total || 0
+        setRankTaxons(results)
+        setTotalTaxons(total)
+        setHasMoreTaxons(results.length < total)
+        setTaxonsOffset(results.length)
+      })
+      .catch(error => {
+        console.error("Error loading taxons by rank:", error)
+        setRankTaxons([])
+        setHasMoreTaxons(false)
+        setTotalTaxons(0)
+      })
+      .finally(() => setLoadingTaxons(false))
+  }, [selectedRank])
+
+  // Load more taxons for infinite scroll
+  const loadMoreTaxons = useCallback(async () => {
+    if (!selectedRank || loadingMoreTaxons || !hasMoreTaxons) return
+
+    setLoadingMoreTaxons(true)
+    const limit = 50
+
+    try {
+      const response = await listTaxons({ rank: selectedRank, limit, offset: taxonsOffset, ...TAXON_SORT_PARAMS })
+      const results = (response as any)?.results || []
+      const total = (response as any)?.total || 0
+
+      setRankTaxons(prev => [...prev, ...results])
+      setTaxonsOffset(prev => prev + results.length)
+      setHasMoreTaxons(taxonsOffset + results.length < total)
+    } catch (error) {
+      console.error("Error loading more taxons:", error)
+    } finally {
+      setLoadingMoreTaxons(false)
+    }
+  }, [selectedRank, loadingMoreTaxons, hasMoreTaxons, taxonsOffset])
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (!hasMoreTaxons || !selectedRank) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMoreTaxons && !loadingMoreTaxons) {
+          loadMoreTaxons()
+        }
+      },
+      {
+        root: scrollContainerRef.current,
+        rootMargin: '50px',
+        threshold: 0.1
+      }
+    )
+
+    const currentTarget = observerTargetRef.current
+    if (currentTarget) {
+      observer.observe(currentTarget)
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget)
+      }
+    }
+  }, [hasMoreTaxons, loadingMoreTaxons, loadMoreTaxons, selectedRank])
+
+  // Fetch taxons by rank for tree when tree rank is selected
+  useEffect(() => {
+    if (!treeSelectedRank) {
+      setTreeRankRoots([])
+      setTreeRankRootsOffset(0)
+      setHasMoreTreeRankRoots(false)
+      setTotalTreeRankRoots(0)
+      return
+    }
+
+    setLoadingTreeRankRoots(true)
+    setTreeRankRootsOffset(0)
+    const limit = 50
+
+    listTaxons({ rank: treeSelectedRank, limit, offset: 0, ...TAXON_SORT_PARAMS })
+      .then(response => {
+        const results = (response as any)?.results || []
+        const total = (response as any)?.total || 0
+        setTreeRankRoots(results)
+        setTotalTreeRankRoots(total)
+        setHasMoreTreeRankRoots(results.length < total)
+        setTreeRankRootsOffset(results.length)
+      })
+      .catch(error => {
+        console.error("Error loading taxons by rank for tree:", error)
+        setTreeRankRoots([])
+        setHasMoreTreeRankRoots(false)
+        setTotalTreeRankRoots(0)
+      })
+      .finally(() => setLoadingTreeRankRoots(false))
+  }, [treeSelectedRank])
+
+  // Load more tree rank roots for infinite scroll
+  const loadMoreTreeRankRoots = useCallback(async () => {
+    if (!treeSelectedRank || loadingTreeRankRoots || !hasMoreTreeRankRoots) return
+
+    setLoadingTreeRankRoots(true)
+    const limit = 50
+
+    try {
+      const response = await listTaxons({ rank: treeSelectedRank, limit, offset: treeRankRootsOffset, ...TAXON_SORT_PARAMS })
+      const results = (response as any)?.results || []
+      const total = (response as any)?.total || 0
+
+      // Deduplicate by taxid
+      setTreeRankRoots(prev => {
+        const existingTaxids = new Set(prev.map(r => r.taxid))
+        const uniqueNew = results.filter((r: TaxonRecord) => !existingTaxids.has(r.taxid))
+        return [...prev, ...uniqueNew]
+      })
+
+      setTreeRankRootsOffset(prev => prev + results.length)
+      setHasMoreTreeRankRoots(treeRankRootsOffset + results.length < total)
+    } catch (error) {
+      console.error("Error loading more taxons by rank for tree:", error)
+    } finally {
+      setLoadingTreeRankRoots(false)
+    }
+  }, [treeSelectedRank, loadingTreeRankRoots, hasMoreTreeRankRoots, treeRankRootsOffset])
+
+  const handleGffSummaryAccordionChange = (value?: string) => {
+    const nextValue = value ?? null
+
+    if (!nextValue && gffSummaryAccordionValue) {
       setFilterSectionSearchQueries(prev => {
         const updated = { ...prev }
-        delete updated[metadataAccordionValue]
+        delete updated[gffSummaryAccordionValue]
         return updated
       })
     }
-    setMetadataAccordionValue(value)
-    if (value) {
-      // Always fetch with current filter values when opening a section
-      loadFilterOptions(value, 'annotation')
+
+    setGffSummaryAccordionValue(nextValue)
+    if (nextValue) {
+      loadFilterOptions(nextValue, 'annotation')
     }
   }
 
-  const handleAssemblyAccordionChange = (value: string | undefined) => {
-    // Clear search query for the previously open section when closing
-    if (!value && assemblyAccordionValue) {
+  const summaryFilterSections = useMemo(
+    () => [
+      {
+        key: "biotype",
+        title: "Biotypes",
+        description: "Biological types (e.g., protein_coding, lncRNA)",
+        options: biotypeOptions,
+        selected: biotypes,
+        onChange: setBiotypes
+      },
+      {
+        key: "feature-types",
+        title: "Feature Types",
+        description: "Genomic feature types (e.g., gene, transcript, exon)",
+        options: featureTypeOptions,
+        selected: featureTypes,
+        onChange: setFeatureTypes
+      },
+    ],
+    [biotypeOptions, biotypes, setBiotypes, featureTypeOptions, featureTypes, setFeatureTypes]
+  )
+
+  const sourceMetadataSections = useMemo(
+    () => [
+      {
+        key: "pipelines",
+        title: "Pipelines",
+        description: "Annotation pipelines used to generate the annotations",
+        options: pipelineOptions,
+        selected: pipelines,
+        onChange: setPipelines
+      },
+      {
+        key: "providers",
+        title: "Providers",
+        description: "Data providers that supplied the annotations",
+        options: providerOptions,
+        selected: providers,
+        onChange: setProviders
+      },
+      {
+        key: "database-sources",
+        title: "Database Sources",
+        description: "Source databases (e.g., RefSeq, Ensembl, GenBank)",
+        options: databaseSourcesOptions,
+        selected: databaseSources,
+        onChange: setDatabaseSources
+      }
+    ],
+    [pipelineOptions, pipelines, setPipelines, providerOptions, providers, setProviders, databaseSourcesOptions, databaseSources, setDatabaseSources]
+  )
+
+  const handleGffSourceAccordionChange = (value?: string) => {
+    const nextValue = value ?? null
+
+    if (!nextValue && gffSourceAccordionValue) {
       setFilterSectionSearchQueries(prev => {
         const updated = { ...prev }
-        delete updated[assemblyAccordionValue]
+        delete updated[gffSourceAccordionValue]
         return updated
       })
     }
-    setAssemblyAccordionValue(value)
-    if (value) {
-      // Always fetch with current filter values when opening a section
-      loadFilterOptions(value, 'assembly')
+
+    setGffSourceAccordionValue(nextValue)
+    if (nextValue) {
+      loadFilterOptions(nextValue, 'annotation')
     }
   }
 
-  // Map sections to their corresponding filter state
-  const getSectionFilterKey = (section: string): string | null => {
-    const sectionFilterMap: Record<string, string> = {
-      'biotypes': 'biotypes',
-      'feature-types': 'featureTypes',
-      'pipelines': 'pipelines',
-      'providers': 'providers',
-      'sources': 'source',
-      'assembly-levels': 'selectedAssemblyLevels',
-      'assembly-statuses': 'selectedAssemblyStatuses',
-      'refseq-categories': 'selectedRefseqCategories'
-    }
-    return sectionFilterMap[section] || null
-  }
+  const sortedRanks = sortRanks(rankFrequencies)
 
-  // Track previous filter values to detect which filter changed
-  const prevFiltersRef = useRef({
-    selectedTaxids: selectedTaxids,
-    selectedAssemblyAccessions: selectedAssemblyAccessions,
-    biotypes: biotypes,
-    featureTypes: featureTypes,
-    pipelines: pipelines,
-    providers: providers,
-    source: source,
-    selectedAssemblyLevels: selectedAssemblyLevels,
-    selectedAssemblyStatuses: selectedAssemblyStatuses,
-    selectedRefseqCategories: selectedRefseqCategories,
-    mostRecentPerSpecies: mostRecentPerSpecies
-  })
 
-  // Track if this is the first render
-  const isFirstRender = useRef(true)
-
-  // Reload only the currently open section when filters change (but not if the change is to that section's own filter)
-  useEffect(() => {
-    // Determine which filters changed
-    const currentFilters = {
-      selectedTaxids,
-      selectedAssemblyAccessions,
-      biotypes,
-      featureTypes,
-      pipelines,
-      providers,
-      source,
-      selectedAssemblyLevels,
-      selectedAssemblyStatuses,
-      selectedRefseqCategories,
-      mostRecentPerSpecies
-    }
-
-    const changedFilters = Object.keys(currentFilters).filter(key => {
-      const current = currentFilters[key as keyof typeof currentFilters]
-      const previous = prevFiltersRef.current[key as keyof typeof prevFiltersRef.current]
-      if (Array.isArray(current) && Array.isArray(previous)) {
-        return JSON.stringify(current) !== JSON.stringify(previous)
-      }
-      return current !== previous
-    })
-
-    // Update ref for next comparison
-    prevFiltersRef.current = currentFilters
-
-    // Skip reload on first render
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-
-    // If no filters changed, don't reload
-    if (changedFilters.length === 0) {
-      return
-    }
-
-    // Reload metadata section if one is open, but NOT if the user is only selecting values in that section
-    if (metadataAccordionValue) {
-      const sectionFilterKey = getSectionFilterKey(metadataAccordionValue)
-
-      // Don't reload if ONLY this section's filter changed (user is selecting values in this section)
-      // Otherwise, reload to update counts based on other filter changes
-      const onlyThisSectionChanged = sectionFilterKey &&
-        changedFilters.length === 1 &&
-        changedFilters[0] === sectionFilterKey
-
-      if (!onlyThisSectionChanged) {
-        loadFilterOptions(metadataAccordionValue, 'annotation')
-      }
-    }
-
-    // Reload assembly section if one is open, but NOT if the user is only selecting values in that section
-    if (assemblyAccordionValue) {
-      const sectionFilterKey = getSectionFilterKey(assemblyAccordionValue)
-
-      // Don't reload if ONLY this section's filter changed (user is selecting values in this section)
-      // Otherwise, reload to update counts based on other filter changes
-      const onlyThisSectionChanged = sectionFilterKey &&
-        changedFilters.length === 1 &&
-        changedFilters[0] === sectionFilterKey
-
-      if (!onlyThisSectionChanged) {
-        loadFilterOptions(assemblyAccordionValue, 'assembly')
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTaxids, selectedAssemblyAccessions, biotypes, featureTypes, pipelines, providers, source, selectedAssemblyLevels, selectedAssemblyStatuses, selectedRefseqCategories, mostRecentPerSpecies, metadataAccordionValue, assemblyAccordionValue])
-
-  // Search taxons
-  useEffect(() => {
-    let cancelled = false
-    const timeoutId = setTimeout(async () => {
-      if (taxonSearchQuery.trim().length < 2) {
-        setTaxonSearchResults([])
-        return
-      }
-
-      setTaxonSearchLoading(true)
-      try {
-        const results = await listTaxons({
-          filter: taxonSearchQuery,
-          limit: 10
-        })
-        if (!cancelled) {
-          setTaxonSearchResults(results.results || [])
-        }
-      } catch (error) {
-        console.error("Error searching taxons:", error)
-        if (!cancelled) {
-          setTaxonSearchResults([])
-        }
-      } finally {
-        if (!cancelled) {
-          setTaxonSearchLoading(false)
-        }
-      }
-    }, 300)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timeoutId)
-    }
-  }, [taxonSearchQuery])
-
-  // Search assemblies
-  useEffect(() => {
-    let cancelled = false
-    const timeoutId = setTimeout(async () => {
-      if (assemblySearchQuery.trim().length < 2) {
-        setAssemblySearchResults([])
-        return
-      }
-
-      setAssemblySearchLoading(true)
-      try {
-        const results = await listAssemblies({
-          filter: assemblySearchQuery,
-          limit: 10
-        })
-        if (!cancelled) {
-          setAssemblySearchResults(results.results || [])
-        }
-      } catch (error) {
-        console.error("Error searching assemblies:", error)
-        if (!cancelled) {
-          setAssemblySearchResults([])
-        }
-      } finally {
-        if (!cancelled) {
-          setAssemblySearchLoading(false)
-        }
-      }
-    }, 300)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timeoutId)
-    }
-  }, [assemblySearchQuery])
-
-  // Load selected taxons
-  useEffect(() => {
-    async function loadSelectedTaxons() {
-      if (selectedTaxids.length === 0) {
-        setSelectedTaxons([])
-        return
-      }
-
-      try {
-        const taxons = await Promise.all(
-          selectedTaxids.map(taxid =>
-            getTaxon(taxid).catch(() => null)
-          )
-        )
-        setSelectedTaxons(taxons.filter((t): t is TaxonRecord => t !== null))
-      } catch (error) {
-        console.error("Error loading selected taxons:", error)
-      }
-    }
-    loadSelectedTaxons()
-  }, [selectedTaxids])
-
-  // Load selected assemblies
-  useEffect(() => {
-    async function loadSelectedAssemblies() {
-      if (selectedAssemblyAccessions.length === 0) {
-        setSelectedAssemblies([])
-        return
-      }
-
-      try {
-        const assemblies = await Promise.all(
-          selectedAssemblyAccessions.map(accession =>
-            getAssembly(accession).catch(() => null)
-          )
-        )
-        setSelectedAssemblies(assemblies.filter((a): a is AssemblyRecord => a !== null))
-      } catch (error) {
-        console.error("Error loading selected assemblies:", error)
-      }
-    }
-    loadSelectedAssemblies()
-  }, [selectedAssemblyAccessions])
-
-  // Track the last assemblies fetch to prevent duplicates
-  const lastAssembliesFetchRef = useRef<string | null>(null)
-  
-  // Reset page when filters change (but not when page changes)
-  // Fetch browse assemblies only when assembly tab is active
-  useEffect(() => {
-    // Only fetch when assembly tab is active
-    if (activeTab !== "assembly") {
-      return
-    }
-    
-    // Create a unique key for this fetch based on all relevant parameters
-    const fetchKey = JSON.stringify({
-      selectedTaxids,
-      selectedAssemblyLevels,
-      selectedAssemblyStatuses,
-      selectedRefseqCategories,
-      browseAssembliesPage,
-      browseAssembliesSortBy,
-      browseAssembliesSortOrder,
-    })
-    
-    // Skip if this exact fetch was already initiated
-    if (lastAssembliesFetchRef.current === fetchKey) {
-      return
-    }
-    
-    lastAssembliesFetchRef.current = fetchKey
-    
-    // Fetch assemblies (store's fetchBrowseAssemblies handles loading state and prevents duplicate fetches)
-    fetchBrowseAssemblies()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    activeTab, // Add activeTab as a dependency
-    selectedTaxids,
-    selectedAssemblyLevels,
-    selectedAssemblyStatuses,
-    selectedRefseqCategories,
-    browseAssembliesPage,
-    browseAssembliesSortBy,
-    browseAssembliesSortOrder,
-    // Note: fetchBrowseAssemblies is a stable Zustand function
-    // We exclude it from deps to prevent unnecessary re-runs, but it's safe to use
-  ])
-
-  const handleTaxonSelect = (taxon: TaxonRecord) => {
-    if (!selectedTaxids.includes(taxon.taxid)) {
-      setSelectedTaxids([...selectedTaxids, taxon.taxid])
-    }
-    setTaxonSearchQuery("")
-    setTaxonSearchResults([])
-  }
-
-  const handleTaxonRemove = (taxid: string) => {
-    setSelectedTaxids(selectedTaxids.filter(id => id !== taxid))
-  }
-
-  const handleTaxonToggle = (taxid: string) => {
-    if (selectedTaxids.includes(taxid)) {
-      setSelectedTaxids(selectedTaxids.filter(id => id !== taxid))
+  const handleTaxonToggle = useCallback((taxon: TaxonRecord) => {
+    if (selectedTaxons.some(t => t.taxid === taxon.taxid)) {
+      setSelectedTaxons(selectedTaxons.filter(t => t.taxid !== taxon.taxid))
     } else {
-      setSelectedTaxids([...selectedTaxids, taxid])
+      setSelectedTaxons([...selectedTaxons, taxon])
     }
-  }
+  }, [selectedTaxons, setSelectedTaxons])
 
-  const handleAssemblySelect = (assembly: AssemblyRecord) => {
-    const accession = assembly.assembly_accession
-    if (selectedAssemblyAccessions.includes(accession)) {
-      // Deselect if already selected
-      setSelectedAssemblyAccessions(selectedAssemblyAccessions.filter(a => a !== accession))
-    } else {
-      // Select if not selected
-      setSelectedAssemblyAccessions([...selectedAssemblyAccessions, accession])
-    }
-    setAssemblySearchQuery("")
-    setAssemblySearchResults([])
-  }
-
-  const handleAssemblyRemove = (accession: string) => {
-    setSelectedAssemblyAccessions(selectedAssemblyAccessions.filter(acc => acc !== accession))
-  }
-
-  const handleCheckboxChange = (
-    value: string,
-    selected: string[],
-    onChange: (values: string[]) => void
-  ) => {
-    if (selected.includes(value)) {
-      onChange(selected.filter(v => v !== value))
-    } else {
-      onChange([...selected, value])
-    }
-  }
-
-  const hasActiveFilters = store.hasActiveFilters()
-
-  const renderFilterSection = (
-    title: string,
-    options: Record<string, number>,
-    selected: string[],
-    onChange: (values: string[]) => void,
-    key: string,
-    isLoading: boolean
-  ) => {
-    const sortedOptions = Object.entries(options)
-      .filter(([key]) => key !== 'no_value')
-      .sort((a, b) => b[1] - a[1])
-
-    const searchQuery = filterSectionSearchQueries[key] || ""
-    const filteredOptions = sortedOptions.filter(([option]) =>
-      option.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-
-    const showSearch = sortedOptions.length > 20
-
-    const handleSearchChange = (value: string) => {
-      setFilterSectionSearchQueries(prev => ({
-        ...prev,
-        [key]: value
-      }))
-    }
-
-    return (
-      <AccordionItem value={key} className="border-b">
-        <AccordionTrigger className="py-3 text-sm font-medium">
-          <div className="flex items-center justify-between w-full mr-2">
-            <span>{title}</span>
-            <div className="flex items-center gap-2">
-              {isLoading && (
-                <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              )}
-              {selected.length > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {selected.length}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </AccordionTrigger>
-        <AccordionContent>
-          {isLoading ? (
-            <div className="py-4 text-center text-sm text-muted-foreground">
-              Loading options...
-            </div>
-          ) : sortedOptions.length === 0 ? (
-            <div className="py-4 text-center text-sm text-muted-foreground">
-              No options available
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* Search bar - only show if more than 20 options */}
-              {showSearch && (
-                <div className="relative">
-                  <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search options..."
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="pl-8 h-8 text-xs"
-                  />
-                </div>
-              )}
-
-              {/* Options list */}
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {filteredOptions.length === 0 ? (
-                  <div className="py-4 text-center text-sm text-muted-foreground">
-                    No options match your search
-                  </div>
-                ) : (
-                  filteredOptions.map(([option, count]) => (
-                    <div key={option} className="flex items-center space-x-3 py-1">
-                      <Checkbox
-                        id={`${key}-${option}`}
-                        checked={selected.includes(option)}
-                        onCheckedChange={() => handleCheckboxChange(option, selected, onChange)}
-                      />
-                      <Label
-                        htmlFor={`${key}-${option}`}
-                        className="flex-1 text-sm cursor-pointer flex items-center justify-between"
-                      >
-                        <span className="flex-1">{option}</span>
-                        <span className="text-xs text-muted-foreground ml-2">
-                          {count.toLocaleString()}
-                        </span>
-                      </Label>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              {/* Show count of filtered results if search is active */}
-              {showSearch && searchQuery && (
-                <div className="text-xs text-muted-foreground pt-2 border-t">
-                  Showing {filteredOptions.length} of {sortedOptions.length} options
-                </div>
-              )}
-            </div>
-          )}
-        </AccordionContent>
-      </AccordionItem>
-    )
-  }
+  const handleQuickSearchSelect = useCallback(
+    async (result: CommonSearchResult<AssemblyRecord | TaxonRecord | OrganismRecord>) => {
+      if (result.modelKey === "assembly") {
+        const assembly = result.data as AssemblyRecord
+        if (!selectedAssemblies.find((a) => a.assembly_accession === assembly.assembly_accession)) {
+          setSelectedAssemblies([...selectedAssemblies, assembly])
+        }
+      }
+      else {
+        // map organism to taxon for filtering
+        const taxon = result.modelKey === "taxon" ? result.data as TaxonRecord : await getTaxon(result.data.taxid)
+        if (!selectedTaxons.find((t) => t.taxid === taxon.taxid)) {
+          setSelectedTaxons([...selectedTaxons, taxon])
+        }
+      }
+    },
+    [selectedAssemblies, selectedTaxons, setSelectedAssemblies, setSelectedTaxons]
+  )
 
   return (
     <>
       <div className="w-full border-r bg-background h-full flex flex-col">
-        {/* Header */}
-        <div className="space-y-0">
-          {/* Title Row */}
-          <div className="px-6 pt-6 pb-4 flex items-center justify-between">
-            <div className="flex items-center gap-3 flex-1">
-              <h2 className="text-2xl font-semibold flex items-center gap-2">
-                {onClose && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onClose}
-                    className="h-7 w-7 p-0 -ml-2"
-                    title="Close filters"
-                  >
-                    <FilterX className="h-4 w-4" />
-                  </Button>
-                )}
-                {!onClose && <FilterX className="h-4 w-4" />}
-                Filters
-              </h2>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsInfoModalOpen(true)}
-                className="h-7 w-7 p-0"
-                title="View guidelines"
-              >
-                <Info className="h-4 w-4" />
-              </Button>
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="h-7 text-xs"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="px-6 border-b border-border flex-shrink-0">
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-              <TabsList className="grid w-full grid-cols-3 h-9 bg-transparent p-0 gap-0">
-                <TabsTrigger 
-                  value="taxon" 
-                  className="gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground hover:text-foreground hover:bg-transparent"
-                >
-                  <Network className="h-4 w-4" />
-                  Taxon
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="assembly" 
-                  className="gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground hover:text-foreground hover:bg-transparent"
-                >
-                  <Database className="h-4 w-4" />
-                  Assembly
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="metadata" 
-                  className="gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none data-[state=inactive]:text-muted-foreground hover:text-foreground hover:bg-transparent"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Metadata
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        </div>
-
+        <QuickSearchSection
+          models={quickSearchModels}
+          onSelect={handleQuickSearchSelect}
+        />
         {/* Content */}
         <div className="flex-1 overflow-y-auto">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
-          {/* Taxon Tab */}
-          <TabsContent value="taxon" className="mt-0 px-6 py-6">
-            <TaxonTab
-              selectedTaxids={selectedTaxids}
-              taxonSearchQuery={taxonSearchQuery}
-              setTaxonSearchQuery={setTaxonSearchQuery}
-              taxonSearchResults={taxonSearchResults}
-              taxonSearchLoading={taxonSearchLoading}
-              expandedTaxonNodes={expandedTaxonNodes}
-              setExpandedTaxonNodes={setExpandedTaxonNodes}
-              onTaxonSelect={handleTaxonSelect}
-              onTaxonToggle={handleTaxonToggle}
-            />
-          </TabsContent>
 
-          {/* Assembly Tab */}
-          <TabsContent value="assembly" className="mt-0 px-6 py-6">
-            <AssemblyTab
-              selectedAssemblyAccessions={selectedAssemblyAccessions}
-              onAssemblyAccessionsChange={setSelectedAssemblyAccessions}
-              selectedAssemblyLevels={selectedAssemblyLevels}
-              onAssemblyLevelsChange={setSelectedAssemblyLevels}
-              selectedAssemblyStatuses={selectedAssemblyStatuses}
-              onAssemblyStatusesChange={setSelectedAssemblyStatuses}
-              selectedRefseqCategories={selectedRefseqCategories}
-              onRefseqCategoriesChange={setSelectedRefseqCategories}
-              assemblyLevelOptions={assemblyLevelOptions}
-              assemblyStatusOptions={assemblyStatusOptions}
-              refseqCategoryOptions={refseqCategoryOptions}
-              loadingSection={loadingSection}
-              assemblyAccordionValue={assemblyAccordionValue}
-              onAssemblyAccordionChange={handleAssemblyAccordionChange}
-              renderFilterSection={renderFilterSection}
-              assemblySearchQuery={assemblySearchQuery}
-              setAssemblySearchQuery={setAssemblySearchQuery}
-              assemblySearchResults={assemblySearchResults}
-              assemblySearchLoading={assemblySearchLoading}
-              onAssemblySelect={handleAssemblySelect}
-              browseAssemblies={browseAssembliesList}
-              browseAssembliesLoading={browseAssembliesLoading}
-              browseAssembliesTotal={browseAssembliesTotal}
-              browseAssembliesPage={browseAssembliesPage}
-              setBrowseAssembliesPage={(page) => {
-                const newPage = typeof page === 'function' ? page(browseAssembliesPage) : page
-                setBrowseAssembliesPage(newPage)
-              }}
-              browseAssembliesSortBy={browseAssembliesSortBy}
-              setBrowseAssembliesSortBy={(sortBy) => setBrowseAssembliesSort(sortBy, browseAssembliesSortOrder)}
-              browseAssembliesSortOrder={browseAssembliesSortOrder}
-              setBrowseAssembliesSortOrder={(sortOrder) => setBrowseAssembliesSort(browseAssembliesSortBy, sortOrder)}
-              browseAssembliesItemsPerPage={browseAssembliesItemsPerPage}
-            />
-          </TabsContent>
+          {/* Taxonomy Section */}
+          <CollapsibleSection
+            title="Taxonomy"
+            description="Browse and select ranks or individual taxons."
+            isOpen={isTaxonomySectionOpen}
+            onToggle={() => setIsTaxonomySectionOpen((prev) => !prev)}
+            isLoading={loadingRanks && treeRankRoots.length === 0}
+          >
+            <div className="space-y-4">
+              {/* Rank Selection */}
+              <div className="flex items-center gap-3">
+                <Select
+                  value={treeSelectedRank || 'all'}
+                  onValueChange={(value) => setTreeSelectedRank(value === 'all' ? null : value)}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Filter by rank" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[200px] overflow-y-auto">
+                    <SelectItem value="all">Filter by rank</SelectItem>
+                    {sortedRanks.map(([rank, count]) => (
+                      <SelectItem key={rank} value={rank}>
+                        {formatRankLabel(rank)} ({count.toLocaleString()})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-          {/* Metadata Tab */}
-          <TabsContent value="metadata" className="mt-0 px-6 py-6">
-            <MetadataTab
-              biotypes={biotypes}
-              onBiotypesChange={setBiotypes}
-              featureTypes={featureTypes}
-              onFeatureTypesChange={setFeatureTypes}
-              pipelines={pipelines}
-              onPipelinesChange={setPipelines}
-              providers={providers}
-              onProvidersChange={setProviders}
-              source={source}
-              onSourceChange={setSource}
-              biotypeOptions={biotypeOptions}
-              featureTypeOptions={featureTypeOptions}
-              pipelineOptions={pipelineOptions}
-              providerOptions={providerOptions}
-              sourceOptions={sourceOptions}
-              loadingSection={loadingSection}
-              metadataAccordionValue={metadataAccordionValue}
-              onMetadataAccordionChange={handleMetadataAccordionChange}
-              renderFilterSection={renderFilterSection}
-            />
-          </TabsContent>
-        </Tabs>
+              {/* Tree Component */}
+              {loadingTreeRankRoots && treeRankRoots.length === 0 ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-xs text-muted-foreground">Loading taxons...</span>
+                </div>
+              ) : (
+                <CompactTaxonomicTree
+                  rootTaxid="2759"
+                  rankRoots={treeSelectedRank ? treeRankRoots : undefined}
+                  selectedTaxons={selectedTaxons}
+                  onTaxonToggle={handleTaxonToggle}
+                  maxHeight="350px"
+                  loadingRankRoots={loadingTreeRankRoots}
+                  hasMoreRankRoots={hasMoreTreeRankRoots}
+                  onLoadMore={loadMoreTreeRankRoots}
+                />
+              )}
+            </div>
+          </CollapsibleSection>
+
+          {/* Assembly Filters */}
+          <CollapsibleSection
+            title="Assemblies"
+            description="Limit annotations by assembly metadata."
+            isOpen={isAssemblySectionOpen}
+            onToggle={() => setIsAssemblySectionOpen((prev) => !prev)}
+            isLoading={loadingAssemblyFilters}
+          >
+            {loadingAssemblyFilters ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Reference Genomes */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold flex items-center gap-2">Reference genomes only</Label>
+                  <button
+                    onClick={() => setOnlyRefGenomes(!onlyRefGenomes)}
+                    className={cn(
+                      "relative inline-flex h-6 w-12 items-center rounded-full border transition-colors",
+                      onlyRefGenomes ? "bg-primary border-primary" : "bg-muted border-border"
+                    )}
+                    role="switch"
+                    aria-checked={onlyRefGenomes}
+                  >
+                    <span
+                      className={cn(
+                        "inline-block h-5 w-5 rounded-full bg-background shadow transition-transform",
+                        onlyRefGenomes ? "translate-x-6" : "translate-x-1"
+                      )}
+                    />
+                  </button>
+                </div>
+                {/* Assembly Levels */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold flex items-center gap-2">Assembly Levels</Label>
+                  <div className="space-y-3">
+                    {Object.keys(assemblyLevelOptions)
+                      .filter(k => k !== 'no_value')
+                      .sort()
+                      .map((level) => (
+                        <div key={level} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`assembly-level-${level}`}
+                            checked={selectedAssemblyLevels.includes(level)}
+                            onCheckedChange={() => {
+                              if (selectedAssemblyLevels.includes(level)) {
+                                setSelectedAssemblyLevels(selectedAssemblyLevels.filter(l => l !== level))
+                              } else {
+                                setSelectedAssemblyLevels([...selectedAssemblyLevels, level])
+                              }
+                            }}
+                          />
+                          <Label
+                            htmlFor={`assembly-level-${level}`}
+                            className="text-sm cursor-pointer"
+                          >
+                            {level}
+                          </Label>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Assembly Statuses */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-semibold flex items-center gap-2">Assembly Statuses</Label>
+                  <div className="space-y-3">
+                    {Object.keys(assemblyStatusOptions)
+                      .filter(k => k !== 'no_value')
+                      .sort()
+                      .map((status) => (
+                        <div key={status} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`assembly-status-${status}`}
+                            checked={selectedAssemblyStatuses.includes(status)}
+                            onCheckedChange={() => {
+                              if (selectedAssemblyStatuses.includes(status)) {
+                                setSelectedAssemblyStatuses(selectedAssemblyStatuses.filter(s => s !== status))
+                              } else {
+                                setSelectedAssemblyStatuses([...selectedAssemblyStatuses, status])
+                              }
+                            }}
+                          />
+                          <Label
+                            htmlFor={`assembly-status-${status}`}
+                            className="text-sm cursor-pointer"
+                          >
+                            {status}
+                          </Label>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </CollapsibleSection>
+
+          {sourceMetadataSections.map((section) => {
+            const isOpen = gffSourceAccordionValue === section.key
+            const isSectionLoading = loadingSection === section.key
+            return (
+              <CollapsibleSection
+                key={section.key}
+                title={section.title}
+                isOpen={isOpen}
+                description={section.description}
+                onToggle={() => handleGffSourceAccordionChange(isOpen ? undefined : section.key)}
+                isLoading={isSectionLoading}
+              >
+                <FilterAccordionSection
+                  title={section.title}
+                  description={section.description}
+                  options={section.options}
+                  selected={section.selected}
+                  onChange={section.onChange}
+                  isLoading={isSectionLoading}
+                  isOpen={isOpen}
+                  onToggle={() => handleGffSourceAccordionChange(isOpen ? undefined : section.key)}
+                  searchQuery={filterSectionSearchQueries[section.key] || ""}
+                  onSearchChange={(value) =>
+                    setFilterSectionSearchQueries((prev) => ({ ...prev, [section.key]: value }))
+                  }
+                  useExternalToggle
+                />
+              </CollapsibleSection>
+            )
+          })}
+          {summaryFilterSections.map((section) => {
+            const isOpen = gffSummaryAccordionValue === section.key
+            const isSectionLoading = loadingSection === section.key
+            return (
+              <CollapsibleSection
+                key={section.key}
+                title={section.title}
+                isOpen={isOpen}
+                description={section.description}
+                onToggle={() => handleGffSummaryAccordionChange(isOpen ? undefined : section.key)}
+                isLoading={isSectionLoading}
+              >
+                <FilterAccordionSection
+                  title={section.title}
+                  description={section.description}
+                  options={section.options}
+                  selected={section.selected}
+                  onChange={section.onChange}
+                  isLoading={isSectionLoading}
+                  isOpen={isOpen}
+                  onToggle={() => handleGffSummaryAccordionChange(isOpen ? undefined : section.key)}
+                  searchQuery={filterSectionSearchQueries[section.key] || ""}
+                  onSearchChange={(value) =>
+                    setFilterSectionSearchQueries((prev) => ({ ...prev, [section.key]: value }))
+                  }
+                  useExternalToggle
+                />
+              </CollapsibleSection>
+            )
+          })}
+
+
         </div>
       </div>
 
-      {/* Info Modal */}
-      <Dialog open={isInfoModalOpen} onOpenChange={setIsInfoModalOpen}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Filter Guidelines</DialogTitle>
-          <DialogDescription>
-            Learn how to use the annotation filters effectively
-          </DialogDescription>
-        </DialogHeader>
-        
-        <Tabs defaultValue="taxon" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="taxon" className="text-xs">
-              <Network className="h-3 w-3 mr-1" />
-              Taxon
-            </TabsTrigger>
-            <TabsTrigger value="assembly" className="text-xs">
-              <Database className="h-3 w-3 mr-1" />
-              Assembly
-            </TabsTrigger>
-            <TabsTrigger value="metadata" className="text-xs">
-              <Sparkles className="h-3 w-3 mr-1" />
-              Metadata
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="taxon" className="space-y-4 mt-4">
-            <div className="space-y-3">
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Search Taxons</h3>
-                <p className="text-sm text-muted-foreground">
-                  Use the search bar to find taxons by name or taxid. Type at least 2 characters to see results. Click on a search result to add it to your filters.
-                </p>
-              </div>
-              
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Browse Taxonomic Tree</h3>
-                <p className="text-sm text-muted-foreground">
-                  Explore the taxonomic hierarchy starting from Eukaryota. Click the expand icon (▶) to expand or collapse nodes. Click on a node name to select it as a filter. Selected taxons are highlighted in the tree.
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3">
-                <p className="text-sm text-blue-900 dark:text-blue-100">
-                  <strong>Note:</strong> When taxons are selected, the assembly list in the Assembly tab will also be filtered to show only assemblies from those taxons.
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="assembly" className="space-y-4 mt-4">
-            <div className="space-y-3">
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Assembly Filters</h3>
-                <p className="text-sm text-muted-foreground">
-                  Filter assemblies by level (e.g., Chromosome, Scaffold), status (e.g., current, suppressed), and RefSeq category (e.g., reference genome). These filters apply to both the assembly list below and the annotations list. Open a section to see available options and their counts.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Browse Assemblies</h3>
-                <p className="text-sm text-muted-foreground">
-                  Search for assemblies by name or accession, or browse the paginated list. Use the sort buttons to sort by release date or annotation count. Click on an assembly card to select it. Selected assemblies are highlighted. The list respects your taxon selections and assembly metadata filters.
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-3">
-                <p className="text-sm text-amber-900 dark:text-amber-100">
-                  <strong>Important:</strong> Selecting specific assemblies will filter annotations to show only those from the selected assemblies. This may be incompatible with taxon selection - when assemblies are selected, annotations are filtered by assembly first, which may not match your taxon filters.
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-3">
-                <p className="text-sm text-blue-900 dark:text-blue-100">
-                  <strong>Note:</strong> The assembly list is automatically filtered by your selected taxons. If you have taxons selected, only assemblies from those taxons will be shown in the browse list.
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="metadata" className="space-y-4 mt-4">
-            <div className="space-y-3">
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Annotation Metadata Filters</h3>
-                <p className="text-sm text-muted-foreground">
-                  Filter annotations by their metadata properties. Each section can be opened to see available options. Options are lazy-loaded when you open a section, showing counts based on your current filter selections.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Filter Sections</h3>
-                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground ml-2">
-                  <li><strong>Biotypes:</strong> Filter by biological types (e.g., protein_coding, lncRNA)</li>
-                  <li><strong>Feature Types:</strong> Filter by genomic feature types (e.g., gene, transcript, exon)</li>
-                  <li><strong>Pipelines:</strong> Filter by annotation pipelines used</li>
-                  <li><strong>Providers:</strong> Filter by data providers</li>
-                  <li><strong>Database Sources:</strong> Filter by source databases (e.g., RefSeq, Ensembl)</li>
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Using Filters</h3>
-                <p className="text-sm text-muted-foreground">
-                  Only one section can be open at a time. Click on a section header to open it and see available options. Check the boxes to select filter values. If a section has more than 20 options, a search bar will appear to help you find specific values. Counts update automatically based on your other filter selections.
-                </p>
-              </div>
-
-              <div>
-                <h3 className="font-semibold text-sm mb-2">Search Functionality</h3>
-                <p className="text-sm text-muted-foreground">
-                  When a section has more than 20 options, a search bar appears at the top. Type to filter options in real-time. The search is case-insensitive and matches any part of the option name.
-                </p>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <div className="rounded-lg bg-muted/50 border p-4 mt-4">
-          <h3 className="font-semibold text-sm mb-2">Filter Compatibility</h3>
-          <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-            <li>Taxon filters apply to both assemblies and annotations</li>
-            <li>Assembly metadata filters (levels, statuses, RefSeq categories) apply to both the assembly list and annotations</li>
-            <li>Selecting specific assemblies filters annotations by those assemblies first</li>
-            <li>When both taxons and assemblies are selected, annotations are filtered by the selected assemblies (which may be a subset of the selected taxons)</li>
-            <li>Metadata filters (biotypes, feature types, etc.) work together with taxon and assembly filters</li>
-          </ul>
-        </div>
-      </DialogContent>
-    </Dialog>
     </>
   )
 }
-

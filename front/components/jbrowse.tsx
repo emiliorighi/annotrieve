@@ -23,15 +23,8 @@ interface JBrowseLinearGenomeViewComponentProps {
 }
 // Use relative URLs to leverage Next.js rewrites and avoid CORS issues
 // For GitHub Pages deployment, use absolute URLs
-const baseURL = process.env.NEXT_PUBLIC_API_URL || 
-  (typeof window !== 'undefined' && window.location.hostname.includes('github.io') 
-    ? 'https://genome.crg.es/annotrieve' 
-    : '')
-const apiBaseURL = process.env.NEXT_PUBLIC_API_URL || 
-  (typeof window !== 'undefined' && window.location.hostname.includes('github.io') 
-    ? 'https://genome.crg.es/annotrieve/api/v0' 
-    : '')
-
+const baseURL = 'https://genome.crg.es/annotrieve' 
+const apiBaseURL = 'https://genome.crg.es/annotrieve/api/v0'
 const configuration = {
   theme: {
     palette: {

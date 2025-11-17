@@ -5,22 +5,22 @@
 
 :root {
   --background: oklch(1 0 0); /* #ffffff */
-  --foreground: oklch(0.45 0 0); /* #4b5563 */
-  --card: oklch(0.99 0 0); /* #f9fafb */
-  --card-foreground: oklch(0.35 0 0); /* #374151 */
+  --foreground: oklch(0.15 0 0); /* Near black - increased contrast */
+  --card: oklch(0.98 0 0); /* Slightly darker for more contrast */
+  --card-foreground: oklch(0.2 0 0); /* Darker - increased contrast */
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.45 0 0);
-  --primary: oklch(0.58 0.13 215); /* #0891b2 - Cyan-600 */
+  --popover-foreground: oklch(0.15 0 0); /* Near black - increased contrast */
+  --primary: oklch(0.58 0.13 215); /* #0891b2 - Cyan-600 - KEEP AS IS */
   --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.65 0.15 55); /* #d97706 - Amber-600 */
+  --secondary: oklch(0.65 0.15 55); /* #d97706 - Amber-600 - KEEP AS IS */
   --secondary-foreground: oklch(1 0 0);
-  --muted: oklch(0.99 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.6 0.18 285); /* #9333ea - Purple-600 */
+  --muted: oklch(0.96 0 0); /* Slightly darker for more contrast */
+  --muted-foreground: oklch(0.3 0 0); /* Darker - increased contrast */
+  --accent: oklch(0.6 0.18 285); /* #9333ea - Purple-600 - KEEP AS IS */
   --accent-foreground: oklch(1 0 0);
   --destructive: oklch(0.58 0.2 35); /* #ea580c */
   --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.92 0 0); /* #e5e7eb */
+  --border: oklch(0.85 0 0); /* Darker border - increased contrast */
   --input: oklch(1 0 0);
   --ring: oklch(0.58 0.13 215 / 0.5);
   --chart-1: oklch(0.58 0.13 215);
@@ -29,13 +29,13 @@
   --chart-4: oklch(0.45 0 0);
   --chart-5: oklch(0.68 0.18 45);
   --radius: 0.5rem;
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.35 0 0);
-  --sidebar-primary: oklch(0.58 0.13 215);
+  --sidebar: oklch(0.98 0 0); /* Slightly darker for more contrast */
+  --sidebar-foreground: oklch(0.2 0 0); /* Darker - increased contrast */
+  --sidebar-primary: oklch(0.58 0.13 215); /* KEEP AS IS */
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.6 0.18 285);
+  --sidebar-accent: oklch(0.6 0.18 285); /* KEEP AS IS */
   --sidebar-accent-foreground: oklch(1 0 0);
-  --sidebar-border: oklch(0.92 0 0);
+  --sidebar-border: oklch(0.85 0 0); /* Darker border - increased contrast */
   --sidebar-ring: oklch(0.58 0.13 215 / 0.5);
 }
 

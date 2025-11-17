@@ -2,28 +2,20 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Download, Eye, Activity, MoreVertical, FileText, Star } from "lucide-react"
-import { StreamIntervalDialog } from "@/components/stream-interval-dialog"
-import { FileOverviewDialog } from "@/components/file-overview-dialog"
+import { FileText, Star } from "lucide-react"
 import type { Annotation } from "@/lib/types"
 import { useRouter } from "next/navigation"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
+import { useUIStore } from "@/lib/stores/ui"
 
 interface AnnotationActionsProps {
   annotation: Annotation
 }
 
 export function AnnotationActions({ annotation }: AnnotationActionsProps) {
-  const [overviewDialogOpen, setOverviewDialogOpen] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const openRightSidebar = useUIStore((state) => state.openRightSidebar)
   
   const { isSelected, toggleSelection } = useSelectedAnnotationsStore()
   const isFavorite = mounted ? isSelected(annotation.annotation_id) : false
@@ -58,44 +50,23 @@ export function AnnotationActions({ annotation }: AnnotationActionsProps) {
     <>
       <div className="flex items-center gap-2">
         <Button 
-          variant="outline" 
+          variant="ghost" 
           size="sm"
           onClick={() => toggleSelection(annotation)}
           className={isFavorite ? "text-yellow-500 hover:text-yellow-600" : ""}
         >
           <Star className={`h-4 w-4 ${isFavorite ? "fill-current" : ""}`} />
         </Button>
-        <Button variant="outline" size="sm" onClick={() => setOverviewDialogOpen(true)}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => openRightSidebar("file-overview", { annotation })}
+        >
           <FileText className="h-4 w-4 mr-2" />
-          Overview
+          Details
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <MoreVertical className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            {/* <DropdownMenuItem onClick={() => setStreamDialogOpen(true)}>
-              <Activity className="h-4 w-4 mr-2" />
-              Stream Intervals
-            </DropdownMenuItem> */}
-            <DropdownMenuItem onClick={handleViewInBrowser}>
-              <Eye className="h-4 w-4 mr-2" />
-              View in Genome Browser
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleDownload}>
-              <Download className="h-4 w-4 mr-2" />
-              Download File
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
-      {/* <StreamIntervalDialog annotation={annotation} open={streamDialogOpen} onOpenChange={setStreamDialogOpen} /> */}
-
-      <FileOverviewDialog annotation={annotation} open={overviewDialogOpen} onOpenChange={setOverviewDialogOpen} />
     </>
   )
 }

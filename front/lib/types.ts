@@ -20,6 +20,16 @@ export interface Chromosome {
   aliases: string[]
 }
 
+
+export interface CommonSearchResult<T = any> {
+  id: string
+  modelKey: string
+  label: string
+  title: string
+  subtitle?: string
+  meta?: string
+  data: T
+}
 export interface Organism {
   id: string
   scientificName: string

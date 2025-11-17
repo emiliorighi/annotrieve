@@ -1,243 +1,290 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { FileText, BarChart3, X, ArrowDown, ArrowUp, Star, GitCompare, Filter } from "lucide-react"
+import { FileText, Star, Loader2, ArrowUp, ArrowDown, PanelLeftClose, PanelLeftOpen, Network, Database } from "lucide-react"
 import { AnnotationsStatsDashboard } from "@/components/annotations-stats-dashboard"
-import { AnnotationsPagination } from "@/components/annotations-pagination"
 import { AnnotationCard } from "@/components/annotation-card"
-import { AnnotationsCompare } from "@/components/annotations-compare"
 import type { Annotation } from "@/lib/types"
+import type { AnnotationRecord } from "@/lib/api/types"
 import { Button } from "./ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
-import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { useAnnotationsFiltersStore, type SortOption } from "@/lib/stores/annotations-filters"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useUIStore } from "@/lib/stores/ui"
-import { cn } from "@/lib/utils"
 
-export function AnnotationsList() {
+interface AnnotationsListProps {
+  annotations: AnnotationRecord[]
+  totalAnnotations: number
+  loading: boolean
+}
+
+export function AnnotationsList({ annotations, totalAnnotations, loading }: AnnotationsListProps) {
   // Get sidebar state from UI store
-  const { isSidebarOpen, toggleSidebar } = useUIStore()
   const searchParams = useSearchParams()
   const router = useRouter()
   const showFavs = searchParams?.get('showFavs') === 'true'
-  
-  // Use store for filters and annotations - use selectors to prevent unnecessary re-renders
-  const annotations = useAnnotationsFiltersStore((state) => state.annotations)
-  const totalAnnotations = useAnnotationsFiltersStore((state) => state.totalAnnotations)
-  const loading = useAnnotationsFiltersStore((state) => state.loading)
+
+  // Use store for filters and pagination
   const stats = useAnnotationsFiltersStore((state) => state.stats)
   const statsLoading = useAnnotationsFiltersStore((state) => state.statsLoading)
   const currentPage = useAnnotationsFiltersStore((state) => state.page)
-  const itemsPerPage = useAnnotationsFiltersStore((state) => state.itemsPerPage)
-  const sortByDate = useAnnotationsFiltersStore((state) => state.sortByDate)
-  const selectedTaxids = useAnnotationsFiltersStore((state) => state.selectedTaxids)
-  const selectedAssemblyAccessions = useAnnotationsFiltersStore((state) => state.selectedAssemblyAccessions)
+  const setAnnotationsPage = useAnnotationsFiltersStore((state) => state.setAnnotationsPage)
+  const sortOption = useAnnotationsFiltersStore((state) => state.sortOption)
+  const setAnnotationsSortOption = useAnnotationsFiltersStore((state) => state.setAnnotationsSortOption)
+  const fetchAnnotationsStats = useAnnotationsFiltersStore((state) => state.fetchAnnotationsStats)
+  const selectedTaxons = useAnnotationsFiltersStore((state) => state.selectedTaxons)
+  const selectedAssemblies = useAnnotationsFiltersStore((state) => state.selectedAssemblies)
   const selectedAssemblyLevels = useAnnotationsFiltersStore((state) => state.selectedAssemblyLevels)
   const selectedAssemblyStatuses = useAnnotationsFiltersStore((state) => state.selectedAssemblyStatuses)
-  const selectedRefseqCategories = useAnnotationsFiltersStore((state) => state.selectedRefseqCategories)
+  const onlyRefGenomes = useAnnotationsFiltersStore((state) => state.onlyRefGenomes)
   const biotypes = useAnnotationsFiltersStore((state) => state.biotypes)
   const featureTypes = useAnnotationsFiltersStore((state) => state.featureTypes)
   const pipelines = useAnnotationsFiltersStore((state) => state.pipelines)
   const providers = useAnnotationsFiltersStore((state) => state.providers)
-  const source = useAnnotationsFiltersStore((state) => state.source)
-  const mostRecentPerSpecies = useAnnotationsFiltersStore((state) => state.mostRecentPerSpecies)
-  const setAnnotationsPage = useAnnotationsFiltersStore((state) => state.setAnnotationsPage)
-  const setAnnotationsSortByDate = useAnnotationsFiltersStore((state) => state.setAnnotationsSortByDate)
-  const fetchAnnotations = useAnnotationsFiltersStore((state) => state.fetchAnnotations)
-  const fetchAnnotationsStats = useAnnotationsFiltersStore((state) => state.fetchAnnotationsStats)
+  const databaseSources = useAnnotationsFiltersStore((state) => state.databaseSources)
 
-  const [viewMode, setViewMode] = useState<"list" | "statistics" | "compare">("list")
+  const [showStats, setShowStats] = useState(false)
   const [hasLoadedStats, setHasLoadedStats] = useState(false)
+  const [accumulatedAnnotations, setAccumulatedAnnotations] = useState<AnnotationRecord[]>([])
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportLoading, setReportLoading] = useState(false)
+  const buildParams = useAnnotationsFiltersStore((state) => state.buildAnnotationsParams)
 
+  // Use store annotations directly for page 1, accumulated for infinite scroll
+  const allAnnotations = currentPage === 1 ? annotations : accumulatedAnnotations
+  const hasMore = allAnnotations.length < totalAnnotations && totalAnnotations > 0
   // Zustand store for favorites
-  const { isSelected: isSelectedStore, getSelectedAnnotations, getSelectionCount } = useSelectedAnnotationsStore()
+  const { isSelected: isSelectedStore } = useSelectedAnnotationsStore()
   const isSelected = (id: string) => isSelectedStore(id)
-  const favoritesCount = getSelectionCount()
+  const getSelectedAnnotations = useSelectedAnnotationsStore((state) => state.getSelectedAnnotations)
 
+  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen)
+  const isDesktop = useUIStore((state) => state.isDesktop)
+  const setIsSidebarOpen = useUIStore((state) => state.setIsSidebarOpen)
+  const openRightSidebar = useUIStore((state) => state.openRightSidebar)
 
-  // Track the last fetch to prevent duplicates
-  const lastFetchRef = useRef<string | null>(null)
-  
-  // Fetch annotations when filters, pagination, or sorting changes
+  const filtersButtonDisabled = showFavs
+
+  const handleFiltersToggle = useCallback(() => {
+    if (filtersButtonDisabled) return
+    if (isDesktop) {
+      setIsSidebarOpen(!isSidebarOpen)
+    } else {
+      setIsSidebarOpen(true)
+    }
+  }, [filtersButtonDisabled, isDesktop, isSidebarOpen, setIsSidebarOpen])
+
+  const handleBrowseAssemblies = useCallback(() => {
+    openRightSidebar('assemblies-list')
+  }, [openRightSidebar])
+
+  // Accumulate annotations for infinite scroll (page > 1)
   useEffect(() => {
-    // In favorites view, only depend on favoritesCount, not filter params
-    if (showFavs) {
-      const favoriteAnnotations = getSelectedAnnotations()
-      const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
-      const fetchKey = JSON.stringify({
-        showFavs: true,
-        favoritesCount,
-        favoriteIds: favoriteIds.sort(), // Sort for consistent key
+    if (currentPage === 1) {
+      setAccumulatedAnnotations([])
+      return
+    }
+    if (annotations && annotations.length > 0) {
+      setAccumulatedAnnotations(prev => {
+        const existingIds = new Set(prev.map(a => a.annotation_id || a.md5_checksum || ''))
+        const newAnnotations = annotations.filter(a => {
+          const id = a.annotation_id || a.md5_checksum || ''
+          return id && !existingIds.has(id)
+        })
+        return newAnnotations.length > 0 ? [...prev, ...newAnnotations] : prev
       })
-      
-      // Skip if this exact fetch was already initiated
-      if (lastFetchRef.current === fetchKey) {
-        return
-      }
-      
-      lastFetchRef.current = fetchKey
-      
-      if (favoriteIds.length > 0) {
-        fetchAnnotations(true, favoriteIds)
-      } else {
-        fetchAnnotations(false)
-      }
-      return
     }
-    
-    // In normal view, use all filter parameters
-    const fetchKey = JSON.stringify({
-      selectedTaxids,
-      selectedAssemblyAccessions,
-      selectedAssemblyLevels,
-      selectedAssemblyStatuses,
-      selectedRefseqCategories,
-      biotypes,
-      featureTypes,
-      pipelines,
-      providers,
-      source,
-      mostRecentPerSpecies,
-      currentPage,
-      itemsPerPage,
-      sortByDate,
-      showFavs: false,
-    })
-    
-    // Skip if this exact fetch was already initiated
-    if (lastFetchRef.current === fetchKey) {
-      return
+  }, [annotations, currentPage])
+
+  // Infinite scroll: load more when reaching the bottom
+  useEffect(() => {
+    if (showFavs || loading || loadingMore || !hasMore || allAnnotations.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          setLoadingMore(true)
+          setAnnotationsPage(currentPage + 1)
+        }
+      },
+      { threshold: 0.1, rootMargin: '100px' }
+    )
+
+    const currentRef = loadMoreRef.current
+    if (currentRef) {
+      observer.observe(currentRef)
     }
-    
-    lastFetchRef.current = fetchKey
-    fetchAnnotations(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    selectedTaxids,
-    selectedAssemblyAccessions,
-    selectedAssemblyLevels,
-    selectedAssemblyStatuses,
-    selectedRefseqCategories,
-    biotypes,
-    featureTypes,
-    pipelines,
-    providers,
-    source,
-    mostRecentPerSpecies,
-    currentPage,
-    itemsPerPage,
-    sortByDate,
-    showFavs,
-    favoritesCount,
-    // Note: fetchAnnotations and getSelectedAnnotations are stable Zustand functions
-    // We exclude them from deps to prevent unnecessary re-runs, but they're safe to use
-  ])
+
+    return () => {
+      if (currentRef) {
+        observer.unobserve(currentRef)
+      }
+    }
+  }, [hasMore, loading, loadingMore, currentPage, showFavs, setAnnotationsPage, allAnnotations.length])
+
+  // Load more annotations when page changes (for infinite scroll)
+  // Note: This is handled by the parent component (page.tsx) which refetches when page changes
+  useEffect(() => {
+    if (currentPage > 1 && !showFavs && !loading) {
+      setLoadingMore(false)
+    }
+  }, [currentPage, showFavs, loading])
 
   // Track the last stats fetch to prevent duplicates
   const lastStatsFetchRef = useRef<string | null>(null)
-  
-  // Fetch stats when statistics tab is opened (lazy load)
-  // Also refresh stats when filters change while on statistics tab
+
+  // Fetch stats when stats panel is opened (lazy load)
+  // Also refresh stats when filters change while stats panel is open
   useEffect(() => {
-    if (viewMode !== "statistics") {
-      // Reset loaded flag when switching away from stats tab
+    if (!showStats) {
+      // Reset loaded flag when closing stats panel
       if (hasLoadedStats) {
         setHasLoadedStats(false)
         lastStatsFetchRef.current = null
       }
       return
     }
-    
+
     // In favorites view, only use favorite IDs for stats
     if (showFavs) {
+      const { getSelectedAnnotations } = useSelectedAnnotationsStore.getState()
       const favoriteAnnotations = getSelectedAnnotations()
       const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
       const statsFiltersKey = JSON.stringify({
         showFavs: true,
-        favoritesCount,
         favoriteIds: favoriteIds.sort(), // Sort for consistent key
       })
-      
+
       // Skip if this exact stats fetch was already initiated
       if (lastStatsFetchRef.current === statsFiltersKey) {
         return
       }
-      
+
       lastStatsFetchRef.current = statsFiltersKey
       setHasLoadedStats(true)
       fetchAnnotationsStats(true, favoriteIds)
       return
     }
-    
+
     // In normal view, use all filter parameters for stats
     const statsFiltersKey = JSON.stringify({
       showFavs: false,
-      selectedTaxids,
-      selectedAssemblyAccessions,
+      selectedTaxons,
+      selectedAssemblies,
       selectedAssemblyLevels,
       selectedAssemblyStatuses,
-      selectedRefseqCategories,
+      onlyRefGenomes,
       biotypes,
       featureTypes,
       pipelines,
       providers,
-      source,
-      mostRecentPerSpecies,
+      databaseSources,
     })
-    
+
     // Skip if this exact stats fetch was already initiated
     if (lastStatsFetchRef.current === statsFiltersKey) {
       return
     }
-    
+
     lastStatsFetchRef.current = statsFiltersKey
     setHasLoadedStats(true)
     fetchAnnotationsStats(false, [])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    viewMode,
+    showStats,
     showFavs,
-    favoritesCount,
-    selectedTaxids,
-    selectedAssemblyAccessions,
+    selectedTaxons,
+    selectedAssemblies,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
-    selectedRefseqCategories,
+    onlyRefGenomes,
     biotypes,
     featureTypes,
     pipelines,
     providers,
-    source,
-    mostRecentPerSpecies,
+    databaseSources,
     // Note: fetchAnnotationsStats and getSelectedAnnotations are stable Zustand functions
     // We exclude them from deps to prevent unnecessary re-runs
   ])
 
-  // Pagination handlers
-  const totalPages = Math.ceil(totalAnnotations / itemsPerPage)
-
-  const handlePreviousPage = () => {
-    setAnnotationsPage(Math.max(1, currentPage - 1))
-  }
-
-  const handleNextPage = () => {
-    setAnnotationsPage(Math.min(totalPages, currentPage + 1))
-  }
-
-  const handlePageClick = (page: number) => {
-    setAnnotationsPage(page)
-  }
-
-  const handleSortByDate = () => {
-    if (sortByDate === "none") {
-      setAnnotationsSortByDate("newest")
-    } else if (sortByDate === "newest") {
-      setAnnotationsSortByDate("oldest")
-    } else {
-      setAnnotationsSortByDate("none")
+  const handleDownloadReport = async () => {
+    try {
+      setReportLoading(true)
+      // Build filter payload similar to data fetching, but without pagination
+      let favoriteIds: string[] = []
+      if (showFavs) {
+        try {
+          const favs = getSelectedAnnotations()
+          favoriteIds = (favs || []).map((a: any) => a.annotation_id).filter(Boolean)
+        } catch {}
+      }
+      const params = buildParams(!!showFavs, favoriteIds)
+      delete (params as any).limit
+      delete (params as any).offset
+      const res = await fetch(`/api/annotations/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+      if (!res.ok) {
+        throw new Error(`Failed to generate report`)
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `annotations_report.tsv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      setReportOpen(false)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setReportLoading(false)
     }
+  }
+
+  // Parse sortOption into field and order
+  const getSortFieldAndOrder = (option: SortOption): { field: string; order: 'asc' | 'desc' } => {
+    if (option === 'none') return { field: 'none', order: 'desc' }
+    const parts = option.split('_')
+    const order = parts[parts.length - 1] as 'asc' | 'desc'
+    const field = parts.slice(0, -1).join('_')
+    return { field, order }
+  }
+
+  const { field: currentSortField, order: currentSortOrder } = getSortFieldAndOrder(sortOption)
+
+  const sortFields: { value: string; label: string }[] = [
+    { value: "none", label: "Sort by" },
+    { value: "date", label: "Release date" },
+    { value: "coding_genes_count", label: "Coding genes count" },
+    { value: "coding_genes_mean_length", label: "Coding gene mean length" },
+    { value: "coding_genes_min_length", label: "Coding gene min length" },
+    { value: "coding_genes_max_length", label: "Coding gene max length" },
+  ]
+
+  const handleSortFieldChange = (field: string) => {
+    if (field === 'none') {
+      setAnnotationsSortOption('none')
+    } else {
+      const newOption = `${field}_${currentSortOrder}` as SortOption
+      setAnnotationsSortOption(newOption)
+    }
+  }
+
+  const handleSortOrderToggle = () => {
+    if (currentSortField === 'none') return
+    const newOrder = currentSortOrder === 'asc' ? 'desc' : 'asc'
+    const newOption = `${currentSortField}_${newOrder}` as SortOption
+    setAnnotationsSortOption(newOption)
   }
 
   return (
@@ -266,164 +313,193 @@ export function AnnotationsList() {
         </div>
       )}
 
-      {/* Header - matches sidebar header structure exactly */}
-      <div className="flex-shrink-0">
-        {/* Title Row - identical to sidebar: px-6 pt-6 pb-4 */}
-        <div className={`px-6 ${showFavs ? 'pt-4' : 'pt-6'} pb-4 flex items-center gap-4`}>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold text-foreground flex items-center gap-2">
-              {/* Toggle sidebar button - shown when sidebar is closed, hidden in favorites view */}
-              {!isSidebarOpen && !showFavs && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={toggleSidebar}
-                  className="h-7 w-7 p-0 -ml-2"
-                  title="Show filters"
-                >
-                  <Filter className="h-4 w-4" />
-                </Button>
+      {/* Toolbar Header */}
+      <div className="flex-shrink-0 border-b border-border/60 bg-background/90 supports-[backdrop-filter]:bg-background/75 backdrop-blur">
+        <div className="px-6 pt-3 pb-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 px-3 gap-2"
+                onClick={handleFiltersToggle}
+                disabled={filtersButtonDisabled}
+                aria-pressed={isSidebarOpen}
+                title={
+                  filtersButtonDisabled
+                    ? 'Filters are hidden in favorites view'
+                    : (isSidebarOpen ? 'Hide filters sidebar' : 'Show filters sidebar')
+                }
+              >
+                {isSidebarOpen ? (
+                  <PanelLeftClose className="h-4 w-4" />
+                ) : (
+                  <PanelLeftOpen className="h-4 w-4" />
+                )}
+              </Button>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                    Annotations
+                  </h1>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {loading
+                    ? 'Fetching results…'
+                    : totalAnnotations > 0
+                      ? `${totalAnnotations.toLocaleString()} ${totalAnnotations === 1 ? 'result' : 'results'}`
+                      : 'No results'}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleBrowseAssemblies}
+                className="h-9 px-3 gap-2"
+                title="Open assemblies browser"
+              >
+                <Database className="h-4 w-4" />
+                Browse Assemblies
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReportOpen(true)}
+                className="h-9 px-3 gap-2"
+                title="Download TSV report for current filters"
+              >
+                <FileText className="h-4 w-4" />
+                Download TSV
+              </Button>
+              <Select value={currentSortField} onValueChange={handleSortFieldChange}>
+                <SelectTrigger className="w-[180px] h-9 text-sm">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortFields.map((field) => (
+                    <SelectItem key={field.value} value={field.value}>
+                      {field.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSortOrderToggle}
+                disabled={currentSortField === 'none'}
+                className="h-9 px-3"
+                title={currentSortField === 'none' ? 'Select a sort field first' : (currentSortOrder === 'asc' ? 'Ascending' : 'Descending')}
+              >
+                {currentSortOrder === 'asc' ? (
+                  <ArrowUp className="h-4 w-4" />
+                ) : (
+                  <ArrowDown className="h-4 w-4" />
+                )}
+              </Button>
+              {loading && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading...</span>
+                </div>
               )}
-              Annotations
-            </h1>
-          </div>
-          <div className="flex">
-              <Badge className="text-md" variant="secondary">{totalAnnotations.toLocaleString()}</Badge>
-          </div>
-        </div>
-      </div>
-
-      {/* View Mode Toggle - full width border, tabs aligned with sidebar tabs */}
-      <div className="flex-shrink-0 border-b border-border">
-        <div className="px-6">
-          <div className="flex items-center gap-0 w-fit">
-            <Button
-              variant="ghost"
-              onClick={() => setViewMode("list")}
-              className={cn(
-                "gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm",
-                viewMode === "list"
-                  ? "text-primary border-primary bg-transparent shadow-none"
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent",
-              )}
-            >
-              <FileText className="h-4 w-4" />
-              List
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setViewMode("statistics")
-                // Stats will be fetched by the useEffect when viewMode changes
-              }}
-              className={cn(
-                "gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm",
-                viewMode === "statistics"
-                  ? "text-primary border-primary bg-transparent shadow-none"
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent",
-              )}
-            >
-              <BarChart3 className="h-4 w-4" />
-              Stats
-            </Button>
-            <Button
-              variant="ghost"
-              onClick={() => setViewMode("compare")}
-              className={cn(
-                "gap-2 h-9 px-3 rounded-none border-b-2 border-transparent font-medium text-sm",
-                viewMode === "compare"
-                  ? "text-primary border-primary bg-transparent shadow-none"
-                  : "text-muted-foreground hover:text-foreground hover:bg-transparent",
-              )}
-            >
-              <GitCompare className="h-4 w-4" />
-              Compare
-            </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Content Area */}
-      {viewMode === "compare" ? (
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
-          <AnnotationsCompare favoriteAnnotations={annotations as any} showFavs={showFavs} totalAnnotations={totalAnnotations} />
-        </div>
-      ) : (
-        <div className="px-6 py-6">
-          {/* List Tab */}
-          {viewMode === "list" && (
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="px-6 py-4">
+          <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Download TSV report</DialogTitle>
+                <DialogDescription>
+                  This will generate a TSV report of the current annotation results based on your active filters.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm">
+                <div className="p-3 rounded-md border bg-muted/40">
+                  <div className="font-medium text-foreground">Summary</div>
+                  <ul className="mt-2 text-muted-foreground list-disc list-inside space-y-1">
+                    <li>Total annotations in current result set: <span className="text-foreground font-semibold">{totalAnnotations.toLocaleString()}</span></li>
+                  </ul>
+                </div>
+                <div className="p-3 rounded-md border bg-amber-50 dark:bg-amber-900/20">
+                  <div className="font-medium text-foreground">About file URLs in the report</div>
+                  <ul className="mt-2 text-amber-800 dark:text-amber-200 text-xs space-y-1">
+                    <li><span className="font-semibold text-foreground">source_file_info.url_path</span>: direct link to the original source file provided by the data source.</li>
+                    <li><span className="font-semibold text-foreground">indexed_file_info.bgzipped_path</span>: relative path of the file processed by Annotrieve (sorted, bgzipped, and indexed). To download, prepend <span className="font-mono text-foreground">https://genome.crg.es/annotrieve/files</span> to this path.</li>
+                  </ul>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setReportOpen(false)} disabled={reportLoading}>
+                  Cancel
+                </Button>
+                <Button onClick={handleDownloadReport} disabled={reportLoading} className="gap-2">
+                  {reportLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  {reportLoading ? 'Preparing…' : 'Download TSV'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          {/* Stats Panel - collapsible */}
+          {showStats && (
+            <div className="mb-6">
+              <AnnotationsStatsDashboard stats={stats || null} loading={statsLoading} />
+            </div>
+          )}
+
+          {/* Annotations List */}
+          {allAnnotations.length === 0 && !loading && !loadingMore ? (
+            <Card className="p-12 border-2 border-dashed">
+              <div className="text-center text-muted-foreground">
+                <FileText className="h-12 w-12 opacity-50 mx-auto mb-3" />
+                <h4 className="text-lg font-semibold text-foreground mb-2">No Annotations Found</h4>
+                <p className="text-sm max-w-md mx-auto mb-4">
+                  No annotations match your current filter criteria.
+                </p>
+              </div>
+            </Card>
+          ) : (
             <div className="space-y-6">
-              {annotations.length === 0 ? (
-                <Card className="p-12 border-2 border-dashed">
-                  <div className="text-center text-muted-foreground">
-                    <FileText className="h-12 w-12 opacity-50 mx-auto mb-3" />
-                    <h4 className="text-lg font-semibold text-foreground mb-2">No Annotations Found</h4>
-                    <p className="text-sm max-w-md mx-auto mb-4">
-                      No annotations match your current filter criteria.
-                    </p>
-                  </div>
-                </Card>
-              ) : (
-                <div className="space-y-6">
-                  {/* Sort Control */}
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="lg"
-                        onClick={handleSortByDate}
-                        className="gap-2"
-                      >
-                        {sortByDate === "newest" ? (
-                          <>
-                            <ArrowDown className="h-3 w-3" />
-                            Newest Release Date
-                          </>
-                        ) : sortByDate === "oldest" ? (
-                          <>
-                            <ArrowUp className="h-3 w-3" />
-                            Oldest Release Date
-                          </>
-                        ) : (
-                          <>
-                            <ArrowDown className="h-3 w-3 opacity-50" />
-                            Sort By Release Date
-                          </>
-                        )}
-                      </Button>
+              {/* Annotations Grid */}
+              <div className="grid gap-4">
+                {allAnnotations.map((annotation) => (
+                  <AnnotationCard
+                    isSelected={isSelected(annotation.annotation_id || annotation.md5_checksum || '')}
+                    key={annotation.annotation_id || annotation.md5_checksum || ''}
+                    annotation={annotation as any}
+                  />
+                ))}
+              </div>
+
+              {/* Infinite Scroll Trigger */}
+              {hasMore && (
+                <div ref={loadMoreRef} className="flex justify-center py-4">
+                  {loadingMore && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Loading more...</span>
                     </div>
+                  )}
+                </div>
+              )}
 
-                    <AnnotationsPagination
-                      currentPage={currentPage}
-                      totalPages={totalPages}
-                      onPreviousPage={handlePreviousPage}
-                      onNextPage={handleNextPage}
-                      onPageClick={handlePageClick}
-                    />
-                  </div>
-
-                  <div className="grid gap-4">
-                    {annotations.map((annotation) => (
-                      <AnnotationCard
-                        isSelected={isSelected(annotation.annotation_id || annotation.md5_checksum || '')}
-                        key={annotation.annotation_id || annotation.md5_checksum || ''}
-                        annotation={annotation as any}
-                      />
-                    ))}
-                  </div>
+              {/* End of results indicator */}
+              {!hasMore && allAnnotations.length > 0 && (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  All {totalAnnotations.toLocaleString()} annotations loaded
                 </div>
               )}
             </div>
           )}
-
-          {/* Dashboard Tab */}
-          {viewMode === "statistics" && (
-            <div>
-              <AnnotationsStatsDashboard stats={stats || null} loading={statsLoading} />
-            </div>
-          )}
         </div>
-      )}
+      </div>
     </div>
   )
 }

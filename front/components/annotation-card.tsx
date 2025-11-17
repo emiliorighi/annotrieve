@@ -44,20 +44,6 @@ export function AnnotationCard({ annotation, isSelected }: AnnotationCardProps) 
       
       <div className="p-5">
         <div className="flex items-start gap-4">
-          {/* Checkbox */}
-          {/* <div className="flex items-start pt-1">
-            <Checkbox.Root
-              checked={isSelected}
-              onCheckedChange={onToggleSelection}
-              className="w-5 h-5 rounded border-2 border-muted-foreground/50 data-[state=checked]:bg-primary data-[state=checked]:border-primary hover:border-primary/70 transition-colors flex items-center justify-center cursor-pointer"
-            >
-              <Checkbox.Indicator className="text-primary-foreground">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
-                  <path d="M11.5 3.5L5.25 9.75L2.5 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-                </svg>
-              </Checkbox.Indicator>
-            </Checkbox.Root>
-          </div> */}
 
           <div className="flex-1 min-w-0 space-y-4">
             {/* Header Section */}
@@ -79,17 +65,12 @@ export function AnnotationCard({ annotation, isSelected }: AnnotationCardProps) 
               </h4>
               
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="font-mono text-xs bg-muted/50 px-2 py-0.5 rounded">{annotation.assembly_accession}</span>
-                <span className="text-xs">{annotation.assembly_name}</span>
+                <span className="text-xs font-mono">{annotation.assembly_name}</span>
               </div>
             </div>
 
             {/* Gene Counts */}
             {hasGeneCounts && (
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="font-medium">Genes:</span>
-                </div>
                 <div className="flex items-center gap-4">
                   {codingGenes !== undefined && (
                     <div className="flex items-center gap-1.5">
@@ -108,8 +89,7 @@ export function AnnotationCard({ annotation, isSelected }: AnnotationCardProps) 
                       <span className="text-xs text-muted-foreground">Pseudo</span>
                       <span className="text-sm font-semibold text-accent">{pseudogenes.toLocaleString()}</span>
                     </div>
-                  )}
-                </div>
+                )}
               </div>
             )}
 
@@ -117,7 +97,6 @@ export function AnnotationCard({ annotation, isSelected }: AnnotationCardProps) 
             {/* Biotypes Tags */}
             {topBiotypes.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-muted-foreground">Biotypes:</span>
                 {topBiotypes.map((biotype) => (
                   <Badge key={biotype} variant="outline" className="text-xs">
                     {biotype}

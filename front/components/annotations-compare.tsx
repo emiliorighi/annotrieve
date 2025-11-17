@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { BarChart3, X, AlertCircle, ChevronDown, Loader2 } from "lucide-react"
+import { BarChart3, X, AlertCircle, ChevronDown, Loader2, Info } from "lucide-react"
 import type { Annotation } from "@/lib/types"
 import { getAnnotationsStatsSummary, listAnnotations } from "@/lib/api/annotations"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
@@ -24,6 +24,7 @@ import {
   PointElement,
   LineElement,
 } from 'chart.js'
+import { useUIStore } from "@/lib/stores/ui"
 
 // Register Chart.js components
 ChartJS.register(
@@ -57,30 +58,34 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
   const observerTarget = useRef<HTMLDivElement>(null)
   
   const MAX_COMPARISON = 10
+  const openRightSidebar = useUIStore((state) => state.openRightSidebar)
+  const removeFromCart = useSelectedAnnotationsStore((state) => state.removeFromCart)
 
   // Get store state and actions
   const buildAnnotationsParams = useAnnotationsFiltersStore((state) => state.buildAnnotationsParams)
-  const totalAnnotationsFromStore = useAnnotationsFiltersStore((state) => state.totalAnnotations)
+  const stats = useAnnotationsFiltersStore((state) => state.stats)
   
   // Get filter state to detect changes (for resetting loaded annotations)
-  const selectedTaxids = useAnnotationsFiltersStore((state) => state.selectedTaxids)
-  const selectedAssemblyAccessions = useAnnotationsFiltersStore((state) => state.selectedAssemblyAccessions)
+  // Use correct property names from the store
+  const selectedTaxons = useAnnotationsFiltersStore((state) => state.selectedTaxons)
+  const selectedAssemblies = useAnnotationsFiltersStore((state) => state.selectedAssemblies)
   const selectedAssemblyLevels = useAnnotationsFiltersStore((state) => state.selectedAssemblyLevels)
   const selectedAssemblyStatuses = useAnnotationsFiltersStore((state) => state.selectedAssemblyStatuses)
-  const selectedRefseqCategories = useAnnotationsFiltersStore((state) => state.selectedRefseqCategories)
+  const onlyRefGenomes = useAnnotationsFiltersStore((state) => state.onlyRefGenomes)
   const biotypes = useAnnotationsFiltersStore((state) => state.biotypes)
   const featureTypes = useAnnotationsFiltersStore((state) => state.featureTypes)
   const pipelines = useAnnotationsFiltersStore((state) => state.pipelines)
   const providers = useAnnotationsFiltersStore((state) => state.providers)
-  const source = useAnnotationsFiltersStore((state) => state.source)
-  const mostRecentPerSpecies = useAnnotationsFiltersStore((state) => state.mostRecentPerSpecies)
-  const sortByDate = useAnnotationsFiltersStore((state) => state.sortByDate)
+  const databaseSources = useAnnotationsFiltersStore((state) => state.databaseSources)
+  const sortOption = useAnnotationsFiltersStore((state) => state.sortOption)
 
-  // Use totalAnnotations from props (favorites view) or store (normal view)
+  // Use totalAnnotations from props (favorites view) or calculate from stats/store (normal view)
+  // If stats exist and have a total, use that; otherwise fall back to 0 or loaded count
+  const totalAnnotationsFromStore = stats?.total ?? 0
   const effectiveTotalAnnotations = showFavs ? totalAnnotations : totalAnnotationsFromStore
 
   // Use loaded annotations or favorite annotations based on view mode
-  const displayAnnotations = showFavs ? favoriteAnnotations : loadedAnnotations
+  const displayAnnotations = loadedAnnotations
   const allAnnotationsForStats = displayAnnotations // All annotations we have loaded
 
   // Fetch annotations - can be used for both initial load and loading more
@@ -129,19 +134,21 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
   }, [showFavs, loadingMore, hasMore, currentOffset, loadAnnotations])
 
   // Create a filter key to detect filter changes
+  // Extract taxids and assembly accessions from the store objects
+  const selectedTaxids = selectedTaxons.map(t => t.taxid)
+  const selectedAssemblyAccessions = selectedAssemblies.map(a => a.assembly_accession)
   const filterKey = JSON.stringify({
     selectedTaxids,
     selectedAssemblyAccessions,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
-    selectedRefseqCategories,
+    onlyRefGenomes,
     biotypes,
     featureTypes,
     pipelines,
     providers,
-    source,
-    mostRecentPerSpecies,
-    sortByDate,
+    databaseSources,
+    sortOption,
   })
 
   // Track previous filter key to detect filter changes
@@ -175,20 +182,19 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
 
   // Initial load and reset when view mode or filters change
   useEffect(() => {
-    if (showFavs) {
-      // In favorites view, use the prop directly
-      setLoadedAnnotations(favoriteAnnotations)
-      setHasMore(false)
-      setCurrentOffset(0)
-    } else {
-      // In normal view, reset and load initial batch
-      setLoadedAnnotations([])
-      setCurrentOffset(0)
-      setHasMore(true)
-      loadAnnotations(0, true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showFavs, favoriteAnnotations.length, filterKey])
+    if (!showFavs) return
+    setLoadedAnnotations(favoriteAnnotations)
+    setHasMore(false)
+    setCurrentOffset(0)
+  }, [showFavs, favoriteAnnotations])
+
+  useEffect(() => {
+    if (showFavs) return
+    setLoadedAnnotations([])
+    setCurrentOffset(0)
+    setHasMore(true)
+    loadAnnotations(0, true)
+  }, [showFavs, filterKey, loadAnnotations])
 
   // Intersection Observer for infinite scroll
   useEffect(() => {
@@ -275,6 +281,23 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
   const selectedAnnotations = displayAnnotations.filter(a => 
     selectedForComparison.includes(a.annotation_id)
   )
+
+  const handleRemoveFavorite = useCallback((annotationId: string) => {
+    removeFromCart(annotationId)
+    if (!showFavs) return
+    setLoadedAnnotations(prev => prev.filter(a => a.annotation_id !== annotationId))
+    setSelectedForComparison(prev => prev.filter(id => id !== annotationId))
+    setComparisonStats(prev => {
+      const updated = { ...prev }
+      delete updated[annotationId]
+      return updated
+    })
+    setLoadingStats(prev => {
+      const updated = { ...prev }
+      delete updated[annotationId]
+      return updated
+    })
+  }, [removeFromCart, showFavs])
 
   // Create mapping for organism names with duplicates
   // Use all loaded annotations for proper labeling
@@ -391,9 +414,37 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
                           >
                             {organismLabelMap[annotation.annotation_id]}
                           </h4>
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                            {annotation.source_file_info.database}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                              {annotation.source_file_info.database}
+                            </Badge>
+                            {showFavs && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  handleRemoveFavorite(annotation.annotation_id)
+                                }}
+                                title="Remove from favorites"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground"
+                              onClick={(event) => {
+                                event.stopPropagation()
+                                openRightSidebar("file-overview", { annotation })
+                              }}
+                              title="View details"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-xs text-muted-foreground truncate" title={`${annotation.assembly_name} (${annotation.assembly_accession})`}>
                           {annotation.assembly_name}
@@ -552,7 +603,7 @@ function ComparisonChartsSection({
   const [isGffSectionOpen, setIsGffSectionOpen] = useState(false)
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto space-y-6">
+    <div className="flex flex-col h-full overflow-y-auto space-y-6 mb-8">
       {isLoading && (
         <Card className="p-4 bg-blue-500/10 border-blue-500/20 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -661,7 +712,7 @@ function OverlapCard({
         <>
           <div className="flex flex-wrap gap-1">
             {displayItems.map((item, idx) => (
-              <Badge key={idx} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+              <Badge key={idx} variant="outline" className="text-xs px-1.5 py-0 h-4">
                 {item}
               </Badge>
             ))}

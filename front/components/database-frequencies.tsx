@@ -5,6 +5,8 @@ import { getAnnotationsFrequencies } from "@/lib/api/annotations"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ExternalLink, Download, Github, Server } from "lucide-react"
+import { ReactNode } from "react"
+import { SectionHeader } from "@/components/ui/section-header"
 
 interface DatabaseFrequency {
   name: string
@@ -97,6 +99,7 @@ function DatabaseItem({ database, index }: { database: DatabaseFrequency; index:
   const animatedValue = useAnimatedCounter(database.value)
   const [isDownloading, setIsDownloading] = useState(false)
   const delay = `${index * 150}ms`
+  const percentageNumber = Number(database.percentage)
 
   const handleDownload = async () => {
     setIsDownloading(true)
@@ -106,65 +109,94 @@ function DatabaseItem({ database, index }: { database: DatabaseFrequency; index:
   }
 
   return (
-    <div
-      className="group relative flex flex-col h-full p-6 rounded-lg border border-border/50 hover:border-border hover:bg-muted/30 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
+    <Card
+      className="group relative flex h-full flex-col border-border/60 bg-card/80 backdrop-blur-sm shadow-sm hover:shadow-md hover:border-primary/40 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
       style={{
         animationDelay: delay,
-        border: `0.25px solid ${database.color}`,
-        animationDuration: '600ms',
-        animationFillMode: 'both'
+        animationDuration: "600ms",
+        animationFillMode: "both",
       }}
     >
-      
-      {/* Top section: Icon, Name, and Stats */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-4">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
+        <div className="flex items-start gap-4">
           {/* Icon */}
-          <div 
+          <div
             className="p-3 rounded-lg transition-all duration-300 group-hover:scale-110 flex-shrink-0"
             style={{ backgroundColor: `${database.color}20` }}
           >
-            <Server 
-              className="h-6 w-6" 
-              style={{ color: database.color }}
-            />
+            <Server className="h-6 w-6" style={{ color: database.color }} />
           </div>
-          
-          {/* Content */}
-          <div className="min-w-0">
-            <h3 className="text-xl font-bold text-foreground mb-1">{database.name}</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">{database.description}</p>
+
+          {/* Name & description */}
+          <div className="min-w-0 space-y-1">
+            <CardTitle className="text-lg font-semibold leading-tight">
+              {database.name}
+            </CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              {database.description}
+            </CardDescription>
           </div>
         </div>
-        
-        {/* Statistics */}
-        <div className="text-right flex-shrink-0 ml-4">
-          <p className="text-2xl font-bold text-foreground tabular-nums">
+
+        {/* Stats */}
+        <div className="flex flex-col items-end text-right gap-1 flex-shrink-0">
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Annotations
+          </p>
+          <p className="text-2xl font-semibold text-foreground tabular-nums">
             {animatedValue.toLocaleString()}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <span className="inline-flex items-center rounded-full border border-border/70 bg-background/60 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
             {database.percentage}% of total
-          </p>
+          </span>
         </div>
-      </div>
-      
-      {/* Bottom section: Download Button - Always at bottom */}
-      <div className="mt-auto">
-        <Button 
-          onClick={handleDownload}
-          disabled={isDownloading}
-          variant="outline" 
-          className="w-full transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Download className={`h-4 w-4 mr-2 transition-transform duration-300 ${isDownloading ? 'animate-spin' : ''}`} />
-          {isDownloading ? 'Downloading...' : 'Download TSV'}
-        </Button>
-      </div>
-    </div>
+      </CardHeader>
+
+      <CardContent className="pt-0 flex flex-col gap-4">
+        {/* Distribution bar */}
+        <div className="mt-2">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+            <span>Share of annotations</span>
+            <span>{database.percentage}%</span>
+          </div>
+          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full transition-[width] duration-500 ease-out"
+              style={{
+                width: `${Math.max(0, Math.min(100, isNaN(percentageNumber) ? 0 : percentageNumber))}%`,
+                backgroundColor: database.color,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Download action */}
+        <div className="mt-2">
+          <Button
+            onClick={handleDownload}
+            disabled={isDownloading}
+            variant="outline"
+            className="w-full justify-center gap-2 transition-transform duration-200 hover:scale-[1.01] disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Download
+              className={`h-4 w-4 transition-transform duration-300 ${
+                isDownloading ? "animate-spin" : ""
+              }`}
+            />
+            {isDownloading ? "Downloading TSV…" : "Download TSV"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
-export function DatabaseFrequencies() {
+interface DatabaseFrequenciesProps {
+  title?: string
+  description?: ReactNode
+}
+
+export function DatabaseFrequencies({ title, description }: DatabaseFrequenciesProps) {
   const [data, setData] = useState<DatabaseFrequency[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -203,16 +235,19 @@ export function DatabaseFrequencies() {
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-16">
-        <div className="mb-12 text-center items-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="inline-flex items-center justify-center mb-4 p-3 rounded-xl bg-indigo-500/10 transition-transform hover:scale-110 duration-300">
-            <Server className="h-8 w-8 text-indigo-600" />
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3 tracking-tight">
-            Database Sources Overview
-          </h2>
-          <p className="text-base sm:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-          Annotrieve automatically updates annotation data from Ensembl, NCBI RefSeq, and GenBank each week using TSV files. These files are available for download from each card, and the automation code is published on GitHub.          </p>
-        </div>
+        <SectionHeader
+          title={title ?? "Database Sources Overview"}
+          description={description ?? (
+            <>
+              Annotrieve automatically updates annotation data from Ensembl, NCBI RefSeq, and GenBank each week using TSV files.
+              These files are available for download from each card, and the automation code is published on GitHub.
+            </>
+          )}
+          icon={Server}
+          iconColor="text-indigo-600"
+          iconBgColor="bg-indigo-500/10"
+          align="center"
+        />
         <div className="flex items-center justify-center py-16">
           <div className="flex flex-col items-center gap-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -226,17 +261,20 @@ export function DatabaseFrequencies() {
   if (error) {
     return (
       <div className="container mx-auto px-4 py-16">
-        <div className="mb-12 text-center items-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-          <div className="inline-flex items-center justify-center mb-4 p-3 rounded-xl bg-indigo-500/10 transition-transform hover:scale-110 duration-300">
-            <Server className="h-8 w-8 text-indigo-600" />
-          </div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3 tracking-tight">
-            Database Sources Overview
-          </h2>
-          <p className="text-base sm:text-lg text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-            We track the annotations present in the FTP servers of Ensembl, NCBI RefSeq, and NCBI GenBank via TSV files weekly. You can click the download button on each card to download the TSV files that Annotrieve itself uses to process and index the data. The automated data fetching logic is available in our GitHub repository.
-          </p>
-        </div>
+        <SectionHeader
+          title={title ?? "Database Sources Overview"}
+          description={description ?? (
+            <>
+              We track the annotations present in the FTP servers of Ensembl, NCBI RefSeq, and NCBI GenBank via TSV files weekly.
+              You can click the download button on each card to download the TSV files that Annotrieve itself uses to process and index the data.
+              The automated data fetching logic is available in our GitHub repository.
+            </>
+          )}
+          icon={Server}
+          iconColor="text-indigo-600"
+          iconBgColor="bg-indigo-500/10"
+          align="center"
+        />
         <div className="flex items-center justify-center py-16">
           <div className="text-center">
             <p className="text-muted-foreground mb-4">{error}</p>
@@ -254,59 +292,59 @@ export function DatabaseFrequencies() {
 
   return (
     <div className="container mx-auto px-4 py-16">
-      <div className="mb-12 text-center items-center animate-in fade-in slide-in-from-bottom-4 duration-700">
-        <div className="inline-flex items-center justify-center mb-4 p-3 rounded-xl bg-indigo-500/10 transition-transform hover:scale-110 duration-300">
-          <Server className="h-8 w-8 text-indigo-600" />
-        </div>
-        <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-3 tracking-tight">
-          Database Sources Overview
-        </h2>
-        <p className="text-base sm:text-lg text-muted-foreground max-w-4xl mx-auto leading-relaxed">
-          
-          Annotrieve automatically updates annotation data from{" "}
-          <a 
-            href="https://www.ensembl.org/" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
-          >
-            Ensembl
-            <ExternalLink className="h-3 w-3" />
-          </a>
-          ,{" "}
-          <a 
-            href="https://www.ncbi.nlm.nih.gov/refseq/" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
-          >
-            RefSeq
-            <ExternalLink className="h-3 w-3" />
-          </a>
-          , and{" "}
-          <a 
-            href="https://www.ncbi.nlm.nih.gov/genbank/" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
-          >
-            GenBank
-            <ExternalLink className="h-3 w-3" />
-          </a>
-          {" "}each week using TSV files. 
-          These files are available for download from each card, and the automation code is published on{" "}
-          <a 
-            href="https://github.com/guigolab/genome-annotation-tracker" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
-          >
-            GitHub repository
-            <Github className="h-3 w-3" />
-          </a>
-          .
-        </p>
-      </div>
+      <SectionHeader
+        title={title ?? "Database Sources Overview"}
+        description={description ?? (
+          <>
+            Annotrieve automatically updates annotation data from{" "}
+            <a 
+              href="https://www.ensembl.org/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center gap-1"
+            >
+              Ensembl
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            ,{" "}
+            <a 
+              href="https://www.ncbi.nlm.nih.gov/refseq/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center gap-1"
+            >
+              RefSeq
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            , and{" "}
+            <a 
+              href="https://www.ncbi.nlm.nih.gov/genbank/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center gap-1"
+            >
+              GenBank
+              <ExternalLink className="h-3 w-3" />
+            </a>
+            {" "}each week using TSV files. 
+            These files are available for download from each card, and the automation code is published on{" "}
+            <a 
+              href="https://github.com/guigolab/genome-annotation-tracker" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center gap-1"
+            >
+              GitHub repository
+              <Github className="h-3 w-3" />
+            </a>
+            .
+          </>
+        )}
+        icon={Server}
+        iconColor="text-indigo-600"
+        iconBgColor="bg-indigo-500/10"
+        align="center"
+      />
       
       {/* Database Items */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">

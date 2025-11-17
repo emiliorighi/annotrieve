@@ -70,7 +70,13 @@ export interface OrganismRecord {
 export interface AssemblyRecord {
   assembly_accession: string
   assembly_name: string
+  paired_assembly_accession?:string
   organism_name: string
+  taxon_lineage?: string[]
+  assembly_level?: string
+  refseq_category?: string
+  assembly_status?:string
+  assembly_type?:string
   taxid: string
   annotations_count?: number
   assembly_stats?: AssemblyStats

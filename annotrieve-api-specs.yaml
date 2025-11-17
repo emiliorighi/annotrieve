@@ -10,6 +10,7 @@ info:
 servers:
   - url: https://genome.crg.es/annotrieve/api/v0
     description: Production server
+
 tags:
   - name: "annotations"
     description: "Genome annotation endpoints"
@@ -21,13 +22,13 @@ tags:
     description: "Taxonomy information endpoints"
 
 paths:
-  # ==================== ANNOTATIONS ====================
   /annotations:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotations"
-      summary: "Get a paginated list of genomic annotations"
+      summary: "Get annotations"
+      description: "Returns annotation metadata filtered, sorted, and paginated via query parameters."
       parameters:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
@@ -41,16 +42,20 @@ paths:
         - $ref: "#/components/parameters/pipelines"
         - $ref: "#/components/parameters/providers"
         - $ref: "#/components/parameters/md5_checksums"
-        - $ref: "#/components/parameters/latest_release_by"
         - $ref: "#/components/parameters/has_stats"
-        - $ref: "#/components/parameters/sort_by"
-        - $ref: "#/components/parameters/sort_order"
+        - $ref: "#/components/parameters/latest_release_by"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
         - $ref: "#/components/parameters/release_date_from"
         - $ref: "#/components/parameters/release_date_to"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
         - $ref: "#/components/parameters/fields"
       responses:
         "200":
-          description: "Successful operation"
+          description: "Annotations page"
           content:
             application/json:
               schema:
@@ -63,7 +68,8 @@ paths:
       tags:
         - "annotations"
       operationId: "postAnnotations"
-      summary: "Get annotations using POST body parameters"
+      summary: "Get annotations via POST"
+      description: "Same as GET /annotations, but accepts filters in the request body."
       requestBody:
         required: true
         content:
@@ -72,11 +78,78 @@ paths:
               $ref: "#/components/schemas/AnnotationQueryParams"
       responses:
         "200":
-          description: "Successful operation"
+          description: "Annotations page"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedAnnotationsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/report:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsReport"
+      summary: "Download annotation metadata as TSV"
+      description: "Streams a TSV file with annotation metadata columns (annotation_id, assembly_accession, assembly_name, organism_name, taxid, database, provider, source_url, bgzip_path, csi_path)."
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/latest_release_by"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
+      responses:
+        "200":
+          description: "TSV stream"
+          content:
+            text/tab-separated-values:
+              schema:
+                type: string
+                description: "TSV payload streamed line by line"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postAnnotationsReport"
+      summary: "Download annotation metadata via POST"
+      description: "Same as GET /annotations/report, but accepts filters in the request body."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "TSV stream"
+          content:
+            text/tab-separated-values:
+              schema:
+                type: string
+                description: "TSV payload streamed line by line"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -87,9 +160,12 @@ paths:
       tags:
         - "annotations"
       operationId: "getAnnotationsSummaryStats"
-      summary: "Get comprehensive summary statistics across all annotations"
+      summary: "Get annotation summary statistics"
+      description: "Aggregates gene, transcript, and feature statistics for the filtered annotation set."
       parameters:
         - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
         - $ref: "#/components/parameters/db_sources"
@@ -98,64 +174,80 @@ paths:
         - $ref: "#/components/parameters/feature_types"
         - $ref: "#/components/parameters/pipelines"
         - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
         - $ref: "#/components/parameters/latest_release_by"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
       responses:
         "200":
-          description: "Comprehensive annotation statistics"
+          description: "Summary statistics"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AnnotationsSummaryStats"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "annotations"
       operationId: "postAnnotationsSummaryStats"
-      summary: "Get summary statistics using POST"
+      summary: "Get annotation summary statistics via POST"
+      description: "Same as GET /annotations/stats/summary, but accepts filters in the request body."
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/AnnotationQueryParams"
       responses:
         "200":
-          description: "Comprehensive annotation statistics"
+          description: "Summary statistics"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AnnotationsSummaryStats"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /annotations/frequencies:
     get:
       tags:
         - "annotations"
-      operationId: "getFrequencyFields"
-      summary: "Get list of available fields for frequency queries"
+      operationId: "getAnnotationFrequencyFields"
+      summary: "List allowed annotation frequency fields"
       responses:
         "200":
-          description: "List of available frequency fields"
+          description: "Frequency-capable fields"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  fields:
-                    type: array
-                    items:
-                      type: string
+                $ref: "#/components/schemas/FrequencyFieldList"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /annotations/frequencies/{field}:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotationFrequencies"
-      summary: "Get frequency counts for a specific field across annotations"
+      summary: "Get annotation field frequencies"
+      description: "Returns frequency counts for the selected field across filtered annotations."
       parameters:
         - name: field
           in: path
           required: true
-          description: "Field to get frequencies for (e.g., 'organism_name', 'taxid', 'source')"
+          description: "Field to aggregate. Allowed values: taxid, organism_name, database, release_date, assembly_accession, assembly_name, feature_type, feature_source, biotype, pipeline, provider."
           schema:
             type: string
         - $ref: "#/components/parameters/filter"
@@ -167,77 +259,81 @@ paths:
         - $ref: "#/components/parameters/feature_types"
         - $ref: "#/components/parameters/pipelines"
         - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/latest_release_by"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
       responses:
         "200":
-          description: "Frequency counts for the field"
+          description: "Frequency counts"
           content:
             application/json:
               schema:
-                type: object
-                additionalProperties: true
+                $ref: "#/components/schemas/FrequencyCounts"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "annotations"
       operationId: "postAnnotationFrequencies"
-      summary: "Get field frequencies using POST"
-      parameters:
-        - name: field
-          in: path
-          required: true
-          schema:
-            type: string
+      summary: "Get annotation field frequencies via POST"
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/AnnotationQueryParams"
       responses:
         "200":
-          description: "Frequency counts response"
+          description: "Frequency counts"
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/FrequencyCounts"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /annotations/errors:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotationErrors"
-      summary: "Get a list of annotation import errors"
+      summary: "List annotation import errors"
       parameters:
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: "List of annotation errors"
+          description: "Annotation errors"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AnnotationError"
-                  pagination:
-                    $ref: "#/components/schemas/Pagination"
-                  total:
-                    type: integer
+                $ref: "#/components/schemas/PaginatedAnnotationErrorsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /annotations/{md5_checksum}:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotationById"
-      summary: "Get a specific annotation by MD5 checksum"
+      summary: "Get annotation by checksum"
       parameters:
         - name: md5_checksum
           in: path
           required: true
-          description: "MD5 checksum of the annotation"
+          description: "MD5 checksum of the annotation (32 lowercase hex characters)."
           schema:
             type: string
             pattern: '^[a-f0-9]{32}$'
@@ -250,46 +346,16 @@ paths:
                 $ref: "#/components/schemas/Annotation"
         "404":
           $ref: "#/components/responses/NotFound"
-
-  /annotations/{md5_checksum}/contigs:
-    get:
-      tags:
-        - "annotations"
-      operationId: "updateAnnotationStats"
-      summary: "Update annotation statistics (admin endpoint)"
-      parameters:
-        - name: md5_checksum
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-f0-9]{32}$'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              description: "Statistics data to update"
-      responses:
-        "200":
-          description: "Stats updated successfully"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-        "404":
-          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /annotations/{md5_checksum}/gff:
     get:
       tags:
         - "annotations"
-      operationId: "streamAnnotationGFF"
-      summary: "Stream GFF data for an annotation file"
+      operationId: "streamAnnotationGff"
+      summary: "Stream filtered GFF3 for an annotation"
+      description: "Streams GFF3 lines for the given annotation. At least one filter (region, feature_type, feature_source, or biotype) must be provided."
       parameters:
         - name: md5_checksum
           in: path
@@ -297,153 +363,201 @@ paths:
           schema:
             type: string
             pattern: '^[a-f0-9]{32}$'
-        - name: seqid
+        - name: region
           in: query
-          description: "Sequence/contig identifier"
+          description: "Sequence/contig identifier or alias."
           schema:
             type: string
         - name: start
           in: query
-          description: "Start position (0-based)"
+          description: "Start position (0-based)."
           schema:
             type: integer
             minimum: 0
         - name: end
           in: query
-          description: "End position"
+          description: "End position (inclusive)."
           schema:
             type: integer
             minimum: 0
         - name: feature_type
           in: query
-          description: "Filter by feature type (e.g., 'gene', 'exon')"
+          description: "Filter by GFF feature type (column 3)."
           schema:
             type: string
         - name: feature_source
           in: query
-          description: "Filter by feature source"
+          description: "Filter by GFF feature source (column 2)."
+          schema:
+            type: string
+        - name: biotype
+          in: query
+          description: "Filter by feature biotype (attribute)."
           schema:
             type: string
       responses:
         "200":
-          description: "GFF3 format data stream"
+          description: "GFF3 stream"
           content:
             text/plain:
               schema:
                 type: string
+                description: "GFF3 lines streamed as plain text"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/{md5_checksum}/contigs:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationContigs"
+      summary: "List contigs available for an annotation"
+      description: "Streams newline-separated contig identifiers from the annotation's Tabix index."
+      parameters:
+        - name: md5_checksum
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{32}$'
+      responses:
+        "200":
+          description: "Contig IDs"
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: "Newline-separated contig identifiers"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /annotations/{md5_checksum}/contigs/aliases:
     get:
       tags:
         - "annotations"
       operationId: "getAnnotationContigAliases"
-      summary: "Get contig name aliases and mappings"
+      summary: "Get contig alias mappings"
       parameters:
         - name: md5_checksum
           in: path
           required: true
           schema:
             type: string
+            pattern: '^[a-f0-9]{32}$'
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: "Contig aliases mapping"
+          description: "Sequence alias mappings"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ContigAlias"
-                  pagination:
-                    $ref: "#/components/schemas/Pagination"
-                  total:
-                    type: integer
+                $ref: "#/components/schemas/PaginatedSequenceAliasesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
-  # ==================== ASSEMBLIES ====================
   /assemblies:
     get:
       tags:
         - "assemblies"
       operationId: "getAssemblies"
-      summary: "Get a paginated list of assemblies"
+      summary: "Get assemblies"
       parameters:
         - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
-        - $ref: "#/components/parameters/offset"
-        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/submitters"
         - $ref: "#/components/parameters/sort_by"
         - $ref: "#/components/parameters/sort_order"
       responses:
         "200":
-          description: "List of assemblies"
+          description: "Assemblies page"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedAssembliesResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "assemblies"
       operationId: "postAssemblies"
-      summary: "Get assemblies using POST"
+      summary: "Get assemblies via POST"
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/AssemblyQueryParams"
       responses:
         "200":
-          description: "List of assemblies"
+          description: "Assemblies page"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedAssembliesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /assemblies/frequencies/{field}:
     get:
       tags:
         - "assemblies"
       operationId: "getAssemblyFrequencies"
-      summary: "Get frequency counts for a specific field across assemblies"
+      summary: "Get assembly field frequencies"
       parameters:
         - name: field
           in: path
           required: true
-          description: "Field to get frequencies for"
+          description: "Field to aggregate. Allowed values: organism_name, submitter, source_database, assembly_level, refseq_category, assembly_status, assembly_type."
           schema:
             type: string
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/submitters"
       responses:
         "200":
           description: "Frequency counts"
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/FrequencyCounts"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "assemblies"
       operationId: "postAssemblyFrequencies"
-      summary: "Get assembly frequencies using POST"
-      parameters:
-        - name: field
-          in: path
-          required: true
-          schema:
-            type: string
+      summary: "Get assembly field frequencies via POST"
       requestBody:
+        required: true
         content:
           application/json:
             schema:
@@ -454,19 +568,22 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/FrequencyCounts"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /assemblies/{assembly_accession}:
     get:
       tags:
         - "assemblies"
       operationId: "getAssemblyById"
-      summary: "Get a specific assembly by accession"
+      summary: "Get assembly by accession"
       parameters:
         - name: assembly_accession
           in: path
           required: true
-          description: "Assembly accession (e.g., 'GCA_000001405.29')"
           schema:
             type: string
       responses:
@@ -478,13 +595,16 @@ paths:
                 $ref: "#/components/schemas/Assembly"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /assemblies/{assembly_accession}/chr_aliases:
     get:
       tags:
         - "assemblies"
       operationId: "getChromosomeAliases"
-      summary: "Get chromosome aliases file for the assembly"
+      summary: "Download chromosome alias table"
+      description: "Streams a TSV file listing chromosome aliases for the assembly (chr_name, sequence_name, GenBank accession, RefSeq accession, UCSC name, aliases)."
       parameters:
         - name: assembly_accession
           in: path
@@ -493,20 +613,23 @@ paths:
             type: string
       responses:
         "200":
-          description: "Chromosome aliases mapping file"
+          description: "TSV stream"
           content:
-            text/plain:
+            text/tab-separated-values:
               schema:
                 type: string
+                description: "Tab-separated alias table"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /assemblies/{assembly_accession}/assembled_molecules:
     get:
       tags:
         - "assemblies"
       operationId: "getAssembledMolecules"
-      summary: "Get assembled molecules (chromosomes/contigs) for an assembly"
+      summary: "List assembled molecules for an assembly"
       parameters:
         - name: assembly_accession
           in: path
@@ -517,27 +640,23 @@ paths:
         - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: "List of assembled molecules"
+          description: "Assembled molecules"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AssembledMolecule"
-                  pagination:
-                    $ref: "#/components/schemas/Pagination"
-                  total:
-                    type: integer
+                $ref: "#/components/schemas/PaginatedGenomicSequencesResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /assemblies/{assembly_accession}/paired:
     get:
       tags:
         - "assemblies"
       operationId: "getPairedAssembly"
-      summary: "Get the paired assembly (RefSeq <-> GenBank)"
+      summary: "Get the paired assembly"
+      description: "Returns the paired RefSeq/GenBank assembly when available."
       parameters:
         - name: assembly_accession
           in: path
@@ -553,57 +672,66 @@ paths:
                 $ref: "#/components/schemas/Assembly"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
-  # ==================== ORGANISMS ====================
   /organisms:
     get:
       tags:
         - "organisms"
       operationId: "getOrganisms"
-      summary: "Get a paginated list of organisms"
+      summary: "Get organisms"
       parameters:
         - $ref: "#/components/parameters/filter"
-        - $ref: "#/components/parameters/taxids"
-        - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
       responses:
         "200":
-          description: "List of organisms"
+          description: "Organisms page"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedOrganismsResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "organisms"
       operationId: "postOrganisms"
-      summary: "Get organisms using POST"
+      summary: "Get organisms via POST"
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/OrganismQueryParams"
       responses:
         "200":
-          description: "List of organisms"
+          description: "Organisms page"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedOrganismsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /organisms/{taxid}:
     get:
       tags:
         - "organisms"
       operationId: "getOrganismById"
-      summary: "Get a specific organism by taxid"
+      summary: "Get organism by taxid"
       parameters:
         - name: taxid
           in: path
           required: true
-          description: "NCBI Taxonomy ID"
           schema:
             type: string
       responses:
@@ -615,53 +743,63 @@ paths:
                 $ref: "#/components/schemas/Organism"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
-  # ==================== TAXONS ====================
   /taxons:
     get:
       tags:
         - "taxons"
       operationId: "getTaxons"
-      summary: "Get a paginated list of taxonomy nodes"
+      summary: "Get taxonomy nodes"
       parameters:
         - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/rank"
-        - $ref: "#/components/parameters/offset"
-        - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/sort_by"
         - $ref: "#/components/parameters/sort_order"
       responses:
         "200":
-          description: "List of taxon nodes"
+          description: "Taxon nodes"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedTaxonsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
     post:
       tags:
         - "taxons"
       operationId: "postTaxons"
-      summary: "Get taxons using POST"
+      summary: "Get taxonomy nodes via POST"
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/TaxonQueryParams"
       responses:
         "200":
-          description: "List of taxon nodes"
+          description: "Taxon nodes"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedTaxonsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /taxons/{taxid}:
     get:
       tags:
         - "taxons"
       operationId: "getTaxonById"
-      summary: "Get a specific taxon node by taxid"
+      summary: "Get taxon node by taxid"
       parameters:
         - name: taxid
           in: path
@@ -677,13 +815,31 @@ paths:
                 $ref: "#/components/schemas/TaxonNode"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /taxons/frequencies/rank:
+    get:
+      tags:
+        - "taxons"
+      operationId: "getTaxonRankFrequencies"
+      summary: "Get rank frequencies"
+      responses:
+        "200":
+          description: "Rank frequency counts"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RankFrequencies"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /taxons/{taxid}/children:
     get:
       tags:
         - "taxons"
       operationId: "getTaxonChildren"
-      summary: "Get child nodes of a taxon"
+      summary: "List children of a taxon"
       parameters:
         - name: taxid
           in: path
@@ -692,20 +848,22 @@ paths:
             type: string
       responses:
         "200":
-          description: "List of child taxon nodes"
+          description: "Children taxon nodes"
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TaxonNode"
+                $ref: "#/components/schemas/PaginatedTaxonsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
   /taxons/{taxid}/ancestors:
     get:
       tags:
         - "taxons"
       operationId: "getTaxonAncestors"
-      summary: "Get ancestor lineage of a taxon"
+      summary: "Get ancestor lineage"
       parameters:
         - name: taxid
           in: path
@@ -714,13 +872,15 @@ paths:
             type: string
       responses:
         "200":
-          description: "List of ancestor taxon nodes"
+          description: "Ancestor lineage"
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/TaxonNode"
+                $ref: "#/components/schemas/TaxonAncestorsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
 
 components:
   parameters:
@@ -730,26 +890,23 @@ components:
       description: "Text search filter across multiple fields"
       schema:
         type: "string"
-    
     limit:
       name: "limit"
       in: "query"
       description: "Maximum number of results to return"
       schema:
         type: "integer"
-        default: 20
         minimum: 1
         maximum: 1000
-    
+        default: 20
     offset:
       name: "offset"
       in: "query"
       description: "Number of results to skip"
       schema:
         type: "integer"
-        default: 0
         minimum: 0
-    
+        default: 0
     taxids:
       name: "taxids"
       in: "query"
@@ -757,7 +914,6 @@ components:
       schema:
         type: "string"
       example: "9606,10090,7227"
-    
     assembly_accessions:
       name: "assembly_accessions"
       in: "query"
@@ -765,123 +921,130 @@ components:
       schema:
         type: "string"
       example: "GCA_000001405.29,GCF_000001405.40"
-    
     db_sources:
       name: "db_sources"
       in: "query"
-      description: "Comma-separated list of database sources"
+      description: "Comma-separated list of source databases (RefSeq, Ensembl, GenBank)"
       schema:
         type: "string"
-      example: "RefSeq,Ensembl"
-    
     feature_sources:
       name: "feature_sources"
       in: "query"
-      description: "Comma-separated list of feature sources from GFF column 2"
+      description: "Comma-separated list of GFF feature sources (column 2)"
       schema:
         type: "string"
-      example: "BestRefSeq,Gnomon"
-    
     biotypes:
       name: "biotypes"
       in: "query"
-      description: "Comma-separated list of biotypes to filter"
+      description: "Comma-separated list of feature biotypes"
       schema:
         type: "string"
-      example: "protein_coding,lncRNA"
-    
     feature_types:
       name: "feature_types"
       in: "query"
-      description: "Comma-separated list of feature types (GFF column 3)"
+      description: "Comma-separated list of GFF feature types (column 3)"
       schema:
         type: "string"
-      example: "gene,mRNA,CDS"
-    
-    md5_checksums:
-      name: "md5_checksums"
-      in: "query"
-      description: "Comma-separated list of annotation MD5 checksums"
-      schema:
-        type: "string"
-    
-    latest_release_by:
-      name: "latest_release_by"
-      in: "query"
-      description: "Group by field and return only latest release"
-      schema:
-        type: "string"
-        enum: ["organism", "assembly"]
-    
     pipelines:
       name: "pipelines"
       in: "query"
-      description: "Comma-separated list of pipeline names"
+      description: "Comma-separated list of annotation pipeline names"
       schema:
         type: "string"
-      example: "BestRefSeq,NCBI"
-    
     providers:
       name: "providers"
       in: "query"
       description: "Comma-separated list of annotation providers"
       schema:
         type: "string"
-      example: "RefSeq,Ensembl"
-    
+    md5_checksums:
+      name: "md5_checksums"
+      in: "query"
+      description: "Comma-separated list of annotation MD5 checksums"
+      schema:
+        type: "string"
     has_stats:
       name: "has_stats"
       in: "query"
-      description: "Filter by presence of statistics"
+      description: "Filter annotations that have computed statistics"
       schema:
         type: "boolean"
-    
-    sort_by:
-      name: "sort_by"
+    latest_release_by:
+      name: "latest_release_by"
       in: "query"
-      description: "Field to sort by"
+      description: "Return only the latest release per group"
       schema:
         type: "string"
-    
-    sort_order:
-      name: "sort_order"
+        enum: ["organism", "assembly"]
+    refseq_categories:
+      name: "refseq_categories"
       in: "query"
-      description: "Sort order (asc or desc)"
+      description: "Comma-separated list of RefSeq categories"
       schema:
         type: "string"
-        enum: ["asc", "desc"]
-        default: "asc"
-    
+    assembly_levels:
+      name: "assembly_levels"
+      in: "query"
+      description: "Comma-separated list of assembly levels"
+      schema:
+        type: "string"
+    assembly_statuses:
+      name: "assembly_statuses"
+      in: "query"
+      description: "Comma-separated list of assembly statuses"
+      schema:
+        type: "string"
+    assembly_types:
+      name: "assembly_types"
+      in: "query"
+      description: "Comma-separated list of assembly types"
+      schema:
+        type: "string"
+    submitters:
+      name: "submitters"
+      in: "query"
+      description: "Comma-separated list of assembly submitter names"
+      schema:
+        type: "string"
     release_date_from:
       name: "release_date_from"
       in: "query"
-      description: "Filter annotations released after this date (ISO format)"
+      description: "Filter annotations released on or after this ISO date"
       schema:
         type: "string"
         format: "date"
-    
     release_date_to:
       name: "release_date_to"
       in: "query"
-      description: "Filter annotations released before this date (ISO format)"
+      description: "Filter annotations released on or before this ISO date"
       schema:
         type: "string"
         format: "date"
-    
+    sort_by:
+      name: "sort_by"
+      in: "query"
+      description: "Field to sort results by"
+      schema:
+        type: "string"
+    sort_order:
+      name: "sort_order"
+      in: "query"
+      description: "Sort order"
+      schema:
+        type: "string"
+        enum: ["asc", "desc"]
     fields:
       name: "fields"
       in: "query"
-      description: "Comma-separated list of fields to return (for projection)"
+      description: "Comma-separated list of dot-notation fields to include in the response"
       schema:
         type: "string"
-    
     rank:
       name: "rank"
       in: "query"
-      description: "Taxonomic rank to filter by"
+      description: "Filter taxonomy nodes by rank"
       schema:
         type: "string"
-      example: "species"
 
   responses:
     BadRequest:
@@ -890,21 +1053,18 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-    
     NotFound:
       description: "Resource not found"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-    
     Forbidden:
-      description: "Forbidden - authentication required"
+      description: "Forbidden"
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
-    
     InternalError:
       description: "Internal server error"
       content:
@@ -914,428 +1074,748 @@ components:
 
   schemas:
     ErrorResponse:
-      type: "object"
+      type: object
       properties:
         detail:
-          type: "string"
-          description: "Error message"
+          type: string
       required:
         - detail
 
-    Pagination:
-      type: "object"
-      properties:
-        offset:
-          type: "integer"
-        limit:
-          type: "integer"
-
-    # ==================== ANNOTATION SCHEMAS ====================
     AnnotationQueryParams:
-      type: "object"
+      type: object
       properties:
         filter:
-          type: "string"
+          type: string
         taxids:
-          type: "string"
+          type: string
         assembly_accessions:
-          type: "string"
+          type: string
         db_sources:
-          type: "string"
+          type: string
         feature_sources:
-          type: "string"
+          type: string
         biotypes:
-          type: "string"
+          type: string
         feature_types:
-          type: "string"
+          type: string
         pipelines:
-          type: "string"
+          type: string
         providers:
-          type: "string"
+          type: string
         md5_checksums:
-          type: "string"
+          type: string
         has_stats:
-          type: "boolean"
+          type: boolean
+        latest_release_by:
+          type: string
+          enum: ["organism", "assembly"]
+        refseq_categories:
+          type: string
+        assembly_levels:
+          type: string
+        assembly_statuses:
+          type: string
+        assembly_types:
+          type: string
+        release_date_from:
+          type: string
+          format: date
+        release_date_to:
+          type: string
+          format: date
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+          enum: ["asc", "desc"]
         offset:
-          type: "integer"
+          type: integer
           default: 0
         limit:
-          type: "integer"
+          type: integer
           default: 20
-        latest_release_by:
-          type: "string"
-          enum: ["organism", "assembly"]
-        sort_by:
-          type: "string"
-        sort_order:
-          type: "string"
-          enum: ["asc", "desc"]
-        release_date_from:
-          type: "string"
-          format: "date"
-        release_date_to:
-          type: "string"
-          format: "date"
         fields:
-          type: "string"
+          type: string
+
+    AssemblyQueryParams:
+      type: object
+      properties:
+        filter:
+          type: string
+        taxids:
+          type: string
+        assembly_accessions:
+          type: string
+        refseq_categories:
+          type: string
+        assembly_levels:
+          type: string
+        assembly_statuses:
+          type: string
+        assembly_types:
+          type: string
+        submitters:
+          type: string
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+          enum: ["asc", "desc"]
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 20
+
+    OrganismQueryParams:
+      type: object
+      properties:
+        filter:
+          type: string
+        taxids:
+          type: string
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+          enum: ["asc", "desc"]
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 20
+
+    TaxonQueryParams:
+      type: object
+      properties:
+        filter:
+          type: string
+        taxids:
+          type: string
+        rank:
+          type: string
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+          enum: ["asc", "desc"]
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 20
 
     Annotation:
-      type: "object"
+      type: object
       properties:
         annotation_id:
-          type: "string"
-          description: "MD5 checksum of the annotation (unique identifier)"
-        name:
-          type: "string"
-          description: "Annotation name"
-        db_source:
-          type: "string"
-          description: "Database source (e.g., 'RefSeq', 'Ensembl')"
-        scientific_name:
-          type: "string"
-          description: "Scientific name of the species"
-        taxon_id:
-          type: "string"
-          description: "NCBI taxonomy identifier"
-        taxon_lineage:
-          type: "array"
-          description: "Taxonomy lineage from species to root"
-          items:
-            type: "string"
+          type: string
+          description: "MD5 checksum of the annotation"
         assembly_accession:
-          type: "string"
-          description: "Assembly accession"
+          type: string
         assembly_name:
-          type: "string"
-          description: "Assembly name"
-        source_file_info:
-          type: "object"
-          properties:
-            database:
-              type: "string"
-            provider:
-              type: "string"
-            release_date:
-              type: "string"
-              format: "date-time"
-            url_path:
-              type: "string"
-              format: "uri"
-            last_modified:
-              type: "string"
-              format: "date-time"
-            uncompressed_md5:
-              type: "string"
-        indexed_file_info:
-          type: "object"
-          properties:
-            bgzipped_path:
-              type: "string"
-            csi_path:
-              type: "string"
-            uncompressed_md5:
-              type: "string"
-            file_size:
-              type: "integer"
-            processed_at:
-              type: "string"
-              format: "date-time"
-        features_summary:
-          type: "object"
-          properties:
-            attribute_keys:
-              type: "array"
-              items:
-                type: "string"
-            types:
-              type: "array"
-              items:
-                type: "string"
-            sources:
-              type: "array"
-              items:
-                type: "string"
-            biotypes:
-              type: "array"
-              items:
-                type: "string"
-            types_missing_id:
-              type: "array"
-              items:
-                type: "string"
-            root_type_counts:
-              type: "object"
-              additionalProperties:
-                type: "integer"
-            has_biotype:
-              type: "boolean"
-            has_cds:
-              type: "boolean"
-            has_exon:
-              type: "boolean"
-
-    PaginatedAnnotationsResponse:
-      type: "object"
-      properties:
-        data:
-          type: "array"
+          type: string
+        organism_name:
+          type: string
+        taxid:
+          type: string
+        taxon_lineage:
+          type: array
           items:
-            $ref: "#/components/schemas/Annotation"
-        pagination:
-          $ref: "#/components/schemas/Pagination"
-        total:
-          type: "integer"
+            type: string
+        mapped_regions:
+          type: array
+          items:
+            type: string
+        source_file_info:
+          $ref: "#/components/schemas/SourceFileInfo"
+        indexed_file_info:
+          $ref: "#/components/schemas/IndexedFileInfo"
+        features_summary:
+          $ref: "#/components/schemas/FeatureSummary"
+        features_statistics:
+          $ref: "#/components/schemas/GFFStats"
+      required:
+        - annotation_id
+        - assembly_accession
+        - assembly_name
+        - organism_name
+        - taxid
 
-    AnnotationError:
-      type: "object"
+    SourceFileInfo:
+      type: object
       properties:
+        database:
+          type: string
+        provider:
+          type: string
+        release_date:
+          type: string
+          format: date-time
         url_path:
-          type: "string"
-        error_message:
-          type: "string"
-        timestamp:
-          type: "string"
-          format: "date-time"
+          type: string
+          format: uri
+        last_modified:
+          type: string
+          format: date-time
+        uncompressed_md5:
+          type: string
+        pipeline:
+          $ref: "#/components/schemas/PipelineInfo"
+      required:
+        - database
+        - release_date
+        - url_path
+        - last_modified
+        - uncompressed_md5
+
+    PipelineInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        method:
+          type: string
+
+    IndexedFileInfo:
+      type: object
+      properties:
+        bgzipped_path:
+          type: string
+        csi_path:
+          type: string
+        uncompressed_md5:
+          type: string
+        file_size:
+          type: integer
+        processed_at:
+          type: string
+          format: date-time
+        pipeline:
+          $ref: "#/components/schemas/PipelineInfo"
+      required:
+        - bgzipped_path
+        - csi_path
+        - uncompressed_md5
+        - file_size
+
+    FeatureSummary:
+      type: object
+      properties:
+        attribute_keys:
+          type: array
+          items:
+            type: string
+        types:
+          type: array
+          items:
+            type: string
+        sources:
+          type: array
+          items:
+            type: string
+        biotypes:
+          type: array
+          items:
+            type: string
+        types_missing_id:
+          type: array
+          items:
+            type: string
+        root_type_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        has_biotype:
+          type: boolean
+        has_cds:
+          type: boolean
+        has_exon:
+          type: boolean
+
+    GFFStats:
+      type: object
+      properties:
+        coding_genes:
+          $ref: "#/components/schemas/GeneStats"
+        non_coding_genes:
+          $ref: "#/components/schemas/GeneStats"
+        pseudogenes:
+          $ref: "#/components/schemas/GeneStats"
+
+    GeneStats:
+      type: object
+      properties:
+        count:
+          type: integer
+        length_stats:
+          $ref: "#/components/schemas/GeneLengthStats"
+        transcripts:
+          $ref: "#/components/schemas/TranscriptStats"
+        features:
+          $ref: "#/components/schemas/FeatureStats"
+
+    GeneLengthStats:
+      type: object
+      properties:
+        min:
+          type: integer
+        max:
+          type: integer
+        mean:
+          type: number
+        median:
+          type: number
+
+    TranscriptStats:
+      type: object
+      properties:
+        count:
+          type: integer
+        per_gene:
+          type: number
+        types:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TranscriptTypeStats"
+
+    TranscriptTypeStats:
+      type: object
+      properties:
+        count:
+          type: integer
+        per_gene:
+          type: number
+        exons_per_transcript:
+          type: number
+        length_stats:
+          $ref: "#/components/schemas/LengthStats"
+        spliced_length_stats:
+          $ref: "#/components/schemas/LengthStats"
+        exon_length_stats:
+          $ref: "#/components/schemas/LengthStats"
+
+    FeatureStats:
+      type: object
+      properties:
+        exons:
+          $ref: "#/components/schemas/FeatureTypeStats"
+        cds:
+          $ref: "#/components/schemas/FeatureTypeStats"
+        introns:
+          $ref: "#/components/schemas/FeatureTypeStats"
+
+    FeatureTypeStats:
+      type: object
+      properties:
+        count:
+          type: integer
+        length_stats:
+          $ref: "#/components/schemas/LengthStats"
+
+    LengthStats:
+      type: object
+      properties:
+        mean:
+          type: number
+        median:
+          type: number
 
     AnnotationsSummaryStats:
-      type: "object"
-      description: "Comprehensive summary statistics across annotations"
+      type: object
       properties:
-        total_annotations:
-          type: "integer"
-          description: "Total number of annotations"
-        organisms_count:
-          type: "integer"
-          description: "Number of unique organisms"
-        assemblies_count:
-          type: "integer"
-          description: "Number of unique assemblies"
-        coding_genes:
-          type: "object"
-          description: "Statistics for coding genes"
+        annotations:
+          type: object
           properties:
-            count:
-              type: "array"
-              items:
-                type: "integer"
-            mean_gene_length:
-              type: "array"
-              items:
-                type: "number"
-        non_coding_genes:
-          type: "object"
-          description: "Statistics for non-coding genes"
-        pseudogenes:
-          type: "object"
-          description: "Statistics for pseudogenes"
-        mrna:
-          type: "object"
-          description: "Statistics for mRNA transcripts"
-        lncrna:
-          type: "object"
-          description: "Statistics for lncRNA"
-        cds:
-          type: "object"
-          description: "Statistics for CDS features"
-        exons:
-          type: "object"
-          description: "Statistics for exons"
+            total_count:
+              type: integer
+            related_organisms_count:
+              type: integer
+            related_assemblies_count:
+              type: integer
+        genes:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/GeneAggregateStats"
+        transcripts:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/TranscriptAggregateStats"
+        features:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/FeatureAggregateStats"
 
-    DownloadSummaryResponse:
-      type: "object"
+    GeneAggregateStats:
+      type: object
       properties:
-        total_bytes:
-          type: "integer"
-        file_count:
-          type: "integer"
-        estimated_size_mb:
-          type: "number"
+        total_count:
+          type: integer
+        mean_count:
+          type: number
+        median_count:
+          type: number
+        mean_length:
+          type: number
+        median_length:
+          type: number
 
-    ContigAlias:
-      type: "object"
+    TranscriptAggregateStats:
+      type: object
       properties:
-        sequence_id:
-          type: "string"
-        aliases:
-          type: "array"
-          items:
-            type: "string"
+        total_count:
+          type: integer
+        mean_count:
+          type: number
+        median_count:
+          type: number
+        mean_length:
+          type: number
+        median_length:
+          type: number
 
-    # ==================== ASSEMBLY SCHEMAS ====================
-    AssemblyQueryParams:
-      type: "object"
+    FeatureAggregateStats:
+      type: object
       properties:
-        filter:
-          type: "string"
-        taxids:
-          type: "string"
-        assembly_accessions:
-          type: "string"
-        offset:
-          type: "integer"
-          default: 0
-        limit:
-          type: "integer"
-          default: 20
-        sort_by:
-          type: "string"
-        sort_order:
-          type: "string"
-          enum: ["asc", "desc"]
+        mean_length:
+          type: number
+        median_length:
+          type: number
 
-    Assembly:
-      type: "object"
+    AnnotationError:
+      type: object
       properties:
         assembly_accession:
-          type: "string"
-        assembly_name:
-          type: "string"
-        organism_name:
-          type: "string"
+          type: string
         taxid:
-          type: "string"
+          type: string
+        organism_name:
+          type: string
+        error_message:
+          type: string
+        url_path:
+          type: string
+          format: uri
+        source_md5:
+          type: string
+        source_database:
+          type: string
+        release_date:
+          type: string
+          format: date-time
+        last_modified:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+      required:
+        - assembly_accession
+        - taxid
+        - organism_name
+        - error_message
+        - url_path
+        - source_md5
+        - source_database
+
+    Assembly:
+      type: object
+      properties:
+        assembly_accession:
+          type: string
         paired_assembly_accession:
-          type: "string"
+          type: string
+        assembly_name:
+          type: string
+        source_database:
+          type: string
         assembly_level:
-          type: "string"
-        genome_representation:
-          type: "string"
+          type: string
+        assembly_status:
+          type: string
+        assembly_type:
+          type: string
         refseq_category:
-          type: "string"
-        assembly_stats:
-          type: "object"
-          properties:
-            total_sequence_length:
-              type: "string"
-            total_ungapped_length:
-              type: "string"
-            gc_percent:
-              type: "integer"
-            number_of_contigs:
-              type: "integer"
-            contig_n50:
-              type: "integer"
-
-    AssembledMolecule:
-      type: "object"
-      properties:
-        sequence_name:
-          type: "string"
-        genbank_accession:
-          type: "string"
-        refseq_accession:
-          type: "string"
-        assigned_molecule:
-          type: "string"
-        sequence_role:
-          type: "string"
-        sequence_length:
-          type: "integer"
-
-    PaginatedAssembliesResponse:
-      type: "object"
-      properties:
-        data:
-          type: "array"
+          type: string
+        taxid:
+          type: string
+        organism_name:
+          type: string
+        taxon_lineage:
+          type: array
           items:
-            $ref: "#/components/schemas/Assembly"
-        pagination:
-          $ref: "#/components/schemas/Pagination"
-        total:
-          type: "integer"
+            type: string
+        release_date:
+          type: string
+          format: date-time
+        submitter:
+          type: string
+        annotations_count:
+          type: integer
+        download_url:
+          type: string
+          format: uri
+        assembly_stats:
+          $ref: "#/components/schemas/AssemblyStats"
+      required:
+        - assembly_accession
+        - assembly_name
+        - organism_name
+        - taxid
+        - download_url
 
-    # ==================== ORGANISM SCHEMAS ====================
-    OrganismQueryParams:
-      type: "object"
+    AssemblyStats:
+      type: object
       properties:
-        filter:
-          type: "string"
-        taxids:
-          type: "string"
-        offset:
-          type: "integer"
-          default: 0
-        limit:
-          type: "integer"
-          default: 20
+        total_number_of_chromosomes:
+          type: integer
+        total_sequence_length:
+          type: string
+        total_ungapped_length:
+          type: string
+        number_of_contigs:
+          type: integer
+        contig_n50:
+          type: integer
+        contig_l50:
+          type: integer
+        number_of_scaffolds:
+          type: integer
+        scaffold_n50:
+          type: integer
+        scaffold_l50:
+          type: integer
+        gaps_between_scaffolds_count:
+          type: integer
+        number_of_component_sequences:
+          type: integer
+        atgc_count:
+          type: string
+        gc_count:
+          type: string
+        gc_percent:
+          type: integer
+        genome_coverage:
+          type: string
+        number_of_organelles:
+          type: integer
+
+    GenomicSequence:
+      type: object
+      properties:
+        assembly_accession:
+          type: string
+        assembly_name:
+          type: string
+        chr_name:
+          type: string
+        sequence_name:
+          type: string
+        ucsc_style_name:
+          type: string
+        genbank_accession:
+          type: string
+        refseq_accession:
+          type: string
+        length:
+          type: integer
+        aliases:
+          type: array
+          items:
+            type: string
+      required:
+        - assembly_accession
+        - assembly_name
+        - sequence_name
+        - aliases
 
     Organism:
-      type: "object"
+      type: object
       properties:
         taxid:
-          type: "string"
-        scientific_name:
-          type: "string"
+          type: string
+        organism_name:
+          type: string
         common_name:
-          type: "string"
-        lineage:
-          type: "array"
+          type: string
+        taxon_lineage:
+          type: array
           items:
-            type: "string"
-        annotation_count:
-          type: "integer"
-        assembly_count:
-          type: "integer"
-
-    PaginatedOrganismsResponse:
-      type: "object"
-      properties:
-        data:
-          type: "array"
-          items:
-            $ref: "#/components/schemas/Organism"
-        pagination:
-          $ref: "#/components/schemas/Pagination"
-        total:
-          type: "integer"
-
-    # ==================== TAXON SCHEMAS ====================
-    TaxonQueryParams:
-      type: "object"
-      properties:
-        filter:
-          type: "string"
-        taxids:
-          type: "string"
-        rank:
-          type: "string"
-          description: "Filter by taxonomic rank"
-        offset:
-          type: "integer"
-          default: 0
-        limit:
-          type: "integer"
-          default: 20
-        sort_by:
-          type: "string"
-        sort_order:
-          type: "string"
-          enum: ["asc", "desc"]
+            type: string
+        annotations_count:
+          type: integer
+        assemblies_count:
+          type: integer
+      required:
+        - taxid
+        - organism_name
 
     TaxonNode:
-      type: "object"
+      type: object
       properties:
         taxid:
-          type: "string"
+          type: string
         scientific_name:
-          type: "string"
+          type: string
         rank:
-          type: "string"
-        parent_taxid:
-          type: "string"
-        lineage:
-          type: "array"
+          type: string
+        children:
+          type: array
           items:
-            type: "string"
+            type: string
+        assemblies_count:
+          type: integer
+        annotations_count:
+          type: integer
+        organisms_count:
+          type: integer
+      required:
+        - taxid
+        - scientific_name
+
+    SequenceAlias:
+      type: object
+      properties:
+        sequence_id:
+          type: string
+        annotation_id:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+      required:
+        - sequence_id
+        - annotation_id
+        - aliases
+
+    FrequencyFieldList:
+      type: object
+      properties:
+        fields:
+          type: array
+          items:
+            type: string
+
+    FrequencyCounts:
+      type: object
+      additionalProperties:
+        type: integer
+
+    RankFrequencies:
+      type: object
+      additionalProperties:
+        type: integer
+
+    PaginatedAnnotationsResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Annotation"
+
+    PaginatedAssembliesResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Assembly"
+
+    PaginatedOrganismsResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organism"
 
     PaginatedTaxonsResponse:
-      type: "object"
+      type: object
       properties:
-        data:
-          type: "array"
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
           items:
             $ref: "#/components/schemas/TaxonNode"
-        pagination:
-          $ref: "#/components/schemas/Pagination"
+
+    PaginatedAnnotationErrorsResponse:
+      type: object
+      properties:
         total:
-          type: "integer"
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnnotationError"
+
+    PaginatedSequenceAliasesResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/SequenceAlias"
+
+    PaginatedGenomicSequencesResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenomicSequence"
+
+    TaxonAncestorsResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxonNode"

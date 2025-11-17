@@ -26,3 +26,7 @@ export function getTaxonChildren(taxid: string) {
 export function getTaxonAncestors(taxid: string) {
   return apiGet<Pagination<TaxonRecord>>(`/taxons/${encodeURIComponent(taxid)}/ancestors`)
 }
+
+export function getTaxonRankFrequencies() {
+  return apiGet<Record<string, number>>('/taxons/frequencies/rank')
+}

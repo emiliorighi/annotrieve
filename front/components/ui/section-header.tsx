@@ -1,10 +1,11 @@
 "use client"
 
 import { LucideIcon } from "lucide-react"
+import { ReactNode } from "react"
 
 interface SectionHeaderProps {
   title: string
-  description?: string
+  description?: ReactNode
   icon?: LucideIcon
   iconColor?: string
   iconBgColor?: string
