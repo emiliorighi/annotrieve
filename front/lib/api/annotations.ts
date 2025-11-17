@@ -25,6 +25,15 @@ export function listAnnotations(params: FetchAnnotationsParams) {
   return apiGet<Pagination<AnnotationRecord>>('/annotations', params)
 }
 
+export async function downloadAnnotationsReport(params: FetchAnnotationsParams): Promise<Blob> {
+  const API_BASE = 'https://genome.crg.es/annotrieve/api/v0'
+  const url = `${API_BASE}/annotations/report${buildQuery(params)}`
+  const res = await fetch(url, { method: 'GET', headers: { Accept: 'text/tab-separated-values' } })
+  if (!res.ok) {
+    throw new Error(`GET /annotations/report failed: ${res.status}`)
+  }
+  return res.blob()
+}
 export function getAnnotation(md5: string) {
   return apiGet<AnnotationRecord>(`/annotations/${md5}`)
 }

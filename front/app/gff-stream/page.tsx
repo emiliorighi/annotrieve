@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { CSSProperties } from "react"
+import type { CSSProperties, ReactNode } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, AlertCircle, Download, Loader2 } from "lucide-react"
 
@@ -301,6 +301,32 @@ function FeatureRow({ feature }: { feature: GffFeature }) {
   )
 }
 
+type FormSectionProps = {
+  title: string
+  description?: string
+  children: ReactNode
+  footer?: ReactNode
+}
+
+function FormSection({ title, description, children, footer }: FormSectionProps) {
+  return (
+    <section className="border-b last:border-b-0">
+      <div className="px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        {description && <p className="mt-1 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <div className="px-4 pb-4">
+        <div className="space-y-4">{children}</div>
+      </div>
+      {footer && (
+        <div className="flex flex-wrap items-center gap-3 bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+          {footer}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export default function GffStreamPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -312,6 +338,7 @@ export default function GffStreamPage() {
 
   const [referenceOptions, setReferenceOptions] = useState<ReferenceOption[]>([])
   const [selectedReference, setSelectedReference] = useState<string>("")
+  const [referenceDraft, setReferenceDraft] = useState<string>("")
   const [windowSize, setWindowSize] = useState<number>(250000)
 
   const [features, setFeatures] = useState<GffFeature[]>([])
@@ -332,6 +359,7 @@ export default function GffStreamPage() {
   const streamingGenerationRef = useRef(0)
   const fetchNextWindowRef = useRef<(() => Promise<void>) | null>(null)
   const seenFeatureKeysRef = useRef<Set<string>>(new Set())
+  const referenceEditedRef = useRef(false)
 
   const activeStartValue = useMemo(
     () => parseBoundaryValue(activeFilters.start),
@@ -355,14 +383,40 @@ export default function GffStreamPage() {
     pendingFilters.biotype !== activeFilters.biotype
   const hasActiveFilters = Object.values(activeFilters).some((value) => Boolean(value))
   const normalizedReference = selectedReference.trim()
+  const normalizedDraftReference = referenceDraft.trim()
   const hasSelectedReference = normalizedReference.length > 0
+  const hasDraftReference = normalizedDraftReference.length > 0
   const isReferenceKnown =
-    hasSelectedReference &&
-    referenceOptions.some((option) => option.sequence_id === normalizedReference)
+    hasDraftReference &&
+    referenceOptions.some((option) => option.sequence_id === normalizedDraftReference)
 
   const featureTypes = ((annotation as any)?.features_summary?.types as string[]) ?? []
   const featureSources = ((annotation as any)?.features_summary?.sources as string[]) ?? []
   const biotypes = ((annotation as any)?.features_summary?.biotypes as string[]) ?? []
+
+  const updateReference = useCallback(
+    (value: string, options?: { immediate?: boolean; fromUser?: boolean }) => {
+      const immediate = options?.immediate ?? false
+      const fromUser = options?.fromUser ?? false
+      if (fromUser) {
+        referenceEditedRef.current = true
+      }
+      setReferenceDraft(value)
+      if (immediate) {
+        setSelectedReference(value)
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    const handler = window.setTimeout(() => {
+      setSelectedReference(referenceDraft)
+    }, 400)
+    return () => {
+      window.clearTimeout(handler)
+    }
+  }, [referenceDraft])
 
   const handleFilterChange = (key: keyof FilterControls, value: string) => {
     setFilterError(null)
@@ -446,6 +500,7 @@ export default function GffStreamPage() {
     setActiveFilters(empty)
     setFilterError(null)
     setRegionLookupError(null)
+    referenceEditedRef.current = false
   }, [annotationId])
 
   useEffect(() => {
@@ -487,7 +542,8 @@ export default function GffStreamPage() {
     if (!annotationId || !annotation?.annotation_id) {
       resetStreamingBuffers()
       setReferenceOptions([])
-      setSelectedReference("")
+      referenceEditedRef.current = false
+      updateReference("", { immediate: true })
       setIsReferencesLoading(false)
       return
     }
@@ -510,7 +566,8 @@ export default function GffStreamPage() {
     async function fetchMappedRegions() {
       setIsReferencesLoading(true)
       setReferenceOptions([])
-      setSelectedReference("")
+      referenceEditedRef.current = false
+      updateReference("", { immediate: true })
       const collected: ReferenceOption[] = []
       const PAGE_SIZE = 200
       let offset = 0
@@ -543,12 +600,12 @@ export default function GffStreamPage() {
           collected.length > 0 ? dedupeReferenceOptions(collected) : fallbackOptions()
         if (cancelled) return
         setReferenceOptions(normalized)
-        setSelectedReference((current) => {
-          if (current && current.trim().length > 0) {
-            return current
+        if (!referenceEditedRef.current) {
+          const defaultOption = normalized[0]?.sequence_id ?? ""
+          if (defaultOption) {
+            updateReference(defaultOption, { immediate: true })
           }
-          return normalized[0]?.sequence_id ?? ""
-        })
+        }
       } catch (err) {
         if (!cancelled) {
           console.error("[GFF stream] Failed to load mapped regions", err)
@@ -557,12 +614,12 @@ export default function GffStreamPage() {
           )
           const fallback = fallbackOptions()
           setReferenceOptions(fallback)
-          setSelectedReference((current) => {
-            if (current && current.trim().length > 0) {
-              return current
+          if (!referenceEditedRef.current) {
+            const defaultOption = fallback[0]?.sequence_id ?? ""
+            if (defaultOption) {
+              updateReference(defaultOption, { immediate: true })
             }
-            return fallback[0]?.sequence_id ?? ""
-          })
+          }
         }
       } finally {
         if (!cancelled) {
@@ -575,7 +632,7 @@ export default function GffStreamPage() {
     return () => {
       cancelled = true
     }
-  }, [annotationId, annotation?.annotation_id, annotation?.mapped_regions, resetStreamingBuffers])
+  }, [annotationId, annotation?.annotation_id, annotation?.mapped_regions, updateReference, resetStreamingBuffers])
 
   useEffect(() => {
     setRegionLookupError(null)
@@ -826,271 +883,284 @@ export default function GffStreamPage() {
           </Card>
         )}
 
-        <Card className="p-4 space-y-4">
-          <div className="grid gap-4 md:grid-cols-[2fr_1fr] lg:grid-cols-[2fr_1fr_1fr]">
-            <div className="space-y-2">
-              <label className="text-xs font-medium uppercase text-muted-foreground">
-                Sequence / contig
-              </label>
-              <Input
-                value={selectedReference}
-                onChange={(event) => setSelectedReference(event.target.value)}
-                placeholder="Enter a contig name (e.g. chr1, scaff_12)"
-                className="font-mono"
-                disabled={missingFiles || loadingState}
-                list={referenceOptions.length ? "reference-suggestions" : undefined}
-              />
-              {referenceOptions.length > 0 && (
-                <datalist id="reference-suggestions">
-                  {referenceOptions.map((option) => (
-                    <option key={option.sequence_id} value={option.sequence_id}>
-                      {option.aliases?.join(", ")}
-                    </option>
-                  ))}
-                </datalist>
-              )}
-              {referenceOptions.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {referenceOptions.slice(0, 10).map((option) => (
-                    <button
-                      key={option.sequence_id}
-                      type="button"
-                      className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-mono text-muted-foreground transition hover:border-border hover:text-foreground"
-                      onClick={() => setSelectedReference(option.sequence_id)}
-                    >
-                      {option.sequence_id}
-                    </button>
-                  ))}
-                  {referenceOptions.length > 10 && (
-                    <span className="text-xs text-muted-foreground">
-                      +{referenceOptions.length - 10} more
-                    </span>
-                  )}
+        <Card className="overflow-hidden border">
+          <FormSection
+            title="Region & window"
+            description="Provide a contig (sequence ID) to begin streaming and choose how wide each request should be."
+            footer={
+              <>
+                <span className="flex-1 min-w-[240px]">
+                  Windows stream through the `/annotations/&lt;annotation_id&gt;/gff` API. Each request
+                  respects the region and window size set above.
+                </span>
+                {annotation && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    disabled={downloadingContigs}
+                    onClick={handleDownloadContigs}
+                  >
+                    {downloadingContigs && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {downloadingContigs ? "Downloading contigs…" : "Download contigs"}
+                  </Button>
+                )}
+              </>
+            }
+          >
+            <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
+              <div className="space-y-2">
+                <Input
+                  value={referenceDraft}
+                  onChange={(event) => updateReference(event.target.value, { fromUser: true })}
+                  placeholder="Enter a contig name (e.g. chr1, scaff_12)"
+                  className="font-mono"
+                  disabled={missingFiles || loadingState}
+                  list={referenceOptions.length ? "reference-suggestions" : undefined}
+                />
+                {referenceOptions.length > 0 && (
+                  <datalist id="reference-suggestions">
+                    {referenceOptions.map((option) => (
+                      <option key={option.sequence_id} value={option.sequence_id}>
+                        {option.aliases?.join(", ")}
+                      </option>
+                    ))}
+                  </datalist>
+                )}
+                {referenceOptions.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {referenceOptions.slice(0, 8).map((option) => (
+                      <button
+                        key={option.sequence_id}
+                        type="button"
+                        className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] font-mono text-muted-foreground transition hover:border-border hover:text-foreground"
+                        onClick={() =>
+                          updateReference(option.sequence_id, { immediate: true, fromUser: true })
+                        }
+                      >
+                        {option.sequence_id}
+                      </button>
+                    ))}
+                    {referenceOptions.length > 8 && (
+                      <span className="text-xs text-muted-foreground">
+                        +{referenceOptions.length - 8} more
+                      </span>
+                    )}
+                  </div>
+                )}
+                {annotationId && !referenceOptions.length && (
+                  <p className="text-xs text-muted-foreground">
+                    {isReferencesLoading
+                      ? "Fetching mapped regions…"
+                      : "No mapped regions were found. Enter the contig name manually or download the contigs file for this annotation."}
+                  </p>
+                )}
+                {hasDraftReference && referenceOptions.length > 0 && !isReferenceKnown && (
+                  <p className="text-xs text-amber-600">
+                    This region is not listed among the mapped contigs. Streaming will still attempt to
+                    fetch it directly.
+                  </p>
+                )}
+                {regionLookupError && (
+                  <p className="text-xs text-destructive">{regionLookupError}</p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Select
+                  value={windowSize.toString()}
+                  onValueChange={(value) => setWindowSize(Number(value))}
+                  disabled={missingFiles || !hasDraftReference}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {WINDOW_CHOICES.map((choice) => (
+                      <SelectItem key={choice} value={choice.toString()}>
+                        {numberFormatter.format(choice)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <label className="text-xs font-medium uppercase text-muted-foreground">
+                  Window size (bp)
+                </label>
+              </div>
+            </div>
+          </FormSection>
+
+          <FormSection
+            title="Optional filters"
+            description="Restrict streaming to a sub-interval or a specific subset of features. Leave blank to stream everything."
+            footer={
+              <>
+                {hasActiveFilters && (
+                  <span className="rounded-full bg-background/70 px-2 py-0.5 font-mono text-[11px] text-foreground">
+                    {[
+                      activeFilters.featureType && `type=${activeFilters.featureType}`,
+                      activeFilters.featureSource && `source=${activeFilters.featureSource}`,
+                      activeFilters.biotype && `biotype=${activeFilters.biotype}`,
+                      activeStartValue !== null && `start≥${numberFormatter.format(activeStartValue)}`,
+                      activeEndValue !== null && `end≤${numberFormatter.format(activeEndValue)}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" • ")}
+                  </span>
+                )}
+                <div className="ml-auto flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleApplyFilters}
+                    disabled={!filtersDirty || !hasDraftReference}
+                  >
+                    Apply filters
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleResetFilters}
+                    disabled={!filtersDirty && !hasActiveFilters}
+                  >
+                    Reset
+                  </Button>
                 </div>
-              )}
-              {annotationId && !referenceOptions.length && (
-                <p className="text-xs text-muted-foreground">
-                  {isReferencesLoading
-                    ? "Fetching mapped regions…"
-                    : "No mapped regions were found. Enter the contig name manually or download the contigs file for this annotation."}
-                </p>
-              )}
-              {hasSelectedReference && referenceOptions.length > 0 && !isReferenceKnown && (
-                <p className="text-xs text-amber-600">
-                  This region is not listed among the mapped contigs. Streaming will still attempt to
-                  fetch it directly.
-                </p>
-              )}
-              {regionLookupError && (
-                <p className="text-xs text-destructive">{regionLookupError}</p>
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase text-muted-foreground">
-                Window size (bp)
-              </label>
-              <Select
-                value={windowSize.toString()}
-                onValueChange={(value) => setWindowSize(Number(value))}
-                disabled={missingFiles || !hasSelectedReference}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {WINDOW_CHOICES.map((choice) => (
-                    <SelectItem key={choice} value={choice.toString()}>
-                      {numberFormatter.format(choice)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase text-muted-foreground">
-                Start boundary (bp)
-              </label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9,]*"
-                placeholder="e.g. 1,000,000"
-                value={pendingFilters.start}
-                onChange={(event) => handleFilterChange("start", event.target.value)}
-                disabled={!hasSelectedReference}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase text-muted-foreground">
-                End boundary (bp)
-              </label>
-              <Input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9,]*"
-                placeholder="e.g. 1,200,000"
-                value={pendingFilters.end}
-                onChange={(event) => handleFilterChange("end", event.target.value)}
-                disabled={!hasSelectedReference}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase text-muted-foreground">
-                Feature type filter
-              </label>
-              {featureTypes.length ? (
-                <Select
-                  value={pendingFilters.featureType || ANY_OPTION_VALUE}
-                  onValueChange={(value) =>
-                    handleFilterChange("featureType", value === ANY_OPTION_VALUE ? "" : value)
-                  }
-                  disabled={!hasSelectedReference}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Any feature type" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value={ANY_OPTION_VALUE}>Any feature type</SelectItem>
-                    {featureTypes.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
+              </>
+            }
+          >
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase text-muted-foreground">
+                  Start boundary (bp)
+                </label>
                 <Input
-                  placeholder="gene, mRNA, CDS…"
-                  value={pendingFilters.featureType}
-                  onChange={(event) => handleFilterChange("featureType", event.target.value)}
-                  disabled={!hasSelectedReference}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9,]*"
+                  placeholder="e.g. 1,000,000"
+                  value={pendingFilters.start}
+                  onChange={(event) => handleFilterChange("start", event.target.value)}
+                  disabled={!hasDraftReference}
                 />
-              )}
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase text-muted-foreground">
-                Feature source filter
-              </label>
-              {featureSources.length ? (
-                <Select
-                  value={pendingFilters.featureSource || ANY_OPTION_VALUE}
-                  onValueChange={(value) =>
-                    handleFilterChange("featureSource", value === ANY_OPTION_VALUE ? "" : value)
-                  }
-                  disabled={!hasSelectedReference}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Any source" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value={ANY_OPTION_VALUE}>Any source</SelectItem>
-                    {featureSources.map((source) => (
-                      <SelectItem key={source} value={source}>
-                        {source}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase text-muted-foreground">
+                  End boundary (bp)
+                </label>
                 <Input
-                  placeholder="Ensembl, RefSeq…"
-                  value={pendingFilters.featureSource}
-                  onChange={(event) => handleFilterChange("featureSource", event.target.value)}
-                  disabled={!hasSelectedReference}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9,]*"
+                  placeholder="e.g. 1,200,000"
+                  value={pendingFilters.end}
+                  onChange={(event) => handleFilterChange("end", event.target.value)}
+                  disabled={!hasDraftReference}
                 />
-              )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase text-muted-foreground">
+                  Feature type filter
+                </label>
+                {featureTypes.length ? (
+                  <Select
+                    value={pendingFilters.featureType || ANY_OPTION_VALUE}
+                    onValueChange={(value) =>
+                      handleFilterChange("featureType", value === ANY_OPTION_VALUE ? "" : value)
+                    }
+                    disabled={!hasDraftReference}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any feature type" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem value={ANY_OPTION_VALUE}>Any feature type</SelectItem>
+                      {featureTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="gene, mRNA, CDS…"
+                    value={pendingFilters.featureType}
+                    onChange={(event) => handleFilterChange("featureType", event.target.value)}
+                    disabled={!hasDraftReference}
+                  />
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase text-muted-foreground">
+                  Feature source filter
+                </label>
+                {featureSources.length ? (
+                  <Select
+                    value={pendingFilters.featureSource || ANY_OPTION_VALUE}
+                    onValueChange={(value) =>
+                      handleFilterChange("featureSource", value === ANY_OPTION_VALUE ? "" : value)
+                    }
+                    disabled={!hasDraftReference}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any source" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem value={ANY_OPTION_VALUE}>Any source</SelectItem>
+                      {featureSources.map((source) => (
+                        <SelectItem key={source} value={source}>
+                          {source}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="Ensembl, RefSeq…"
+                    value={pendingFilters.featureSource}
+                    onChange={(event) => handleFilterChange("featureSource", event.target.value)}
+                    disabled={!hasDraftReference}
+                  />
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-medium uppercase text-muted-foreground">Biotype</label>
+                {biotypes.length ? (
+                  <Select
+                    value={pendingFilters.biotype || ANY_OPTION_VALUE}
+                    onValueChange={(value) =>
+                      handleFilterChange("biotype", value === ANY_OPTION_VALUE ? "" : value)
+                    }
+                    disabled={!hasDraftReference}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any biotype" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      <SelectItem value={ANY_OPTION_VALUE}>Any biotype</SelectItem>
+                      {biotypes.map((bt) => (
+                        <SelectItem key={bt} value={bt}>
+                          {bt}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input
+                    placeholder="protein_coding, rRNA…"
+                    value={pendingFilters.biotype}
+                    onChange={(event) => handleFilterChange("biotype", event.target.value)}
+                    disabled={!hasDraftReference}
+                  />
+                )}
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-medium uppercase text-muted-foreground">Biotype</label>
-              {biotypes.length ? (
-                <Select
-                  value={pendingFilters.biotype || ANY_OPTION_VALUE}
-                  onValueChange={(value) =>
-                    handleFilterChange("biotype", value === ANY_OPTION_VALUE ? "" : value)
-                  }
-                  disabled={!hasSelectedReference}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Any biotype" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    <SelectItem value={ANY_OPTION_VALUE}>Any biotype</SelectItem>
-                    {biotypes.map((bt) => (
-                      <SelectItem key={bt} value={bt}>
-                        {bt}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Input
-                  placeholder="protein_coding, rRNA…"
-                  value={pendingFilters.biotype}
-                  onChange={(event) => handleFilterChange("biotype", event.target.value)}
-                  disabled={!hasSelectedReference}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-xs text-muted-foreground flex-1 min-w-[240px]">
-              Windows stream through the `/annotations/&lt;annotation_id&gt;/gff` API and respect the
-              optional filters above on every request.
-            </p>
-            {hasActiveFilters && (
-              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] text-foreground">
-                {[
-                  activeFilters.featureType && `type=${activeFilters.featureType}`,
-                  activeFilters.featureSource && `source=${activeFilters.featureSource}`,
-                  activeFilters.biotype && `biotype=${activeFilters.biotype}`,
-                  activeStartValue !== null && `start≥${numberFormatter.format(activeStartValue)}`,
-                  activeEndValue !== null && `end≤${numberFormatter.format(activeEndValue)}`,
-                ]
-                  .filter(Boolean)
-                  .join(" • ")}
-              </span>
-            )}
-            {annotation && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="ml-auto gap-2"
-                disabled={downloadingContigs}
-                onClick={handleDownloadContigs}
-              >
-                {downloadingContigs && <Loader2 className="h-4 w-4 animate-spin" />}
-                {downloadingContigs ? "Downloading contigs…" : "Download contigs"}
-              </Button>
-            )}
-          </div>
-
-          {filterError && <p className="text-xs text-destructive">{filterError}</p>}
-
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              onClick={handleApplyFilters}
-              disabled={!filtersDirty || !hasSelectedReference}
-            >
-              Apply filters
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={handleResetFilters}
-              disabled={!filtersDirty && !hasActiveFilters}
-            >
-              Reset
-            </Button>
-          </div>
+            {filterError && <p className="text-xs text-destructive">{filterError}</p>}
+          </FormSection>
         </Card>
 
         <Card className="overflow-hidden">

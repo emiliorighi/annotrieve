@@ -14,6 +14,7 @@ import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 import { useAnnotationsFiltersStore, type SortOption } from "@/lib/stores/annotations-filters"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useUIStore } from "@/lib/stores/ui"
+import { downloadAnnotationsReport } from "@/lib/api/annotations"
 
 interface AnnotationsListProps {
   annotations: AnnotationRecord[]
@@ -226,22 +227,14 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
       const params = buildParams(!!showFavs, favoriteIds)
       delete (params as any).limit
       delete (params as any).offset
-      const res = await fetch(`/api/annotations/report`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params),
-      })
-      if (!res.ok) {
-        throw new Error(`Failed to generate report`)
-      }
-      const blob = await res.blob()
+      const blob = await downloadAnnotationsReport(params as any)
       const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `annotations_report.tsv`
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `annotations_report.tsv`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
       window.URL.revokeObjectURL(url)
       setReportOpen(false)
     } catch (e) {

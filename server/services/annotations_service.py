@@ -57,16 +57,20 @@ def get_annotations(args: dict, field: str = None, response_type: str = 'metadat
         raise HTTPException(status_code=500, detail=f"Error fetching annotations: {e}")
 
 def stream_annotation_tsv(annotations):
-    tsv_data = io.StringIO()
-    tsv_data.write("\t".join(FIELD_TSV_MAP.keys()))
-    tsv_data.write("\n")
-    for annotation in annotations.scalar(*FIELD_TSV_MAP.values()):
-        tsv_data.write("\t".join(annotation))
-        tsv_data.write("\n")
-    tsv_data.seek(0)
-    return StreamingResponse(tsv_data, media_type='text/tab-separated-values', headers={
-        "Content-Disposition": f'attachment; filename="annotations_{datetime.now().strftime("%Y%m%d_%H%M%S")}.tsv"',
-    })
+    def row_iterator():
+        header = "\t".join(FIELD_TSV_MAP.keys()) + "\n"
+        yield header
+        for annotation in annotations.scalar(*FIELD_TSV_MAP.values()):
+            row = "\t".join("" if value is None else str(value) for value in annotation) + "\n"
+            yield row
+
+    return StreamingResponse(
+        row_iterator(),
+        media_type='text/tab-separated-values',
+        headers={
+            "Content-Disposition": f'attachment; filename="annotations_{datetime.now().strftime("%Y%m%d_%H%M%S")}.tsv"',
+        },
+    )
 
 def get_annotation_records(
     filter:str = None, #text search on assembly, taxonomy or annotation id
