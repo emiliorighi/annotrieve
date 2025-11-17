@@ -895,9 +895,8 @@ export default function GffStreamPage() {
                 </span>
                 {annotation && (
                   <Button
-                    variant="outline"
-                    size="sm"
                     className="gap-2"
+                    variant="accent"
                     disabled={downloadingContigs}
                     onClick={handleDownloadContigs}
                   >

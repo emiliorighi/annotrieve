@@ -395,9 +395,9 @@ export function FileOverviewSidebar({ annotation, open, onOpenChange }: FileOver
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
                   {/* Browser Actions */}
+                  <DropdownMenuLabel>Browser Actions</DropdownMenuLabel>
+
                   {(annotation as any).mapped_regions && Array.isArray((annotation as any).mapped_regions) && (annotation as any).mapped_regions.length > 0 && (
-                    <>
-                      <DropdownMenuLabel>Browser Actions</DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={() => {
                           router.push(`/jbrowse/?accession=${annotation.assembly_accession}&annotationId=${annotation.annotation_id}`)
@@ -406,7 +406,7 @@ export function FileOverviewSidebar({ annotation, open, onOpenChange }: FileOver
                         <Eye className="h-4 w-4 mr-2" />
                         <span>View in Browser</span>
                       </DropdownMenuItem>
-                      
+                    )}
                       <DropdownMenuItem
                         onClick={() => router.push(`/gff-stream?id=${annotation.annotation_id}`)}
                       >
@@ -414,8 +414,7 @@ export function FileOverviewSidebar({ annotation, open, onOpenChange }: FileOver
                         <span>Stream GFF regions</span>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                    </>
-                  )}
+                  
 
                   {/* Downloads */}
                   <DropdownMenuLabel>Downloads</DropdownMenuLabel>
