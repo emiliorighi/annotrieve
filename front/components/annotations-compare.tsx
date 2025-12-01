@@ -275,9 +275,9 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
   const organismLabelMap = createOrganismLabelMap(displayAnnotations)
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-full px-6 py-6">
+    <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 lg:h-full h-auto lg:overflow-hidden px-3 sm:px-4 md:px-6 py-4 sm:py-6">
       {/* Left Column - Annotation Selection List */}
-      <div className="lg:w-1/3 xl:w-1/4 flex flex-col min-w-0 border-r border-border pr-6">
+      <div className="lg:w-1/3 xl:w-1/4 flex flex-col min-w-0 border-b lg:border-b-0 lg:border-r border-border pb-4 lg:pb-0 lg:pr-6 flex-shrink-0">
         {/* Header */}
         <div className="flex-shrink-0 mb-4">
           <div className="flex items-center justify-between mb-2">
@@ -324,7 +324,7 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
         </div>
 
         {/* Annotation List - Scrollable */}
-        <div className="flex-1 overflow-y-auto min-h-0 -mr-6 pr-6">
+        <div className="flex-1 overflow-y-auto min-h-0 -mr-6 pr-6 lg:flex-1">
           {displayAnnotations.length === 0 && !loadingMore ? (
             <Card className="p-6 border-2 border-dashed">
               <div className="text-center text-muted-foreground">
@@ -436,28 +436,28 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
       </div>
 
       {/* Right Column - Comparison Stats */}
-      <div className="lg:w-2/3 xl:w-3/4 flex flex-col min-w-0">
+      <div className="lg:w-2/3 xl:w-3/4 flex flex-col min-w-0 w-full lg:flex-1 lg:min-h-0">
         {selectedForComparison.length >= 2 ? (
           <ComparisonChartsSection 
             selectedAnnotations={selectedAnnotations}
             organismLabelMap={organismLabelMap}
           />
         ) : selectedForComparison.length === 1 ? (
-          <Card className="p-12 border-2 border-dashed">
+          <Card className="p-6 sm:p-8 md:p-12 border-2 border-dashed">
             <div className="text-center text-muted-foreground">
-              <BarChart3 className="h-12 w-12 opacity-50 mx-auto mb-3" />
-              <p className="text-sm font-medium text-foreground mb-1">Select More Annotations</p>
-              <p className="text-xs">
+              <BarChart3 className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 opacity-50 mx-auto mb-2 sm:mb-3" />
+              <p className="text-xs sm:text-sm font-medium text-foreground mb-1">Select More Annotations</p>
+              <p className="text-[10px] sm:text-xs">
                 Select at least 2 annotations to view comparison charts.
               </p>
             </div>
           </Card>
         ) : (
-          <Card className="p-12 border-2 border-dashed">
+          <Card className="p-6 sm:p-8 md:p-12 border-2 border-dashed">
             <div className="text-center text-muted-foreground">
-              <AlertCircle className="h-12 w-12 opacity-50 mx-auto mb-3" />
-              <p className="text-sm font-medium text-foreground mb-1">No Annotations Selected</p>
-              <p className="text-xs">
+              <AlertCircle className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 opacity-50 mx-auto mb-2 sm:mb-3" />
+              <p className="text-xs sm:text-sm font-medium text-foreground mb-1">No Annotations Selected</p>
+              <p className="text-[10px] sm:text-xs">
                 Select annotations from the list to compare their statistics.
               </p>
             </div>
@@ -546,11 +546,11 @@ function ComparisonChartsSection({
   const [isGffSectionOpen, setIsGffSectionOpen] = useState(false)
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto space-y-6 mb-8">
+    <div className="flex flex-col h-auto lg:h-full lg:min-h-0 lg:overflow-y-auto space-y-4 sm:space-y-6 mb-8">
 
       {/* GFF Structure Section - Collapsible */}
       <Collapsible open={isGffSectionOpen} onOpenChange={setIsGffSectionOpen}>
-        <Card className="p-4 flex-shrink-0">
+        <Card className="p-3 sm:p-4 flex-shrink-0">
           <CollapsibleTrigger asChild>
             <Button variant="ghost" className="w-full justify-between p-0 h-auto hover:bg-transparent">
               <h4 className="text-base font-semibold text-foreground">GFF Structure Overlap</h4>
@@ -625,9 +625,9 @@ function OverlapCard({
   const hasMore = items.length > 10
 
   return (
-    <Card className="p-3 bg-muted/30">
+    <Card className="p-2.5 sm:p-3 bg-muted/30">
       <div className="mb-2">
-        <h5 className="text-sm font-semibold text-foreground mb-0.5">{title}</h5>
+        <h5 className="text-xs sm:text-sm font-semibold text-foreground mb-0.5">{title}</h5>
         <p className="text-[10px] text-muted-foreground">
           {items.length} item{items.length !== 1 ? 's' : ''} in all {totalAnnotations} annotation{totalAnnotations !== 1 ? 's' : ''}
         </p>
@@ -799,16 +799,16 @@ function GroupedGeneComparisonChart({
   }
 
   return (
-    <Card className="p-4 flex-shrink-0">
+    <Card className="p-3 sm:p-4 flex-shrink-0">
       <div className="mb-3">
-        <h4 className="font-semibold text-base text-foreground mb-1">
+        <h4 className="font-semibold text-sm sm:text-base text-foreground mb-1">
           Gene Category Comparison
         </h4>
-        <p className="text-xs text-muted-foreground mb-3">
+        <p className="text-[10px] sm:text-xs text-muted-foreground mb-3">
           Compare gene metrics across different categories.
         </p>
           <Select value={metricType} onValueChange={(value: any) => setMetricType(value)}>
-          <SelectTrigger className="w-[160px] h-8 text-xs">
+          <SelectTrigger className="w-[140px] sm:w-[160px] h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -818,7 +818,7 @@ function GroupedGeneComparisonChart({
         </Select>
       </div>
       
-      <div className="h-[300px]">
+      <div className="h-[250px] sm:h-[300px]">
         <Bar data={chartData} options={options} />
       </div>
     </Card>
@@ -847,7 +847,7 @@ function TranscriptTypeStackedBarChart({
   
   if (types.length === 0) {
     return (
-      <Card className="p-4 flex-shrink-0">
+      <Card className="p-3 sm:p-4 flex-shrink-0">
         <div className="flex items-center justify-center h-[200px]">
           <p className="text-xs text-muted-foreground italic">No transcript type data available</p>
         </div>
@@ -950,14 +950,14 @@ function TranscriptTypeStackedBarChart({
   }
 
   return (
-    <Card className="p-4 flex-shrink-0">
+    <Card className="p-3 sm:p-4 flex-shrink-0">
       <div className="mb-3">
-        <h4 className="font-semibold text-base text-foreground mb-1">Transcript Type Distribution - Stacked</h4>
-        <p className="text-xs text-muted-foreground mb-3">
+        <h4 className="font-semibold text-sm sm:text-base text-foreground mb-1">Transcript Type Distribution - Stacked</h4>
+        <p className="text-[10px] sm:text-xs text-muted-foreground mb-3">
           Compare transcript types across annotations. Each bar represents an annotation, segments are transcript types.
         </p>
         <Select value={metricType} onValueChange={(value: any) => setMetricType(value)}>
-          <SelectTrigger className="w-[160px] h-8 text-xs">
+          <SelectTrigger className="w-[140px] sm:w-[160px] h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -966,7 +966,7 @@ function TranscriptTypeStackedBarChart({
           </SelectContent>
         </Select>
       </div>
-      <div className="h-[300px]">
+      <div className="h-[250px] sm:h-[300px]">
         <Bar data={chartData} options={options} />
       </div>
     </Card>
@@ -995,7 +995,7 @@ function TranscriptTypeHeatmap({
   
   if (types.length === 0) {
     return (
-      <Card className="p-4 flex-shrink-0">
+      <Card className="p-3 sm:p-4 flex-shrink-0">
         <div className="flex items-center justify-center h-[200px]">
           <p className="text-xs text-muted-foreground italic">No transcript type data available</p>
         </div>
@@ -1065,14 +1065,14 @@ function TranscriptTypeHeatmap({
   }
 
   return (
-    <Card className="p-4 flex-shrink-0">
+    <Card className="p-3 sm:p-4 flex-shrink-0">
       <div className="mb-3">
-        <h4 className="font-semibold text-base text-foreground mb-1">Transcript Type Heatmap</h4>
-        <p className="text-xs text-muted-foreground mb-3">
+        <h4 className="font-semibold text-sm sm:text-base text-foreground mb-1">Transcript Type Heatmap</h4>
+        <p className="text-[10px] sm:text-xs text-muted-foreground mb-3">
           Detailed matrix view of transcript types per annotation. Color intensity represents the selected metric.
         </p>
         <Select value={metricField} onValueChange={(value: any) => setMetricField(value)}>
-          <SelectTrigger className="w-[200px] h-8 text-xs">
+          <SelectTrigger className="w-[160px] sm:w-[200px] h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="max-h-[300px] overflow-y-auto">

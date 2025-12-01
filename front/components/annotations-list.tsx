@@ -26,7 +26,6 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
   // Get sidebar state from UI store
   const searchParams = useSearchParams()
   const router = useRouter()
-  const showFavs = searchParams?.get('showFavs') === 'true'
 
   // Use store for filters and pagination
   const stats = useAnnotationsFiltersStore((state) => state.stats)
@@ -70,16 +69,14 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
   const setIsSidebarOpen = useUIStore((state) => state.setIsSidebarOpen)
   const openRightSidebar = useUIStore((state) => state.openRightSidebar)
 
-  const filtersButtonDisabled = showFavs
 
   const handleFiltersToggle = useCallback(() => {
-    if (filtersButtonDisabled) return
     if (isDesktop) {
       setIsSidebarOpen(!isSidebarOpen)
     } else {
       setIsSidebarOpen(true)
     }
-  }, [filtersButtonDisabled, isDesktop, isSidebarOpen, setIsSidebarOpen])
+  }, [isDesktop, isSidebarOpen, setIsSidebarOpen])
 
   const handleBrowseAssemblies = useCallback(() => {
     openRightSidebar('assemblies-list')
@@ -105,7 +102,7 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
 
   // Infinite scroll: load more when reaching the bottom
   useEffect(() => {
-    if (showFavs || loading || loadingMore || !hasMore || allAnnotations.length === 0) return
+    if (loading || loadingMore || !hasMore || allAnnotations.length === 0) return
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -127,15 +124,15 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
         observer.unobserve(currentRef)
       }
     }
-  }, [hasMore, loading, loadingMore, currentPage, showFavs, setAnnotationsPage, allAnnotations.length])
+  }, [hasMore, loading, loadingMore, currentPage, setAnnotationsPage, allAnnotations.length])
 
   // Load more annotations when page changes (for infinite scroll)
   // Note: This is handled by the parent component (page.tsx) which refetches when page changes
   useEffect(() => {
-    if (currentPage > 1 && !showFavs && !loading) {
+    if (currentPage > 1 && !loading) {
       setLoadingMore(false)
     }
-  }, [currentPage, showFavs, loading])
+  }, [currentPage, loading])
 
   // Track the last stats fetch to prevent duplicates
   const lastStatsFetchRef = useRef<string | null>(null)
@@ -152,30 +149,8 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
       return
     }
 
-    // In favorites view, only use favorite IDs for stats
-    if (showFavs) {
-      const { getSelectedAnnotations } = useSelectedAnnotationsStore.getState()
-      const favoriteAnnotations = getSelectedAnnotations()
-      const favoriteIds = favoriteAnnotations.map((annotation: Annotation) => annotation.annotation_id)
-      const statsFiltersKey = JSON.stringify({
-        showFavs: true,
-        favoriteIds: favoriteIds.sort(), // Sort for consistent key
-      })
-
-      // Skip if this exact stats fetch was already initiated
-      if (lastStatsFetchRef.current === statsFiltersKey) {
-        return
-      }
-
-      lastStatsFetchRef.current = statsFiltersKey
-      setHasLoadedStats(true)
-      fetchAnnotationsStats(true, favoriteIds)
-      return
-    }
-
     // In normal view, use all filter parameters for stats
     const statsFiltersKey = JSON.stringify({
-      showFavs: false,
       selectedTaxons,
       selectedAssemblies,
       selectedBioprojects,
@@ -200,7 +175,6 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     showStats,
-    showFavs,
     selectedTaxons,
     selectedAssemblies,
     selectedBioprojects,
@@ -220,14 +194,7 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
     try {
       setReportLoading(true)
       // Build filter payload similar to data fetching, but without pagination
-      let favoriteIds: string[] = []
-      if (showFavs) {
-        try {
-          const favs = getSelectedAnnotations()
-          favoriteIds = (favs || []).map((a: any) => a.annotation_id).filter(Boolean)
-        } catch {}
-      }
-      const params = buildParams(!!showFavs, favoriteIds)
+      const params = buildParams(false, [])
       delete (params as any).limit
       delete (params as any).offset
       const blob = await downloadAnnotationsReport(params as any)
@@ -284,46 +251,20 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
 
   return (
     <div className="flex flex-col h-full">
-      {/* Favorites Banner - shown when in favorites view */}
-      {showFavs && (
-        <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-border bg-primary/5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Star className="h-5 w-5 text-primary fill-primary" />
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Favorite Annotations</h2>
-                <p className="text-sm text-muted-foreground">
-                  Viewing {totalAnnotations} favorite annotation{totalAnnotations !== 1 ? 's' : ''}
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push('/annotations')}
-            >
-              Back to All Annotations
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Toolbar Header */}
       <div className="flex-shrink-0 border-b border-border/60 bg-background/90 supports-[backdrop-filter]:bg-background/75 backdrop-blur">
-        <div className="px-6 pt-3 pb-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="px-3 sm:px-6 pt-3 pb-4">
+          <div className="flex flex-col md:flex-row md:flex-wrap items-start md:items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 w-full md:w-auto">
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9 px-3 gap-2"
+                className="h-9 px-2 sm:px-3 gap-2 shrink-0"
                 onClick={handleFiltersToggle}
-                disabled={filtersButtonDisabled}
                 aria-pressed={isSidebarOpen}
                 title={
-                  filtersButtonDisabled
-                    ? 'Filters are hidden in favorites view'
-                    : (isSidebarOpen ? 'Hide filters sidebar' : 'Show filters sidebar')
+                  isSidebarOpen ? 'Hide filters sidebar' : 'Show filters sidebar'
                 }
               >
                 {isSidebarOpen ? (
@@ -331,14 +272,15 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
                 ) : (
                   <PanelLeftOpen className="h-4 w-4" />
                 )}
+                <span className="hidden md:inline">Filters</span>
               </Button>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                  <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-foreground">
                     Annotations
                   </h1>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   {loading
                     ? 'Fetching results…'
                     : totalAnnotations > 0
@@ -347,29 +289,31 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full md:w-auto justify-start md:justify-end min-w-0">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleBrowseAssemblies}
-                className="h-9 px-3 gap-2"
+                className="h-9 px-2 sm:px-3 gap-1.5 sm:gap-2 shrink-0"
                 title="Open assemblies browser"
               >
-                <Database className="h-4 w-4" />
-                Browse Assemblies
+                <Database className="h-4 w-4 shrink-0" />
+                <span className="hidden md:inline">Browse Assemblies</span>
+                <span className="md:hidden">Browse</span>
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setReportOpen(true)}
-                className="h-9 px-3 gap-2"
+                className="h-9 px-2 sm:px-3 gap-1.5 sm:gap-2 shrink-0"
                 title="Download TSV report for current filters"
               >
-                <FileText className="h-4 w-4" />
-                Download TSV
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="hidden md:inline">Download TSV</span>
+                <span className="md:hidden">TSV</span>
               </Button>
               <Select value={currentSortField} onValueChange={handleSortFieldChange}>
-                <SelectTrigger className="w-[180px] h-9 text-sm">
+                <SelectTrigger className="w-[120px] sm:w-[140px] md:w-[180px] h-9 text-xs sm:text-sm shrink-0">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -385,7 +329,7 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
                 size="sm"
                 onClick={handleSortOrderToggle}
                 disabled={currentSortField === 'none'}
-                className="h-9 px-3"
+                className="h-9 px-2 sm:px-3 shrink-0"
                 title={currentSortField === 'none' ? 'Select a sort field first' : (currentSortOrder === 'asc' ? 'Ascending' : 'Descending')}
               >
                 {currentSortOrder === 'asc' ? (
@@ -395,9 +339,9 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
                 )}
               </Button>
               {loading && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Loading...</span>
+                <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground shrink-0">
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  <span className="hidden sm:inline">Loading...</span>
                 </div>
               )}
             </div>

@@ -153,7 +153,7 @@ export default function FavoritesComparePage() {
     )
   } else {
     content = (
-      <div className="h-full overflow-hidden">
+      <div className="h-full lg:overflow-hidden overflow-y-auto">
         <AnnotationsCompare
           favoriteAnnotations={favoriteAnnotations}
           showFavs
@@ -195,7 +195,7 @@ export default function FavoritesComparePage() {
             )}
           </div>
         </header>
-        <main className="flex-1 min-h-0 overflow-hidden bg-background">
+        <main className="flex-1 min-h-0 lg:overflow-hidden overflow-y-auto bg-background">
           {content}
         </main>
       </div>
