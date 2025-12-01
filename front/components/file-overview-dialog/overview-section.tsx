@@ -90,7 +90,7 @@ function BiotypeProgressBar({ biotypeCounts, colorClass = 'bg-secondary' }: Biot
               <div className="flex items-center justify-between text-xs">
                 <span className="font-medium text-foreground truncate flex-1 mr-2">{biotype}</span>
                 <span className="text-muted-foreground font-mono tabular-nums whitespace-nowrap">
-                  {count.toLocaleString()} ({percentage.toFixed(1)}%)
+                  {count.toLocaleString()} ({percentage.toFixed(2)}%)
                 </span>
               </div>
               <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -378,7 +378,7 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
                                         className={`text-xs font-medium ${config.colorClass} transition-opacity hover:opacity-80`}
                                         title={`${CATEGORY_LABELS[cat]}: ${percentage.toFixed(2)}%`}
                                       >
-                                        {percentage.toFixed(1)}%
+                                        {percentage.toFixed(2)}%
                                       </span>
                                     )
                                   })}
@@ -438,11 +438,11 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
                                             <Badge 
                                               key={category} 
                                               variant="outline" 
-                                              className={`text-xs border-2 transition-colors hover:bg-accent/50 ${config?.borderClass || ''}`}
+                                              className={`text-xs border-2 hover:bg-accent/50 ${config?.borderClass || ''}`}
                                               title={`${categoryLabel}: ${(count as number).toLocaleString()} parent genes`}
                                             >
                                               <span className={config?.colorClass || ''}>{categoryLabel}</span>
-                                              <span className="text-muted-foreground ml-1">{(count as number).toLocaleString()}</span>
+                                              <span className={config?.colorClass + ' ml-1' || 'ml-1'}>{(count as number).toLocaleString()}</span>
                                             </Badge>
                                           )
                                         })}
