@@ -10,7 +10,6 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
     chromosomes = GenomicSequence.objects(assembly_accession=parsed_annotation.assembly_accession)
     
     if chromosomes.count() == 0:
-        print(f"No chromosomes found for {parsed_annotation.assembly_accession}, skipping alias mapping")
         return
 
     chr_aliases_dict = {} #dict with all possible combinations of aliases for the chromosomes
@@ -58,7 +57,7 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
                         aliases=chr.aliases, 
                     ))
         if not sequences_to_save:
-            print(f"No sequences to save found for {parsed_annotation.source_file_info.url_path}, chromosomes found in the db {chromosomes.count()} for assembly {parsed_annotation.assembly_accession}")
+            # we will try to map the contigs to the chromosomes later
             return 
 
         AnnotationSequenceMap.objects.insert(sequences_to_save)

@@ -147,44 +147,91 @@ def parse_taxons_and_organisms_from_ena_browser(xml_path: str)->list[OrganismToP
     Parse taxons from ENA browser XML file and return a tuple of list of organisms (with ordered taxon lineages from species to root) and dictionary of taxon lineages
     """
     parsed_organisms = []
-    with gzip.open(xml_path, "rb") as f:
-        context = etree.iterparse(f, events=("end",), tag="taxon")
-        if not context:
-            return parsed_organisms
-        
-        for _, elem in context:
-            if elem.getparent().tag == "TAXON_SET":
-                # Top-level taxon
-                organism_taxid = str(elem.get("taxId"))
-                organism_info = OrganismToProcess(
-                    taxid=organism_taxid,
-                    organism_name=elem.get("scientificName"),
-                    common_name=elem.get("commonName"),
-                    taxon_lineage=[],
-                    parsed_taxon_lineage=[]
-                )
-                #add the organism to the taxon node
-                organism_info.taxon_lineage.append(organism_taxid)
-                organism_info.parsed_taxon_lineage.append(TaxonNode(
-                    taxid=organism_taxid,
-                    scientific_name=organism_info.organism_name,
-                    rank="organism"
-                ))
-                # Collect lineage children
-                lineage_elem = elem.find("lineage")
-                if lineage_elem is not None:
-                    for lt in lineage_elem.findall("taxon"):
-                        taxid = str(lt.get("taxId"))
-                        #we suppose this are ordered from species to root
-                        if lt.get("scientificName") == "root":
+    
+    # Validate file exists and has content
+    if not os.path.exists(xml_path):
+        print(f"XML file does not exist: {xml_path}")
+        return parsed_organisms
+    
+    file_size = os.path.getsize(xml_path)
+    if file_size == 0:
+        print(f"XML file is empty: {xml_path}")
+        return parsed_organisms
+    
+    try:
+        with gzip.open(xml_path, "rb") as f:
+            try:
+                context = etree.iterparse(f, events=("end",), tag="taxon")
+                
+                for _, elem in context:
+                    try:
+                        parent = elem.getparent()
+                        if parent is None:
                             continue
-                        organism_info.taxon_lineage.append(taxid)
-                        organism_info.parsed_taxon_lineage.append(TaxonNode(
-                            taxid=taxid, 
-                            scientific_name=lt.get("scientificName"), 
-                            rank=lt.get("rank") if lt.get("rank") else "other"
-                        ))
+                        if parent.tag == "TAXON_SET":
+                            # Top-level taxon
+                            organism_taxid = str(elem.get("taxId"))
+                            if not organism_taxid or organism_taxid == "None":
+                                continue
+                            
+                            organism_info = OrganismToProcess(
+                                taxid=organism_taxid,
+                                organism_name=elem.get("scientificName"),
+                                common_name=elem.get("commonName"),
+                                taxon_lineage=[],
+                                parsed_taxon_lineage=[]
+                            )
+                            #add the organism to the taxon node
+                            organism_info.taxon_lineage.append(organism_taxid)
+                            organism_info.parsed_taxon_lineage.append(TaxonNode(
+                                taxid=organism_taxid,
+                                scientific_name=organism_info.organism_name,
+                                rank="organism"
+                            ))
+                            # Collect lineage children
+                            lineage_elem = elem.find("lineage")
+                            if lineage_elem is not None:
+                                for lt in lineage_elem.findall("taxon"):
+                                    taxid = str(lt.get("taxId"))
+                                    #we suppose this are ordered from species to root
+                                    if lt.get("scientificName") == "root":
+                                        continue
+                                    organism_info.taxon_lineage.append(taxid)
+                                    organism_info.parsed_taxon_lineage.append(TaxonNode(
+                                        taxid=taxid, 
+                                        scientific_name=lt.get("scientificName"), 
+                                        rank=lt.get("rank") if lt.get("rank") else "other"
+                                    ))
 
-                parsed_organisms.append(organism_info)
+                            parsed_organisms.append(organism_info)
+                        # Clean up element to free memory
+                        elem.clear()
+                        while elem.getprevious() is not None:
+                            del elem.getparent()[0]
+                    except (AttributeError, TypeError) as e:
+                        # Skip malformed elements
+                        print(f"Warning: Skipping malformed element in {xml_path}: {e}")
+                        continue
+                        
+            except etree.XMLSyntaxError as e:
+                print(f"XML syntax error in {xml_path}: {e}")
+                return parsed_organisms
+            except etree.ParseError as e:
+                print(f"XML parse error in {xml_path}: {e}")
+                return parsed_organisms
+            except etree.Error as e:
+                # Catch "no element found" and other lxml errors
+                print(f"XML parsing error in {xml_path}: {e}")
+                return parsed_organisms
+                
+    except gzip.BadGzipFile as e:
+        print(f"Invalid gzip file: {xml_path}, error: {e}")
+        return parsed_organisms
+    except IOError as e:
+        print(f"IO error reading file {xml_path}: {e}")
+        return parsed_organisms
+    except Exception as e:
+        print(f"Unexpected error reading XML file {xml_path}: {e}")
+        return parsed_organisms
 
     return parsed_organisms

@@ -1,5 +1,6 @@
 import os
 import shutil
+import random
 from celery import shared_task
 from helpers import file as file_helper
 from .services.classes import AnnotationToProcess
@@ -44,20 +45,7 @@ def import_annotations():
         new_annotations.extend(filtered_annotations)
     
     if DEV:
-        URLS_TO_TEST = [
-            #one of the most annotated
-            "https://ftp.ebi.ac.uk/pub/ensemblorganisms/Mus_musculus/GCA_001624475.1/community/geneset/2018_01/genes.gff3.gz",
-
-            #one with broken relationships same exon point to gene ids
-            "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/916/722/125/GCA_916722125.1_LMJFC_annotationDEFINITIVO/GCA_916722125.1_LMJFC_annotationDEFINITIVO_genomic.gff.gz",
-
-            #human ensembl
-            "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_genomic.gff.gz",
-
-            # a lot of genes around 2gb and 1 million genes
-            "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/026/074/375/GCA_026074375.1_Tcoc_v1.0/GCA_026074375.1_Tcoc_v1.0_genomic.gff.gz"
-            ]
-        new_annotations = [annotation for annotation in new_annotations if annotation.access_url in URLS_TO_TEST]
+        new_annotations = random.sample(new_annotations, 10)
     print(f"Found {len(new_annotations)} new annotations to process")
     # LINEAGE HANDLING STEP
     valid_lineages = taxonomy_service.handle_taxonomy(new_annotations, TMP_DIR) #lineages saved in the database, return a dict of taxid:lineage
