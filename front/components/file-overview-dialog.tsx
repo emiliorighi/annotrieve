@@ -407,13 +407,13 @@ export function FileOverviewSidebar({ annotation, open, onOpenChange }: FileOver
                         <span>View in Browser</span>
                       </DropdownMenuItem>
                     )}
-                      <DropdownMenuItem
+                      {/* <DropdownMenuItem
                         onClick={() => router.push(`/gff-stream?id=${annotation.annotation_id}`)}
                       >
                         <Activity className="h-4 w-4 mr-2" />
                         <span>Stream GFF regions</span>
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
+                      <DropdownMenuSeparator /> */}
                   
 
                   {/* Downloads */}
