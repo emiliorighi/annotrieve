@@ -45,18 +45,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         client_max_body_size 100M;
         
-        # Handle CORS preflight requests first (before caching)
-        if ($request_method = 'OPTIONS') {
-            add_header 'Access-Control-Allow-Origin' '*';
-            add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
-            add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Origin, Accept, X-Requested-With';
-            add_header 'Access-Control-Max-Age' 86400;
-            add_header 'Content-Length' 0;
-            add_header 'Content-Type' 'text/plain charset=UTF-8';
-            return 204;
-        }
+        # IMPORTANT: Let FastAPI handle CORS - do NOT add CORS headers here
+        # FastAPI's CORSMiddleware already adds the correct headers based on Origin
+        # Adding headers here creates duplicate Access-Control-Allow-Origin headers
+        # which causes browsers to reject the response
 
-        # Enable caching for GET requests (OPTIONS requests are already handled above)
+        # Enable caching for GET requests
         proxy_cache my_cache;
         proxy_cache_methods GET HEAD;
         proxy_cache_key "$scheme$request_method$host$request_uri$is_args$args";
@@ -64,12 +58,6 @@ server {
         proxy_cache_valid 404 1m;   # Cache 404s for 1 minute
         proxy_cache_bypass $http_cache_control;  # Respect Cache-Control: no-cache
         add_header X-Cache-Status $upstream_cache_status;  # Debug header
-
-        # CORS
-        add_header 'Access-Control-Allow-Origin' '*' always;
-        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS' always;
-        add_header 'Access-Control-Allow-Headers' 'Authorization, Content-Type, Origin, Accept, X-Requested-With' always;
-        add_header 'Access-Control-Expose-Headers' 'Content-Length, Content-Type' always;
     }
 
     # Static file download endpoint
