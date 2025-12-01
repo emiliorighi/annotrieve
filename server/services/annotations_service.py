@@ -147,8 +147,13 @@ def get_annotation(md5_checksum):
 def trigger_annotation_fields_update(auth_key: str):
     if auth_key != os.getenv('AUTH_KEY'):
         raise HTTPException(status_code=401, detail="Unauthorized")
+    #queue both tasks
+    update_feature_stats.delay()
     import_annotations.delay()
-    return {"message": "Import annotations task triggered"}
+    return {"message": "Feature stats and import annotations task triggered"}
+
+
+
 
 def get_annotations_distribution_data(annotations, metric: str = 'all', category: str = 'all'):
     """

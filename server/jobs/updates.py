@@ -28,14 +28,14 @@ def update_feature_stats():
         #get full bgzipped path from the indexed file info
         bgzipped_path = file_helper.get_annotation_file_path(annotation)
         feature_stats = feature_stats_service.compute_features_statistics(bgzipped_path)
-        existing_feature_stats = annotation.features_statistics
         #for the moment we keep the old fields for backwards compatibility
-        if existing_feature_stats:
-            existing_feature_stats.gene_category_stats = feature_stats.gene_category_stats
-            existing_feature_stats.transcript_type_stats = feature_stats.transcript_type_stats
-            annotation.modify(features_statistics=existing_feature_stats)
+        if annotation.features_statistics:
+            annotation.features_statistics.gene_category_stats = feature_stats.gene_category_stats
+            annotation.features_statistics.transcript_type_stats = feature_stats.transcript_type_stats
+            annotation.save()
         else:
-            annotation.modify(features_statistics=feature_stats)
+            annotation.features_statistics = feature_stats
+            annotation.save()
 
 @shared_task(name='update_bioprojects', ignore_result=False)
 def update_bioprojects():
@@ -45,6 +45,7 @@ def update_bioprojects():
     accessions = GenomeAssembly.objects().scalar('assembly_accession')
     batches = create_batches(accessions, 5000)
     files_to_delete = []
+    all_bp_accessions = set()
     bioprojects_to_save = dict() #accession: BioProject to ensure we don't save the same bioproject multiple times
     assembly_to_bp_accessions = dict() #assembly_accession: list[bioproject_accessions]
     for idx, accessions_batch in enumerate(batches):
@@ -62,17 +63,21 @@ def update_bioprojects():
             assembly_accession = assembly.get('accession')
             bioproject_accessions = assembly_service.parse_bioprojects(assembly.get('assembly_info', {}), bioprojects_to_save)
             assembly_to_bp_accessions[assembly_accession] = bioproject_accessions
+            all_bp_accessions.update(bioproject_accessions)
+    
+    #filter out existing bioprojects
+    existing_bioprojects = BioProject.objects(accession__in=list(all_bp_accessions)).scalar('accession')
+    new_bioprojects = all_bp_accessions - set(existing_bioprojects)
+    bioprojects_to_save = {accession: bioproject for accession, bioproject in bioprojects_to_save.items() if accession in new_bioprojects}
     #insert the bioprojects to the database
-    annotations_to_update = []
+    if not new_bioprojects:
+        print("No new bioprojects to insert")
+        return
     try:
         BioProject.objects.insert(list(bioprojects_to_save.values()))
         for assembly_accession, bioproject_accessions in assembly_to_bp_accessions.items():
             GenomeAssembly.objects(assembly_accession=assembly_accession).update(bioprojects=bioproject_accessions)
-            annotation_batch_to_update = GenomeAnnotation.objects(assembly_accession=assembly_accession)
-            annotation_batch_to_update.update(bioprojects=bioproject_accessions)
-            annotations_to_update.extend(annotation_batch_to_update)
-
-        stats_service.update_db_stats(annotations_to_update)
+        print(f"Updated {len(assembly_to_bp_accessions)} assemblies with new bioprojects")
     #update Bioprojects counts
     except Exception as e:
         print(f"Error inserting bioprojects: {e}")

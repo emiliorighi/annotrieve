@@ -160,35 +160,12 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
       if (!typeStats) return null
       
       const totalCount = typeStats.total_count || 0
-      const associatedGenes = typeStats.associated_genes
       
-      // Calculate category segments for this transcript type
-      // Get transcript counts from each gene category's transcript_type_counts
-      const segments: Array<{ cat: GeneCategory; count: number; percentage: number }> = []
-      
-      if (totalCount > 0) {
-        GENE_CATEGORIES.forEach(cat => {
-          const categoryStats = getGeneCategoryStats(stats, cat)
-          const transcriptTypeCounts = categoryStats?.transcript_type_counts
-          
-          if (transcriptTypeCounts && transcriptTypeCounts[type]) {
-            const count = transcriptTypeCounts[type] as number
-            if (count > 0) {
-              segments.push({
-                cat,
-                count,
-                percentage: (count / totalCount) * 100,
-              })
-            }
-          }
-        })
-      }
       
       return {
         type,
         totalCount,
         stats: typeStats,
-        segments: segments.sort((a, b) => b.count - a.count), // Sort by count descending
       }
     })
     .filter((item): item is NonNullable<typeof item> => item !== null)
@@ -335,7 +312,7 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
           <div>
             <h5 className="text-xs font-medium mb-4 text-foreground">Transcript Types ({sortedTranscriptTypes.length})</h5>
             <div className="space-y-3">
-              {sortedTranscriptTypes.map(({ type, totalCount, stats: typeStats, segments }) => {
+              {sortedTranscriptTypes.map(({ type, totalCount, stats: typeStats }) => {
                 if (!typeStats) return null
                 const isExpanded = expandedTranscriptTypes[type]
                 const lengthStats = typeStats.length_stats
@@ -367,23 +344,6 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
                                   {totalCount.toLocaleString()} transcripts
                                 </Badge>
                               </div>
-                              {/* Category breakdown segments */}
-                              {segments && segments.length > 0 && (
-                                <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
-                                  {segments.map(({ cat, percentage }) => {
-                                    const config = CATEGORY_CONFIG[cat]
-                                    return (
-                                      <span
-                                        key={cat}
-                                        className={`text-xs font-medium ${config.colorClass} transition-opacity hover:opacity-80`}
-                                        title={`${CATEGORY_LABELS[cat]}: ${percentage.toFixed(2)}%`}
-                                      >
-                                        {percentage.toFixed(2)}%
-                                      </span>
-                                    )
-                                  })}
-                                </div>
-                              )}
                               <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                                 <span>Min: <span className="font-mono font-medium">{min.toLocaleString()}</span> bp</span>
                                 <span>Mean: <span className="font-mono font-medium">{mean.toLocaleString()}</span> bp</span>
