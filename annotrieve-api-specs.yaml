@@ -157,71 +157,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
-  /annotations/stats/summary:
-    get:
-      tags:
-        - "annotations"
-      operationId: "getAnnotationsSummaryStats"
-      summary: "Get annotation summary statistics"
-      description: "Aggregates gene, transcript, and feature statistics for the filtered annotation set."
-      parameters:
-        - $ref: "#/components/parameters/filter"
-        - $ref: "#/components/parameters/limit"
-        - $ref: "#/components/parameters/offset"
-        - $ref: "#/components/parameters/taxids"
-        - $ref: "#/components/parameters/assembly_accessions"
-        - $ref: "#/components/parameters/bioproject_accessions"
-        - $ref: "#/components/parameters/db_sources"
-        - $ref: "#/components/parameters/feature_sources"
-        - $ref: "#/components/parameters/biotypes"
-        - $ref: "#/components/parameters/feature_types"
-        - $ref: "#/components/parameters/pipelines"
-        - $ref: "#/components/parameters/providers"
-        - $ref: "#/components/parameters/md5_checksums"
-        - $ref: "#/components/parameters/has_stats"
-        - $ref: "#/components/parameters/refseq_categories"
-        - $ref: "#/components/parameters/assembly_levels"
-        - $ref: "#/components/parameters/assembly_statuses"
-        - $ref: "#/components/parameters/assembly_types"
-        - $ref: "#/components/parameters/release_date_from"
-        - $ref: "#/components/parameters/release_date_to"
-        - $ref: "#/components/parameters/sort_by"
-        - $ref: "#/components/parameters/sort_order"
-      responses:
-        "200":
-          description: "Summary statistics"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnnotationsSummaryStats"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/InternalError"
-    post:
-      tags:
-        - "annotations"
-      operationId: "postAnnotationsSummaryStats"
-      summary: "Get annotation summary statistics via POST"
-      description: "Same as GET /annotations/stats/summary, but accepts filters in the request body."
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AnnotationQueryParams"
-      responses:
-        "200":
-          description: "Summary statistics"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/AnnotationsSummaryStats"
-        "400":
-          $ref: "#/components/responses/BadRequest"
-        "500":
-          $ref: "#/components/responses/InternalError"
-
   /annotations/frequencies:
     get:
       tags:
@@ -1443,12 +1378,14 @@ components:
     GFFStats:
       type: object
       properties:
-        coding_genes:
-          $ref: "#/components/schemas/GeneStats"
-        non_coding_genes:
-          $ref: "#/components/schemas/GeneStats"
-        pseudogenes:
-          $ref: "#/components/schemas/GeneStats"
+        gene_category_stats:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/GeneCategoryFeatureStats"
+        transcript_type_stats:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/GenericTranscriptTypeStats"
 
     GeneStats:
       type: object
@@ -1527,6 +1464,70 @@ components:
           type: number
         median:
           type: number
+
+    GenericLengthStats:
+      type: object
+      properties:
+        min:
+          type: integer
+        max:
+          type: integer
+        mean:
+          type: number
+
+    GeneCategoryFeatureStats:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        length_stats:
+          $ref: "#/components/schemas/GenericLengthStats"
+        biotype_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        transcript_type_counts:
+          type: object
+          additionalProperties:
+            type: integer
+
+    AssociatedGenesStats:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        gene_categories:
+          type: object
+          additionalProperties:
+            type: integer
+
+    SubFeatureStats:
+      type: object
+      properties:
+        total_count:
+          type: integer
+        length:
+          $ref: "#/components/schemas/GenericLengthStats"
+        concatenated_length:
+          $ref: "#/components/schemas/GenericLengthStats"
+
+    GenericTranscriptTypeStats:
+      type: object
+      properties:
+        length_stats:
+          $ref: "#/components/schemas/GenericLengthStats"
+        total_count:
+          type: integer
+        biotype_counts:
+          type: object
+          additionalProperties:
+            type: integer
+        associated_genes:
+          $ref: "#/components/schemas/AssociatedGenesStats"
+        exon_stats:
+          $ref: "#/components/schemas/SubFeatureStats"
+        cds_stats:
+          $ref: "#/components/schemas/SubFeatureStats"
 
     AnnotationsSummaryStats:
       type: object
