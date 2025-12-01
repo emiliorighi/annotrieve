@@ -78,6 +78,12 @@ def update_bioprojects():
         for assembly_accession, bioproject_accessions in assembly_to_bp_accessions.items():
             GenomeAssembly.objects(assembly_accession=assembly_accession).update(bioprojects=bioproject_accessions)
         print(f"Updated {len(assembly_to_bp_accessions)} assemblies with new bioprojects")
+
+        #update bp counts 
+
+        for bp in BioProject.objects():
+            bp.modify(assemblies_count=GenomeAssembly.objects(bioprojects__in=[bp.accession]).count())
+    
     #update Bioprojects counts
     except Exception as e:
         print(f"Error inserting bioprojects: {e}")
