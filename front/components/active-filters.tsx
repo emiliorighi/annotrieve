@@ -5,6 +5,7 @@ import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { Database, Network, Filter } from "lucide-react"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
+import { useShownTooltipsStore } from "@/lib/stores/shown-tooltips"
 import { FilterChip } from "./active-filters/filter-chip"
 import { Button } from "@/components/ui/button"
 import { buildEntityDetailsUrl } from "@/lib/utils"
@@ -45,22 +46,7 @@ export function ActiveFilters() {
   const chipRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const previousTaxonKeys = useRef<Set<string>>(new Set())
   const previousAssemblyKeys = useRef<Set<string>>(new Set())
-  const shownTooltipsRef = useRef<Set<string>>(new Set())
-  
-  // Load previously shown tooltips from localStorage on mount
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("annotrieve-shown-tooltips")
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored) as string[]
-          shownTooltipsRef.current = new Set(parsed)
-        } catch (e) {
-          // Ignore parse errors
-        }
-      }
-    }
-  }, [])
+  const { isShown, markAsShown } = useShownTooltipsStore()
 
   // Track new taxon/assembly filters and show tooltip for 3 seconds (only once per filter)
   useEffect(() => {
@@ -70,7 +56,7 @@ export function ActiveFilters() {
     // Find newly added taxons (only those that haven't shown tooltip before)
     const newTaxonKeys = new Set<string>()
     currentTaxonKeys.forEach(key => {
-      if (!previousTaxonKeys.current.has(key) && !shownTooltipsRef.current.has(key)) {
+      if (!previousTaxonKeys.current.has(key) && !isShown(key)) {
         newTaxonKeys.add(key)
       }
     })
@@ -78,7 +64,7 @@ export function ActiveFilters() {
     // Find newly added assemblies (only those that haven't shown tooltip before)
     const newAssemblyKeys = new Set<string>()
     currentAssemblyKeys.forEach(key => {
-      if (!previousAssemblyKeys.current.has(key) && !shownTooltipsRef.current.has(key)) {
+      if (!previousAssemblyKeys.current.has(key) && !isShown(key)) {
         newAssemblyKeys.add(key)
       }
     })
@@ -87,15 +73,10 @@ export function ActiveFilters() {
     if (newTaxonKeys.size > 0 || newAssemblyKeys.size > 0) {
       const newTooltipKeys = new Set([...newTaxonKeys, ...newAssemblyKeys])
       
-      // Mark these tooltips as shown
+      // Mark these tooltips as shown in the store
       newTooltipKeys.forEach(key => {
-        shownTooltipsRef.current.add(key)
+        markAsShown(key)
       })
-      
-      // Save to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("annotrieve-shown-tooltips", JSON.stringify(Array.from(shownTooltipsRef.current)))
-      }
       
       setTooltipKeys(newTooltipKeys)
 

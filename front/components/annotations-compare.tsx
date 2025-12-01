@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { BarChart3, X, AlertCircle, ChevronDown, Loader2, Info } from "lucide-react"
 import type { Annotation } from "@/lib/types"
-import { getAnnotationsStatsSummary, listAnnotations } from "@/lib/api/annotations"
+import { listAnnotations } from "@/lib/api/annotations"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 import { Bar } from 'react-chartjs-2'
@@ -46,8 +46,6 @@ interface AnnotationsCompareProps {
 
 export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, totalAnnotations }: AnnotationsCompareProps) {
   const [selectedForComparison, setSelectedForComparison] = useState<string[]>([])
-  const [comparisonStats, setComparisonStats] = useState<Record<string, any>>({})
-  const [loadingStats, setLoadingStats] = useState<Record<string, boolean>>({})
   
   // Lazy loading state
   const [loadedAnnotations, setLoadedAnnotations] = useState<Annotation[]>([])
@@ -157,8 +155,6 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
   // Reset selected annotations when switching between favorites and default view
   useEffect(() => {
     setSelectedForComparison([])
-    setComparisonStats({})
-    setLoadingStats({})
     // Reset filter key ref when view changes
     prevFilterKeyRef.current = null
   }, [showFavs])
@@ -174,8 +170,6 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
     // Only reset if filter key actually changed
     if (prevFilterKeyRef.current !== filterKey) {
       setSelectedForComparison([])
-      setComparisonStats({})
-      setLoadingStats({})
       prevFilterKeyRef.current = filterKey
     }
   }, [filterKey, showFavs])
@@ -221,36 +215,6 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
     }
   }, [hasMore, loadingMore, showFavs, loadMoreAnnotations])
 
-  // Fetch stats for selected annotations
-  useEffect(() => {
-    async function fetchComparisonStats() {
-      for (const annotationId of selectedForComparison) {
-        if (comparisonStats[annotationId]) continue // Already have stats
-        
-        setLoadingStats(prev => ({ ...prev, [annotationId]: true }))
-        try {
-          // Find annotation in loaded annotations or favorite annotations
-          const annotation = allAnnotationsForStats.find(a => a.annotation_id === annotationId)
-          if (annotation) {
-            const stats = await getAnnotationsStatsSummary({ 
-              md5_checksums: annotationId,
-              taxids: annotation.taxid,
-              assembly_accessions: annotation.assembly_accession
-            })
-            setComparisonStats(prev => ({ ...prev, [annotationId]: stats }))
-          }
-        } catch (error) {
-          console.error(`Error fetching stats for ${annotationId}:`, error)
-        } finally {
-          setLoadingStats(prev => ({ ...prev, [annotationId]: false }))
-        }
-      }
-    }
-    
-    if (selectedForComparison.length > 0) {
-      fetchComparisonStats()
-    }
-  }, [selectedForComparison, allAnnotationsForStats, comparisonStats])
 
   const handleToggleAnnotation = (annotationId: string) => {
     setSelectedForComparison(prev => {
@@ -267,8 +231,6 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
 
   const handleClearSelection = () => {
     setSelectedForComparison([])
-    setComparisonStats({})
-    setLoadingStats({})
   }
 
   const handleSelectFirst10 = () => {
@@ -287,16 +249,6 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
     if (!showFavs) return
     setLoadedAnnotations(prev => prev.filter(a => a.annotation_id !== annotationId))
     setSelectedForComparison(prev => prev.filter(id => id !== annotationId))
-    setComparisonStats(prev => {
-      const updated = { ...prev }
-      delete updated[annotationId]
-      return updated
-    })
-    setLoadingStats(prev => {
-      const updated = { ...prev }
-      delete updated[annotationId]
-      return updated
-    })
   }, [removeFromCart, showFavs])
 
   // Create mapping for organism names with duplicates
@@ -488,8 +440,6 @@ export function AnnotationsCompare({ favoriteAnnotations, showFavs = false, tota
         {selectedForComparison.length >= 2 ? (
           <ComparisonChartsSection 
             selectedAnnotations={selectedAnnotations}
-            comparisonStats={comparisonStats}
-            loadingStats={loadingStats}
             organismLabelMap={organismLabelMap}
           />
         ) : selectedForComparison.length === 1 ? (
@@ -548,15 +498,11 @@ function findOverlappingRootTypes(annotations: Annotation[]): string[] {
 // Comparison Charts Section Component
 function ComparisonChartsSection({ 
   selectedAnnotations,
-  loadingStats,
   organismLabelMap
 }: {
   selectedAnnotations: Annotation[]
-  comparisonStats: Record<string, any>
-  loadingStats: Record<string, boolean>
   organismLabelMap: Record<string, string>
 }) {
-  const isLoading = selectedAnnotations.some(ann => loadingStats[ann.annotation_id])
 
   // Find overlapping GFF structure elements
   const overlappingBiotypes = findOverlappingItems(selectedAnnotations, 'biotypes')
@@ -601,14 +547,6 @@ function ComparisonChartsSection({
 
   return (
     <div className="flex flex-col h-full overflow-y-auto space-y-6 mb-8">
-      {isLoading && (
-        <Card className="p-4 bg-blue-500/10 border-blue-500/20 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4 text-blue-500 animate-pulse" />
-            <p className="text-xs text-muted-foreground">Loading statistics...</p>
-          </div>
-        </Card>
-      )}
 
       {/* GFF Structure Section - Collapsible */}
       <Collapsible open={isGffSectionOpen} onOpenChange={setIsGffSectionOpen}>
@@ -647,7 +585,7 @@ function ComparisonChartsSection({
       </Collapsible>
 
       {/* Gene Categories Comparison */}
-      {!isLoading && (hasCodingGenes || hasNonCodingGenes || hasPseudogenes) && (
+      {(hasCodingGenes || hasNonCodingGenes || hasPseudogenes) && (
         <div className="space-y-4 flex-shrink-0">
           <GroupedGeneComparisonChart
             geneData={geneData}

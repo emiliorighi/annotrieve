@@ -262,9 +262,8 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
     { value: "none", label: "Sort by" },
     { value: "date", label: "Release date" },
     { value: "coding_genes_count", label: "Coding genes count" },
-    { value: "coding_genes_mean_length", label: "Coding gene mean length" },
-    { value: "coding_genes_min_length", label: "Coding gene min length" },
-    { value: "coding_genes_max_length", label: "Coding gene max length" },
+    { value: "non_coding_genes_count", label: "Non-coding genes count" },
+    { value: "pseudogenes_count", label: "Pseudogenes count" },
   ]
 
   const handleSortFieldChange = (field: string) => {

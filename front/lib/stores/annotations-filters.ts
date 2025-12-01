@@ -8,12 +8,10 @@ export type SortOption =
   | 'date_asc'
   | 'coding_genes_count_desc'
   | 'coding_genes_count_asc'
-  | 'coding_genes_mean_length_desc'
-  | 'coding_genes_mean_length_asc'
-  | 'coding_genes_min_length_desc'
-  | 'coding_genes_min_length_asc'
-  | 'coding_genes_max_length_desc'
-  | 'coding_genes_max_length_asc'
+  | 'non_coding_genes_count_desc'
+  | 'non_coding_genes_count_asc'
+  | 'pseudogenes_count_desc'
+  | 'pseudogenes_count_asc'
 
 // Filter state interface
 export interface FiltersState {
@@ -253,28 +251,20 @@ export const useAnnotationsFiltersStore = create<AnnotationsFiltersStore>((set, 
         params.sort_by = 'features_statistics.gene_category_stats.coding.total_count'
         params.sort_order = 'asc'
         break
-      case 'coding_genes_mean_length_desc':
-        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.mean'
+      case 'non_coding_genes_count_desc':
+        params.sort_by = 'features_statistics.gene_category_stats.non_coding.total_count'
         params.sort_order = 'desc'
         break
-      case 'coding_genes_mean_length_asc':
-        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.mean'
+      case 'non_coding_genes_count_asc':
+        params.sort_by = 'features_statistics.gene_category_stats.non_coding.total_count'
         params.sort_order = 'asc'
         break
-      case 'coding_genes_min_length_desc':
-        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.min'
+      case 'pseudogenes_count_desc':
+        params.sort_by = 'features_statistics.gene_category_stats.pseudogene.total_count'
         params.sort_order = 'desc'
         break
-      case 'coding_genes_min_length_asc':
-        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.min'
-        params.sort_order = 'asc'
-        break
-      case 'coding_genes_max_length_desc':
-        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.max'
-        params.sort_order = 'desc'
-        break
-      case 'coding_genes_max_length_asc':
-        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.max'
+      case 'pseudogenes_count_asc':
+        params.sort_by = 'features_statistics.gene_category_stats.pseudogene.total_count'
         params.sort_order = 'asc'
         break
       case 'none':

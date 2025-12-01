@@ -17,7 +17,6 @@ import { createAssemblySearchModel, createOrganismSearchModel, createTaxonSearch
 import { QuickSearchSection } from "@/components/annotations-sidebar-filters/components/quick-search-section"
 import { FilterAccordionSection } from "@/components/annotations-sidebar-filters/components/filter-accordion-section"
 import { sortRanks, formatRankLabel } from "@/components/annotations-sidebar-filters/utils"
-import { useUIStore } from "@/lib/stores/ui"
 import { CommonSearchResult } from "@/lib/types"
 
 const FILTER_PARAM_EXCLUDE_MAP: Record<string, string> = {
@@ -354,7 +353,7 @@ export function AnnotationsSidebarFilters() {
       const response = await listBioprojects({
         limit: BIOPROJECTS_PAGE_SIZE,
         offset: currentOffset,
-        sort_by: 'annotations_count',
+        sort_by: 'assemblies_count',
         sort_order: 'desc'
       })
       const results = response?.results ?? []
@@ -978,7 +977,7 @@ export function AnnotationsSidebarFilters() {
                             <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{project.accession}</p>
                           </div>
                           <div className="text-[11px] text-muted-foreground text-right whitespace-nowrap">
-                            {(project.annotations_count ?? 0).toLocaleString()} ann.
+                            {(project.assemblies_count ?? 0).toLocaleString()} assemblies
                           </div>
                         </button>
                       )
