@@ -149,7 +149,6 @@ def trigger_annotation_fields_update(auth_key: str):
         raise HTTPException(status_code=401, detail="Unauthorized")
     #queue both tasks
     update_feature_stats.delay()
-    import_annotations.delay()
     return {"message": "Feature stats and import annotations task triggered"}
 
 

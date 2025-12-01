@@ -10,18 +10,23 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
     chromosomes = GenomicSequence.objects(assembly_accession=parsed_annotation.assembly_accession)
     
     if chromosomes.count() == 0:
-        #should the assembly have chromosomes?
-        assembly = GenomeAssembly.objects(assembly_accession=parsed_annotation.assembly_accession).first()
-        if assembly.assembly_level == 'Chromosome' or assembly.assembly_level == 'Complete Genome':
-            raise Exception(f"Error fetching chromosomes for {parsed_annotation.assembly_accession} with name {assembly.assembly_name} and level {assembly.assembly_level}, the chromosomes are not present in the database")
-        else:
-            #skip the alias mapping for contig/scaffold level assemblies
-            return
+        print(f"No chromosomes found for {parsed_annotation.assembly_accession}, skipping alias mapping")
+        return
 
     chr_aliases_dict = {} #dict with all possible combinations of aliases for the chromosomes
     chr_map = {} #dict uid to chr
     for chr in chromosomes:
-        uid = f"{chr.genbank_accession}_{chr.refseq_accession}" #this is the unique identifier for the chromosome
+        gb = chr.genbank_accession
+        rs = chr.refseq_accession
+        if gb and rs:
+            uid = f"{gb}_{rs}"
+        elif gb:
+            uid = gb
+        elif rs:
+            uid = rs
+        else:
+            uid = str(chr.id)
+    
         for alias in chr.aliases:
             chr_aliases_dict[alias] = uid
         chr_map[uid] = chr
