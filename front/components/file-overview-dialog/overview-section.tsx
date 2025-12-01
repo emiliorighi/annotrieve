@@ -461,7 +461,7 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
                               </h6>
                               <BiotypeProgressBar 
                                 biotypeCounts={typeStats.biotype_counts as Record<string, number>}
-                                colorClass="bg-secondary"
+                                colorClass="bg-slate-500"
                               />
                             </div>
                           ) : null}
