@@ -73,6 +73,11 @@ class GeneLengthStats(EmbeddedDocument):
     mean = FloatField()
     median = FloatField()
 
+class GenericLengthStats(DynamicEmbeddedDocument):
+    min = IntField()
+    max = IntField()
+    mean = FloatField()
+
 class LengthStats(EmbeddedDocument):
     mean = FloatField()
     median = FloatField()
@@ -105,9 +110,41 @@ class GeneStats(EmbeddedDocument):
     transcripts = EmbeddedDocumentField(TranscriptStats)
     features = EmbeddedDocumentField(FeatureStats)
 
+class GeneCategoryFeatureStats(DynamicEmbeddedDocument):
+    """
+    This class is used to store the stats of a gene category feature.
+    """
+    total_count = IntField()
+    length_stats = EmbeddedDocumentField(GenericLengthStats)
+    biotype_counts = DictField(field=IntField())
+    transcript_type_counts = DictField(field=IntField())
+
+
+class SubFeatureStats(DynamicEmbeddedDocument):
+    total_count = IntField()
+    length = EmbeddedDocumentField(GenericLengthStats)
+    concatenated_length = EmbeddedDocumentField(GenericLengthStats)
+
+class AssociatedGenesStats(DynamicEmbeddedDocument):
+    total_count = IntField()
+    gene_categories = DictField(field=IntField())
+
+class GenericTranscriptTypeStats(DynamicEmbeddedDocument):
+    length_stats = EmbeddedDocumentField(GenericLengthStats)
+    total_count = IntField()
+    biotype_counts = DictField(field=IntField())
+    associated_genes = EmbeddedDocumentField(AssociatedGenesStats)
+    exon_stats = EmbeddedDocumentField(SubFeatureStats)
+    cds_stats    = EmbeddedDocumentField(SubFeatureStats)
+
 class GFFStats(DynamicEmbeddedDocument):
+    #keep the old fields for backwards compatibility
     coding_genes = EmbeddedDocumentField(GeneStats)
     non_coding_genes = EmbeddedDocumentField(GeneStats)
     pseudogenes = EmbeddedDocumentField(GeneStats)
+
+    #new fields
+    gene_category_stats = DictField(field=EmbeddedDocumentField(GeneCategoryFeatureStats))
+    transcript_type_stats = DictField(field=EmbeddedDocumentField(GenericTranscriptTypeStats))
 
 

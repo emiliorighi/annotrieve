@@ -244,9 +244,9 @@ export function CompactTaxonomicTree({
   }
 
   return (
-    <div className="border" style={{ maxHeight }}>
+    <div className="border overflow-x-auto" style={{ maxHeight }}>
       <div className="overflow-y-auto" style={{ maxHeight }}>
-        <div className="p-1.5 space-y-0.5">
+        <div className="p-1.5 space-y-0.5 min-w-max">
           {flattenedNodes.map((node) => {
             // Check if node has children
             // If we've fetched it, check the actual children array length

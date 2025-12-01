@@ -8,6 +8,8 @@ info:
     email: "emilio.righi@crg.eu"
 
 servers:
+  - url: /annotrieve/api/v0
+    description: Default server (served via nginx proxy)
   - url: https://genome.crg.es/annotrieve/api/v0
     description: Production server
 

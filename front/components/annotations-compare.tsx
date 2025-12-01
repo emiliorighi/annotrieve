@@ -564,15 +564,14 @@ function ComparisonChartsSection({
   const overlappingRootTypes = findOverlappingRootTypes(selectedAnnotations)
   const overlappingAttributeKeys = findOverlappingItems(selectedAnnotations, 'attribute_keys')
 
-  // Extract gene counts and length stats for each annotation
+  // Extract gene counts and length stats for each annotation using new structure
   const geneData = selectedAnnotations.map(ann => {    
-    // Fallback to annotation's own features_statistics if API stats are not available
     const featuresStatistics = ann.features_statistics
     
-    // Try multiple possible data structures
-    let codingGenes = featuresStatistics?.coding_genes
-    let nonCodingGenes = featuresStatistics?.non_coding_genes
-    let pseudogenes = featuresStatistics?.pseudogenes
+    // Use new gene_category_stats structure
+    const codingGenes = featuresStatistics?.gene_category_stats?.['coding']
+    const nonCodingGenes = featuresStatistics?.gene_category_stats?.['non_coding']
+    const pseudogenes = featuresStatistics?.gene_category_stats?.['pseudogene']
     
     return {
       annotation: ann,
@@ -582,23 +581,21 @@ function ComparisonChartsSection({
     }
   })
 
+  // Extract transcript type stats for each annotation
   const transcriptData = selectedAnnotations.map(ann => {
     const featuresStatistics = ann.features_statistics
-    let codingTranscriptsTypes = featuresStatistics?.coding_genes?.transcripts?.types
-    let nonCodingTranscriptsTypes = featuresStatistics?.non_coding_genes?.transcripts?.types
-    let pseudogenesTranscriptsTypes = featuresStatistics?.pseudogenes?.transcripts?.types
+    // Use new transcript_type_stats structure
+    const transcriptTypeStats = featuresStatistics?.transcript_type_stats || {}
     return {
       annotation: ann,
-      codingTranscriptsTypes,
-      nonCodingTranscriptsTypes,
-      pseudogenesTranscriptsTypes,
+      transcriptTypeStats,
     }
   })
 
   // Check if any annotation has each gene type
-  const hasCodingGenes = geneData.some(d => d.codingGenes !== null)
-  const hasNonCodingGenes = geneData.some(d => d.nonCodingGenes !== null)
-  const hasPseudogenes = geneData.some(d => d.pseudogenes !== null)
+  const hasCodingGenes = geneData.some(d => d.codingGenes !== null && d.codingGenes !== undefined)
+  const hasNonCodingGenes = geneData.some(d => d.nonCodingGenes !== null && d.nonCodingGenes !== undefined)
+  const hasPseudogenes = geneData.some(d => d.pseudogenes !== null && d.pseudogenes !== undefined)
 
   const [isGffSectionOpen, setIsGffSectionOpen] = useState(false)
 
@@ -662,17 +659,11 @@ function ComparisonChartsSection({
 
           <TranscriptTypeStackedBarChart
             transcriptData={transcriptData}
-            hasCodingGenes={hasCodingGenes}
-            hasNonCodingGenes={hasNonCodingGenes}
-            hasPseudogenes={hasPseudogenes}
             organismLabelMap={organismLabelMap}
           />
 
           <TranscriptTypeHeatmap
             transcriptData={transcriptData}
-            hasCodingGenes={hasCodingGenes}
-            hasNonCodingGenes={hasNonCodingGenes}
-            hasPseudogenes={hasPseudogenes}
             organismLabelMap={organismLabelMap}
           />
         </div>
@@ -748,7 +739,7 @@ function GroupedGeneComparisonChart({
   hasPseudogenes: boolean
   organismLabelMap: Record<string, string>
 }) {
-  const [metricType, setMetricType] = useState<'count' | 'mean_length' | 'median_length'>('count')
+  const [metricType, setMetricType] = useState<'count' | 'mean_length'>('count')
   
   // X-axis: Gene categories
   const labels = []
@@ -775,9 +766,9 @@ function GroupedGeneComparisonChart({
     const dataPoints = []
     
     if (metricType === 'count') {
-      if (hasCodingGenes) dataPoints.push(data.codingGenes?.count || 0)
-      if (hasPseudogenes) dataPoints.push(data.pseudogenes?.count || 0)
-      if (hasNonCodingGenes) dataPoints.push(data.nonCodingGenes?.count || 0)
+      if (hasCodingGenes) dataPoints.push(data.codingGenes?.total_count || 0)
+      if (hasPseudogenes) dataPoints.push(data.pseudogenes?.total_count || 0)
+      if (hasNonCodingGenes) dataPoints.push(data.nonCodingGenes?.total_count || 0)
     } 
   
     else if (metricType === 'mean_length') {
@@ -795,20 +786,6 @@ function GroupedGeneComparisonChart({
       }
     }
 
-    else {
-      if (hasCodingGenes) {
-        const lengthStats = data.codingGenes?.length_stats
-        dataPoints.push(lengthStats?.median || 0)
-      }
-      if (hasPseudogenes) {
-        const lengthStats = data.pseudogenes?.length_stats
-        dataPoints.push(lengthStats?.median || 0)
-      }
-      if (hasNonCodingGenes) {
-        const lengthStats = data.nonCodingGenes?.length_stats
-        dataPoints.push(lengthStats?.median || 0)
-      }
-    }
     
     return {
       label: organismLabelMap[data.annotation.annotation_id],
@@ -892,14 +869,13 @@ function GroupedGeneComparisonChart({
         <p className="text-xs text-muted-foreground mb-3">
           Compare gene metrics across different categories.
         </p>
-        <Select value={metricType} onValueChange={(value: any) => setMetricType(value)}>
+          <Select value={metricType} onValueChange={(value: any) => setMetricType(value)}>
           <SelectTrigger className="w-[160px] h-8 text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="count">Gene Count</SelectItem>
             <SelectItem value="mean_length">Mean Length</SelectItem>
-            <SelectItem value="median_length">Median Length</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -914,40 +890,19 @@ function GroupedGeneComparisonChart({
 // Transcript Type Stacked Bar Chart Component
 function TranscriptTypeStackedBarChart({ 
   transcriptData,
-  hasCodingGenes,
-  hasNonCodingGenes,
-  hasPseudogenes,
   organismLabelMap
 }: { 
   transcriptData: any[]
-  hasCodingGenes: boolean
-  hasNonCodingGenes: boolean
-  hasPseudogenes: boolean
   organismLabelMap: Record<string, string>
 }) {
-  const getInitialCategory = () => {
-    if (hasCodingGenes) return 'coding'
-    if (hasPseudogenes) return 'pseudogenes'
-    if (hasNonCodingGenes) return 'nonCoding'
-    return 'coding'
-  }
-
-  const [geneCategory, setGeneCategory] = useState<'coding' | 'pseudogenes' | 'nonCoding'>(getInitialCategory())
+  const [metricType, setMetricType] = useState<'count' | 'mean_length'>('count')
   
-  const geneKeyMap = {
-    coding: 'codingTranscriptsTypes',
-    pseudogenes: 'pseudogenesTranscriptsTypes',
-    nonCoding: 'nonCodingTranscriptsTypes',
-  } as const
-  
-  const geneKey = geneKeyMap[geneCategory]
-  
-  // Extract all unique transcript types
+  // Extract all unique transcript types across all annotations
   const transcriptTypesSet = new Set<string>()
   transcriptData.forEach(data => {
-    const typeData = data[geneKey]
-    if (typeData) {
-      Object.keys(typeData).forEach(type => transcriptTypesSet.add(type))
+    const typeStats = data.transcriptTypeStats
+    if (typeStats) {
+      Object.keys(typeStats).forEach(type => transcriptTypesSet.add(type))
     }
   })
   const types = Array.from(transcriptTypesSet).sort()
@@ -955,17 +910,6 @@ function TranscriptTypeStackedBarChart({
   if (types.length === 0) {
     return (
       <Card className="p-4 flex-shrink-0">
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {hasCodingGenes && (
-            <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>
-          )}
-          {hasPseudogenes && (
-            <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>
-          )}
-          {hasNonCodingGenes && (
-            <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>
-          )}
-        </div>
         <div className="flex items-center justify-center h-[200px]">
           <p className="text-xs text-muted-foreground italic">No transcript type data available</p>
         </div>
@@ -978,14 +922,29 @@ function TranscriptTypeStackedBarChart({
     '#3b82f6', '#f97316', '#a855f7', '#10b981', '#ef4444',
     '#06b6d4', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6',
     '#6366f1', '#f43f5e', '#84cc16', '#0ea5e9', '#f59e0b',
+    // Additional 30 complementary colors
+    '#22c55e', '#eab308', '#dc2626', '#7c3aed', '#059669',
+    '#ea580c', '#be185d', '#0891b2', '#65a30d', '#ca8a04',
+    '#9333ea', '#16a34a', '#c2410c', '#9f1239', '#0e7490',
+    '#4d7c0f', '#a16207', '#7e22ce', '#15803d', '#b91c1c',
+    '#1e40af', '#c026d3', '#047857', '#d97706', '#be123c',
+    '#0369a1', '#9333ea', '#059669', '#dc2626', '#7c2d12',
+    '#1e3a8a', '#a21caf', '#065f46', '#b45309', '#991b1b',
   ]
 
-  // Prepare stacked bar data
+  // Prepare stacked bar data - each annotation is a bar, transcript types are segments
   const labels = transcriptData.map(data => organismLabelMap[data.annotation.annotation_id])
   
   const datasets = types.map((type, idx) => ({
     label: type,
-    data: transcriptData.map(data => data[geneKey]?.[type]?.count || 0),
+    data: transcriptData.map(data => {
+      const typeStats = data.transcriptTypeStats?.[type]
+      if (metricType === 'count') {
+        return typeStats?.total_count || 0
+      } else {
+        return typeStats?.length_stats?.mean || 0
+      }
+    }),
     backgroundColor: typeColors[idx % typeColors.length],
     borderColor: typeColors[idx % typeColors.length],
     borderWidth: 1,
@@ -1000,7 +959,7 @@ function TranscriptTypeStackedBarChart({
     plugins: {
       legend: {
         display: true,
-        position: 'right' as const,
+        position: 'bottom' as const,
         labels: {
           color: '#64748b',
           font: { size: 10 },
@@ -1016,7 +975,9 @@ function TranscriptTypeStackedBarChart({
         borderWidth: 1,
         callbacks: {
           label: function(context: any) {
-            return `${context.dataset.label}: ${context.parsed.x.toLocaleString()} transcripts`
+            const value = context.parsed.x.toLocaleString()
+            const suffix = metricType === 'count' ? ' transcripts' : ' bp'
+            return `${context.dataset.label}: ${value}${suffix}`
           },
         },
       },
@@ -1055,19 +1016,17 @@ function TranscriptTypeStackedBarChart({
       <div className="mb-3">
         <h4 className="font-semibold text-base text-foreground mb-1">Transcript Type Distribution - Stacked</h4>
         <p className="text-xs text-muted-foreground mb-3">
-          Compare transcript count and composition across annotations.
+          Compare transcript types across annotations. Each bar represents an annotation, segments are transcript types.
         </p>
-        <div className="flex items-center gap-2 flex-wrap">
-          {hasCodingGenes && (
-            <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>
-          )}
-          {hasPseudogenes && (
-            <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>
-          )}
-          {hasNonCodingGenes && (
-            <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>
-          )}
-        </div>
+        <Select value={metricType} onValueChange={(value: any) => setMetricType(value)}>
+          <SelectTrigger className="w-[160px] h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="count">Transcript Count</SelectItem>
+            <SelectItem value="mean_length">Mean Length</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="h-[300px]">
         <Bar data={chartData} options={options} />
@@ -1079,41 +1038,19 @@ function TranscriptTypeStackedBarChart({
 // Transcript Type Heatmap Component
 function TranscriptTypeHeatmap({ 
   transcriptData,
-  hasCodingGenes,
-  hasNonCodingGenes,
-  hasPseudogenes,
   organismLabelMap
 }: { 
   transcriptData: any[]
-  hasCodingGenes: boolean
-  hasNonCodingGenes: boolean
-  hasPseudogenes: boolean
   organismLabelMap: Record<string, string>
 }) {
-  const getInitialCategory = () => {
-    if (hasCodingGenes) return 'coding'
-    if (hasPseudogenes) return 'pseudogenes'
-    if (hasNonCodingGenes) return 'nonCoding'
-    return 'coding'
-  }
-
-  const [geneCategory, setGeneCategory] = useState<'coding' | 'pseudogenes' | 'nonCoding'>(getInitialCategory())
-  const [metricField, setMetricField] = useState<'count' | 'mean_length' | 'per_gene' | 'median_length' | 'exons_per_transcript' | 'spliced_mean_length' | 'spliced_median_length' | 'exon_mean_length' | 'exon_median_length'>('count')
+  const [metricField, setMetricField] = useState<string>('length_min')
   
-  const geneKeyMap = {
-    coding: 'codingTranscriptsTypes',
-    pseudogenes: 'pseudogenesTranscriptsTypes',
-    nonCoding: 'nonCodingTranscriptsTypes',
-  } as const
-  
-  const geneKey = geneKeyMap[geneCategory]
-  
-  // Extract all unique transcript types
+  // Extract all unique transcript types across all annotations
   const transcriptTypesSet = new Set<string>()
   transcriptData.forEach(data => {
-    const typeData = data[geneKey]
-    if (typeData) {
-      Object.keys(typeData).forEach(type => transcriptTypesSet.add(type))
+    const typeStats = data.transcriptTypeStats
+    if (typeStats) {
+      Object.keys(typeStats).forEach(type => transcriptTypesSet.add(type))
     }
   })
   const types = Array.from(transcriptTypesSet).sort()
@@ -1121,27 +1058,6 @@ function TranscriptTypeHeatmap({
   if (types.length === 0) {
     return (
       <Card className="p-4 flex-shrink-0">
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {hasCodingGenes && <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>}
-            {hasPseudogenes && <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>}
-            {hasNonCodingGenes && <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>}
-          </div>
-          <Select value={metricField} onValueChange={(value: any) => setMetricField(value)}>
-            <SelectTrigger className="w-[140px] h-7 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="count">Count</SelectItem>
-              <SelectItem value="mean_length">Mean Length</SelectItem>
-              <SelectItem value="per_gene">Per Gene</SelectItem>
-              <SelectItem value="median_length">Median Length</SelectItem>
-              <SelectItem value="exons_per_transcript">Exons per Transcript</SelectItem>
-              <SelectItem value="spliced_mean_length">Spliced Mean Length</SelectItem>
-              <SelectItem value="spliced_median_length">Spliced Median Length</SelectItem>
-              <SelectItem value="exon_mean_length">Exon Mean Length</SelectItem>
-              <SelectItem value="exon_median_length">Exon Median Length</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
         <div className="flex items-center justify-center h-[200px]">
           <p className="text-xs text-muted-foreground italic">No transcript type data available</p>
         </div>
@@ -1149,21 +1065,49 @@ function TranscriptTypeHeatmap({
     )
   }
 
+  // Helper function to extract value based on metric field
+  const getMetricValue = (typeStats: any, field: string): number => {
+    if (!typeStats) return 0
+    
+    // Length stats
+    if (field === 'length_min') return typeStats.length_stats?.min || 0
+    if (field === 'length_max') return typeStats.length_stats?.max || 0
+  
+    // Associated genes
+    if (field === 'associated_genes_total') return typeStats.associated_genes?.total_count || 0
+    if (field === 'associated_genes_coding') return typeStats.associated_genes?.gene_categories?.['coding'] || 0
+    if (field === 'associated_genes_non_coding') return typeStats.associated_genes?.gene_categories?.['non_coding'] || 0
+    if (field === 'associated_genes_pseudogene') return typeStats.associated_genes?.gene_categories?.['pseudogene'] || 0
+    
+    // Exon stats
+    if (field === 'exon_total_count') return typeStats.exon_stats?.total_count || 0
+    if (field === 'exon_length_min') return typeStats.exon_stats?.length?.min || 0
+    if (field === 'exon_length_max') return typeStats.exon_stats?.length?.max || 0
+    if (field === 'exon_length_mean') return typeStats.exon_stats?.length?.mean || 0
+    if (field === 'exon_concat_min') return typeStats.exon_stats?.concatenated_length?.min || 0
+    if (field === 'exon_concat_max') return typeStats.exon_stats?.concatenated_length?.max || 0
+    if (field === 'exon_concat_mean') return typeStats.exon_stats?.concatenated_length?.mean || 0
+    
+    // CDS stats
+    if (field === 'cds_total_count') return typeStats.cds_stats?.total_count || 0
+    if (field === 'cds_length_min') return typeStats.cds_stats?.length?.min || 0
+    if (field === 'cds_length_max') return typeStats.cds_stats?.length?.max || 0
+    if (field === 'cds_length_mean') return typeStats.cds_stats?.length?.mean || 0
+    if (field === 'cds_concat_min') return typeStats.cds_stats?.concatenated_length?.min || 0
+    if (field === 'cds_concat_max') return typeStats.cds_stats?.concatenated_length?.max || 0
+    if (field === 'cds_concat_mean') return typeStats.cds_stats?.concatenated_length?.mean || 0
+    
+    return 0
+  }
+
   // Calculate max value for color scaling
   const allValues: number[] = []
   transcriptData.forEach(data => {
     types.forEach(type => {
-      const typeData = data[geneKey]?.[type]
-      if (typeData) {
-        if (metricField === 'count') allValues.push(typeData.count || 0)
-        else if (metricField === 'mean_length') allValues.push(typeData.length_stats?.mean || 0)
-        else if (metricField === 'per_gene') allValues.push(typeData.per_gene || 0)
-        else if (metricField === 'median_length') allValues.push(typeData.length_stats?.median || 0)
-        else if (metricField === 'exons_per_transcript') allValues.push(typeData.exons_per_transcript || 0)
-        else if (metricField === 'spliced_mean_length') allValues.push(typeData.spliced_length_stats?.mean || 0)
-        else if (metricField === 'spliced_median_length') allValues.push(typeData.spliced_length_stats?.median || 0)
-        else if (metricField === 'exon_mean_length') allValues.push(typeData.exon_length_stats?.mean || 0)
-        else if (metricField === 'exon_median_length') allValues.push(typeData.exon_length_stats?.median || 0)
+      const typeStats = data.transcriptTypeStats?.[type]
+      if (typeStats) {
+        const value = getMetricValue(typeStats, metricField)
+        allValues.push(value)
       }
     })
   })
@@ -1187,29 +1131,35 @@ function TranscriptTypeHeatmap({
       <div className="mb-3">
         <h4 className="font-semibold text-base text-foreground mb-1">Transcript Type Heatmap</h4>
         <p className="text-xs text-muted-foreground mb-3">
-          Detailed matrix view of transcript types. Color intensity represents the selected metric.
+          Detailed matrix view of transcript types per annotation. Color intensity represents the selected metric.
         </p>
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {hasCodingGenes && <Button variant={geneCategory === 'coding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('coding')} className="h-7 text-xs">Coding</Button>}
-            {hasPseudogenes && <Button variant={geneCategory === 'pseudogenes' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('pseudogenes')} className="h-7 text-xs">Pseudogenes</Button>}
-            {hasNonCodingGenes && <Button variant={geneCategory === 'nonCoding' ? 'default' : 'outline'} size="sm" onClick={() => setGeneCategory('nonCoding')} className="h-7 text-xs">Non-coding</Button>}
-          </div>
-          <Select value={metricField} onValueChange={(value: any) => setMetricField(value)}>
-            <SelectTrigger className="w-[140px] h-7 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="count">Count</SelectItem>
-              <SelectItem value="mean_length">Mean Length</SelectItem>
-              <SelectItem value="per_gene">Per Gene</SelectItem>
-              <SelectItem value="median_length">Median Length</SelectItem>
-              <SelectItem value="exons_per_transcript">Exons per Transcript</SelectItem>
-              <SelectItem value="spliced_mean_length">Spliced Mean Length</SelectItem>
-              <SelectItem value="spliced_median_length">Spliced Median Length</SelectItem>
-              <SelectItem value="exon_mean_length">Exon Mean Length</SelectItem>
-              <SelectItem value="exon_median_length">Exon Median Length</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={metricField} onValueChange={(value: any) => setMetricField(value)}>
+          <SelectTrigger className="w-[200px] h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="max-h-[300px] overflow-y-auto">
+            <SelectItem value="length_min">Length: Min</SelectItem>
+            <SelectItem value="length_max">Length: Max</SelectItem>
+            <SelectItem value="associated_genes_total">Associated Genes: Total</SelectItem>
+            <SelectItem value="associated_genes_coding">Associated Genes: Coding</SelectItem>
+            <SelectItem value="associated_genes_non_coding">Associated Genes: Non-coding</SelectItem>
+            <SelectItem value="associated_genes_pseudogene">Associated Genes: Pseudogene</SelectItem>
+            <SelectItem value="exon_total_count">Exon: Total Count</SelectItem>
+            <SelectItem value="exon_length_min">Exon Length: Min</SelectItem>
+            <SelectItem value="exon_length_max">Exon Length: Max</SelectItem>
+            <SelectItem value="exon_length_mean">Exon Length: Mean</SelectItem>
+            <SelectItem value="exon_concat_min">Exon Concatenated: Min</SelectItem>
+            <SelectItem value="exon_concat_max">Exon Concatenated: Max</SelectItem>
+            <SelectItem value="exon_concat_mean">Exon Concatenated: Mean</SelectItem>
+            <SelectItem value="cds_total_count">CDS: Total Count</SelectItem>
+            <SelectItem value="cds_length_min">CDS Length: Min</SelectItem>
+            <SelectItem value="cds_length_max">CDS Length: Max</SelectItem>
+            <SelectItem value="cds_length_mean">CDS Length: Mean</SelectItem>
+            <SelectItem value="cds_concat_min">CDS Concatenated: Min</SelectItem>
+            <SelectItem value="cds_concat_max">CDS Concatenated: Max</SelectItem>
+            <SelectItem value="cds_concat_mean">CDS Concatenated: Mean</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="overflow-auto max-h-[400px] border border-border rounded-md">
         <table className="w-full text-xs border-collapse">
@@ -1230,50 +1180,37 @@ function TranscriptTypeHeatmap({
                 <tr key={idx}>
                   <td className="border border-border p-1.5 text-xs font-medium bg-muted sticky left-0 z-10">{annotationLabel}</td>
                   {types.map(type => {
-                    const typeData = data[geneKey]?.[type]
-                    let value = 0
+                    const typeStats = data.transcriptTypeStats?.[type]
+                    const value = getMetricValue(typeStats, metricField)
                     let displayValue = '-'
                     
-                    if (typeData) {
-                      if (metricField === 'count') {
-                        value = typeData.count || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'mean_length') {
-                        value = typeData.length_stats?.mean || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'per_gene') {
-                        value = typeData.per_gene || 0
-                        displayValue = value > 0 ? value.toFixed(2) : '-'
-                      } else if (metricField === 'median_length') {
-                        value = typeData.length_stats?.median || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'exons_per_transcript') {
-                        value = typeData.exons_per_transcript || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'spliced_mean_length') {
-                        value = typeData.spliced_length_stats?.mean || typeData.exon_length_stats?.mean || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'spliced_median_length') {
-                        value = typeData.spliced_length_stats?.median || typeData.exon_length_stats?.median || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'exon_mean_length') {
-                        value = typeData.exon_length_stats?.mean || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
-                      } else if (metricField === 'exon_median_length') {
-                        value = typeData.exon_length_stats?.median || 0
-                        displayValue = value > 0 ? value.toLocaleString() : '-'
+                    if (value > 0) {
+                      // Format based on metric type
+                      if (metricField.includes('length') || metricField.includes('concat')) {
+                        // Length values - show with bp suffix in tooltip, formatted number in cell
+                        displayValue = value >= 1000 
+                          ? value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                          : value.toFixed(2)
+                      } else {
+                        // Count values - show as integer
+                        displayValue = Number.isInteger(value) 
+                          ? value.toLocaleString() 
+                          : value.toFixed(2)
                       }
                     }
                     
                     const bgColor = value > 0 ? getHeatmapColor(value) : 'transparent'
                     const textColor = value > maxValue * 0.5 ? '#ffffff' : '#1e293b'
                     
+                    // Determine suffix for tooltip
+                    const suffix = (metricField.includes('length') || metricField.includes('concat')) ? ' bp' : ''
+                    
                     return (
                       <td 
                         key={type}
                         className="border border-border p-1.5 text-center text-xs"
                         style={{ backgroundColor: bgColor, color: textColor }}
-                        title={`${annotationLabel} - ${type}: ${displayValue}`}
+                        title={`${annotationLabel} - ${type}: ${displayValue}${suffix}`}
                       >
                         {displayValue}
                       </td>

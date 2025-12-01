@@ -10,7 +10,6 @@ import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 import { listAnnotations } from "@/lib/api/annotations"
 import type { AnnotationRecord } from "@/lib/api/types"
 import { RightSidebar } from "@/components/right-sidebar"
-import { INSDCSearchModal } from "@/components/insdc-search-sidebar"
 import { buildEntityDetailsUrl } from "@/lib/utils"
 
 export default function AnnotationsPage() {
@@ -34,6 +33,7 @@ export default function AnnotationsPage() {
   const sortOption = useAnnotationsFiltersStore((state) => state.sortOption)
   const selectedTaxons = useAnnotationsFiltersStore((state) => state.selectedTaxons)
   const selectedAssemblies = useAnnotationsFiltersStore((state) => state.selectedAssemblies)
+  const selectedBioprojects = useAnnotationsFiltersStore((state) => state.selectedBioprojects)
   const selectedAssemblyLevels = useAnnotationsFiltersStore((state) => state.selectedAssemblyLevels)
   const selectedAssemblyStatuses = useAnnotationsFiltersStore((state) => state.selectedAssemblyStatuses)
   const onlyRefGenomes = useAnnotationsFiltersStore((state) => state.onlyRefGenomes)
@@ -100,6 +100,7 @@ export default function AnnotationsPage() {
     sortOption,
     selectedTaxons,
     selectedAssemblies,
+    selectedBioprojects,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
     onlyRefGenomes,
@@ -136,18 +137,11 @@ export default function AnnotationsPage() {
 
   // Removed manual resize logic for sidebar; use responsive fixed widths instead
 
-  const insdcSearchModal = useUIStore((state) => state.insdcSearchModal)
-  const closeInsdcSearchModal = useUIStore((state) => state.closeInsdcSearchModal)
 
   if (shouldRedirectToFavorites) {
     return (
       <>
         <RightSidebar />
-        <INSDCSearchModal
-          open={insdcSearchModal.isOpen}
-          onOpenChange={(open) => !open && closeInsdcSearchModal()}
-          initialQuery={insdcSearchModal.initialQuery}
-        />
         <div className="flex items-center justify-center h-[calc(100vh-4rem)] px-6">
           <p className="text-sm text-muted-foreground">
             Redirecting to your favorites…
@@ -160,11 +154,6 @@ export default function AnnotationsPage() {
   return (
     <>
       <RightSidebar />
-      <INSDCSearchModal
-        open={insdcSearchModal.isOpen}
-        onOpenChange={(open) => !open && closeInsdcSearchModal()}
-        initialQuery={insdcSearchModal.initialQuery}
-      />
       <div className="relative flex h-[calc(100vh-4rem)] overflow-hidden">
         {/* Overlay - visible when sidebar is open on mobile */}
         <div

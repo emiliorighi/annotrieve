@@ -6,6 +6,7 @@ import { FavoritesFloatingButton } from "@/components/favorites-floating-button"
 import { BetaBannerProvider } from "@/components/beta-banner-provider";
 import { ReactQueryProvider } from "@/components/providers/react-query-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { InsdcModalProvider } from "@/components/providers/insdc-modal-provider";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -59,6 +60,7 @@ export default function RootLayout({
         <ThemeProvider>
           <ReactQueryProvider>
             <BetaBannerProvider>
+              <InsdcModalProvider />
               <div className="min-h-screen flex flex-col">
                 <AppHeader />
                 <main className="flex-1">

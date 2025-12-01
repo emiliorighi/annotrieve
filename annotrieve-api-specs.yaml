@@ -20,6 +20,8 @@ tags:
     description: "Organism information endpoints"
   - name: "taxons"
     description: "Taxonomy information endpoints"
+  - name: "bioprojects"
+    description: "BioProject information endpoints"
 
 paths:
   /annotations:
@@ -35,6 +37,7 @@ paths:
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
         - $ref: "#/components/parameters/db_sources"
         - $ref: "#/components/parameters/feature_sources"
         - $ref: "#/components/parameters/biotypes"
@@ -43,7 +46,6 @@ paths:
         - $ref: "#/components/parameters/providers"
         - $ref: "#/components/parameters/md5_checksums"
         - $ref: "#/components/parameters/has_stats"
-        - $ref: "#/components/parameters/latest_release_by"
         - $ref: "#/components/parameters/refseq_categories"
         - $ref: "#/components/parameters/assembly_levels"
         - $ref: "#/components/parameters/assembly_statuses"
@@ -101,6 +103,7 @@ paths:
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
         - $ref: "#/components/parameters/db_sources"
         - $ref: "#/components/parameters/feature_sources"
         - $ref: "#/components/parameters/biotypes"
@@ -109,7 +112,6 @@ paths:
         - $ref: "#/components/parameters/providers"
         - $ref: "#/components/parameters/md5_checksums"
         - $ref: "#/components/parameters/has_stats"
-        - $ref: "#/components/parameters/latest_release_by"
         - $ref: "#/components/parameters/refseq_categories"
         - $ref: "#/components/parameters/assembly_levels"
         - $ref: "#/components/parameters/assembly_statuses"
@@ -168,6 +170,7 @@ paths:
         - $ref: "#/components/parameters/offset"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
         - $ref: "#/components/parameters/db_sources"
         - $ref: "#/components/parameters/feature_sources"
         - $ref: "#/components/parameters/biotypes"
@@ -176,7 +179,6 @@ paths:
         - $ref: "#/components/parameters/providers"
         - $ref: "#/components/parameters/md5_checksums"
         - $ref: "#/components/parameters/has_stats"
-        - $ref: "#/components/parameters/latest_release_by"
         - $ref: "#/components/parameters/refseq_categories"
         - $ref: "#/components/parameters/assembly_levels"
         - $ref: "#/components/parameters/assembly_statuses"
@@ -253,6 +255,7 @@ paths:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/taxids"
         - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
         - $ref: "#/components/parameters/db_sources"
         - $ref: "#/components/parameters/feature_sources"
         - $ref: "#/components/parameters/biotypes"
@@ -261,7 +264,6 @@ paths:
         - $ref: "#/components/parameters/providers"
         - $ref: "#/components/parameters/md5_checksums"
         - $ref: "#/components/parameters/has_stats"
-        - $ref: "#/components/parameters/latest_release_by"
         - $ref: "#/components/parameters/refseq_categories"
         - $ref: "#/components/parameters/assembly_levels"
         - $ref: "#/components/parameters/assembly_statuses"
@@ -882,6 +884,76 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /bioprojects:
+    get:
+      tags:
+        - "bioprojects"
+      operationId: "getBioprojects"
+      summary: "Get BioProjects"
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/sort_by"
+        - $ref: "#/components/parameters/sort_order"
+      responses:
+        "200":
+          description: "BioProjects page"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBioprojectsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "bioprojects"
+      operationId: "postBioprojects"
+      summary: "Get BioProjects via POST"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BioprojectQueryParams"
+      responses:
+        "200":
+          description: "BioProjects page"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedBioprojectsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /bioprojects/{accession}:
+    get:
+      tags:
+        - "bioprojects"
+      operationId: "getBioprojectById"
+      summary: "Get BioProject by accession"
+      parameters:
+        - name: accession
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "BioProject details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BioProject"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
 components:
   parameters:
     filter:
@@ -914,6 +986,13 @@ components:
       schema:
         type: "string"
       example: "9606,10090,7227"
+    bioproject_accessions:
+      name: "bioproject_accessions"
+      in: "query"
+      description: "Comma-separated list of BioProject accessions"
+      schema:
+        type: "string"
+      example: "PRJNA123456,PRJNA123457"
     assembly_accessions:
       name: "assembly_accessions"
       in: "query"
@@ -1088,6 +1167,8 @@ components:
           type: string
         taxids:
           type: string
+        bioproject_accessions:
+          type: string
         assembly_accessions:
           type: string
         db_sources:
@@ -1144,6 +1225,8 @@ components:
           type: string
         taxids:
           type: string
+        bioproject_accessions:
+          type: string
         assembly_accessions:
           type: string
         refseq_categories:
@@ -1175,6 +1258,8 @@ components:
           type: string
         taxids:
           type: string
+        bioproject_accessions:
+          type: string
         sort_by:
           type: string
         sort_order:
@@ -1195,6 +1280,23 @@ components:
         taxids:
           type: string
         rank:
+          type: string
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+          enum: ["asc", "desc"]
+        offset:
+          type: integer
+          default: 0
+        limit:
+          type: integer
+          default: 20
+
+    BioprojectQueryParams:
+      type: object
+      properties:
+        filter:
           type: string
         sort_by:
           type: string
@@ -1819,3 +1921,34 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/TaxonNode"
+
+    BioProject:
+      type: object
+      properties:
+        accession:
+          type: string
+        title:
+          type: string
+        assemblies_count:
+          type: integer
+        species_count:
+          type: integer
+        annotations_count:
+          type: integer
+      required:
+        - accession
+        - title
+
+    PaginatedBioprojectsResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        offset:
+          type: integer
+        limit:
+          type: integer
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/BioProject"

@@ -54,12 +54,6 @@ services:
       - "5000"
     networks:
       - monstre
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
 
   annotrieve-fastapi-celery:
     image: gitlab.hpc.crg.es:5005/monstre/annotrieve/annotrieve-fastapi

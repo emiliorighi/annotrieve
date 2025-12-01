@@ -1,17 +1,19 @@
-from db.models import GenomeAssembly, GenomeAnnotation, Organism, TaxonNode
+from db.models import GenomeAssembly, GenomeAnnotation, Organism, TaxonNode, BioProject
 from itertools import chain
 from mongoengine.queryset.visitor import Q
 
 
-def update_db_stats(saved_annotations: list[GenomeAnnotation]):
+def update_db_stats(saved_annotations_ids: list[str]):
     """
-    Update the db stats
+    Update the db stats, given a list of annotations ids 
     """
-    accessions_to_update = set(ann.assembly_accession for ann in saved_annotations)
-    organisms_to_update = set(ann.taxid for ann in saved_annotations)
-    taxons_to_update = set(chain(*[ann.taxon_lineage for ann in saved_annotations]))
-   
-    print(f"Updating stats for {len(accessions_to_update)} assemblies, {len(organisms_to_update)} organisms, {len(taxons_to_update)} taxons")
+    accessions_to_update = set(GenomeAnnotation.objects(annotation_id__in=saved_annotations_ids).scalar('assembly_accession'))
+    organisms_to_update = set(GenomeAnnotation.objects(annotation_id__in=saved_annotations_ids).scalar('taxid'))
+    taxon_lineages = GenomeAnnotation.objects(annotation_id__in=saved_annotations_ids).scalar('taxon_lineage')
+    taxons_to_update = set(chain(*[list(lineage) if lineage else [] for lineage in taxon_lineages]))
+    related_bioprojects = GenomeAssembly.objects(assembly_accession__in=list(accessions_to_update)).scalar('bioprojects')
+    bioproject_accessions_to_update = set(chain(*[list(bp_list) if bp_list else [] for bp_list in related_bioprojects]))
+    print(f"Updating stats for {len(accessions_to_update)} assemblies, {len(organisms_to_update)} organisms, {len(taxons_to_update)} taxons, {len(bioproject_accessions_to_update)} bioprojects")
     #update annotations count for assemblies
     for assembly in GenomeAssembly.objects(assembly_accession__in=list(accessions_to_update)):
         assembly.modify(
@@ -35,16 +37,21 @@ def update_db_stats(saved_annotations: list[GenomeAnnotation]):
             assemblies_count=assemblies_count, \
             organisms_count=organisms_count
         )
+    #update assemblies count for bioprojects
+    for bioproject in BioProject.objects(accession__in=list(bioproject_accessions_to_update)):
+        bioproject.modify(
+            assemblies_count=GenomeAssembly.objects(bioprojects__in=[bioproject.accession]).count()
+        )
 
 def clean_up_empty_models():
     """
     Clean up empty models where annotations_count is 0
     """
-    print("Cleaning up empty models")
-    query_op = Q(annotations_count=0) | Q(annotations_count__exists=False)
-    deleted_assemblies_count = GenomeAssembly.objects(query_op).delete()
-    deleted_organisms_count = Organism.objects(query_op).delete()
-    deleted_taxon_nodes_count = TaxonNode.objects(query_op).delete()
-    print(f"Deleted {deleted_assemblies_count} assemblies, {deleted_organisms_count} organisms, {deleted_taxon_nodes_count} taxon nodes")
+    annotation_q = Q(annotations_count=0) | Q(annotations_count__exists=False)
+    deleted_assemblies_count = GenomeAssembly.objects(annotation_q).delete()
+    deleted_organisms_count = Organism.objects(annotation_q).delete()
+    deleted_taxon_nodes_count = TaxonNode.objects(annotation_q).delete()
+    assembly_q = Q(assemblies_count=0) | Q(assemblies_count__exists=False)
+    deleted_bioprojects_count = BioProject.objects(assembly_q).delete()
+    print(f"Deleted {deleted_assemblies_count} assemblies, {deleted_organisms_count} organisms, {deleted_taxon_nodes_count} taxon nodes, {deleted_bioprojects_count} bioprojects")
 
-    #update counts on organisms and taxon nodes after deleting empty models

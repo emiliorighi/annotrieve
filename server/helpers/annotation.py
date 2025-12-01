@@ -9,6 +9,7 @@ from helpers import pysam_helper
 
 DEFAULT_FIELD_MAP: Dict[str, str] = {
     "taxids": "taxon_lineage__in",
+    "bioproject_accessions": "bioprojects__in",
     "db_sources": "source_file_info__database__in",
     "assembly_accessions": "assembly_accession__in",
     "md5_checksums": "annotation_id__in",
@@ -310,26 +311,7 @@ def _process_string_value(raw_value: Any, should_normalize: bool = True) -> str:
     else:
         # Convert to string
         return str(raw_value).strip() if should_normalize else str(raw_value)
-
-def get_latest_release_by_group_pipeline(group_by: str):
-    group_field_map = {
-        "organism": "taxid",
-        "assembly": "assembly_accession",
-    }
-    field = group_field_map.get(group_by, group_by)  # allow direct field
-
-    return [
-        {"$sort": {
-            field: 1,
-            "source_file_info.release_date": -1,
-            "source_file_info.last_modified": -1,
-            "_id": -1,
-        }},
-        {"$group": {"_id": f"${field}", "latest_annotation": {"$first": "$$ROOT"}}},
-        {"$replaceRoot": {"newRoot": "$latest_annotation"}},
-    ]
-
-
+        
 def map_to_gene_category_stats(data: Dict[str, Any], counts: List[int], mean_lengths: List[float]) -> dict[str, Any]:
     return {
         'total_count': data.get('total_count', 0),

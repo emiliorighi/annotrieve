@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { OrganismRecord, TaxonRecord, AssemblyRecord } from '@/lib/api/types'
+import type { OrganismRecord, TaxonRecord, AssemblyRecord, BioProjectRecord } from '@/lib/api/types'
 import { getAnnotationsStatsSummary } from '@/lib/api/annotations'
 
 export type SortOption =
@@ -21,6 +21,7 @@ export interface FiltersState {
   selectedTaxons: TaxonRecord[]
   selectedOrganisms: OrganismRecord[],
   selectedAssemblies: AssemblyRecord[],
+  selectedBioprojects: BioProjectRecord[],
   
   // Assembly filters
   selectedAssemblyLevels: string[]
@@ -52,6 +53,7 @@ export interface AnnotationsFiltersStore extends FiltersState, AnnotationsState 
   setSelectedTaxons: (taxons: TaxonRecord[]) => void
   setSelectedOrganisms: (organisms: OrganismRecord[]) => void
   setSelectedAssemblies: (assemblies: AssemblyRecord[]) => void
+  setSelectedBioprojects: (bioprojects: BioProjectRecord[]) => void
   setSelectedAssemblyLevels: (levels: string[]) => void
   setSelectedAssemblyStatuses: (statuses: string[]) => void
   setOnlyRefGenomes: (value: boolean) => void
@@ -80,6 +82,7 @@ const defaultFilters: FiltersState = {
   selectedTaxons:[], 
   selectedOrganisms: [],
   selectedAssemblies: [],
+  selectedBioprojects: [],
   selectedAssemblyLevels: [],
   selectedAssemblyStatuses: [],
   onlyRefGenomes: false,
@@ -108,6 +111,10 @@ export const useAnnotationsFiltersStore = create<AnnotationsFiltersStore>((set, 
   // Filter actions
   setSelectedTaxons: (taxons: TaxonRecord[]) => {
     set({ selectedTaxons: taxons })
+    get().resetAnnotationsPage()
+  },
+  setSelectedBioprojects: (bioprojects: BioProjectRecord[]) => {
+    set({ selectedBioprojects: bioprojects })
     get().resetAnnotationsPage()
   },
   
@@ -195,6 +202,9 @@ export const useAnnotationsFiltersStore = create<AnnotationsFiltersStore>((set, 
     if (state.selectedAssemblies.length > 0) {
       params.assembly_accessions = state.selectedAssemblies.map(assembly => assembly.assembly_accession).join(',')
     }
+    if (state.selectedBioprojects.length > 0) {
+      params.bioproject_accessions = state.selectedBioprojects.map(project => project.accession).join(',')
+    }
     if (state.selectedAssemblyLevels.length > 0) {
       params.assembly_levels = state.selectedAssemblyLevels.join(',')
     }
@@ -236,35 +246,35 @@ export const useAnnotationsFiltersStore = create<AnnotationsFiltersStore>((set, 
         params.sort_order = 'asc'
         break
       case 'coding_genes_count_desc':
-        params.sort_by = 'features_statistics.coding_genes.count'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.total_count'
         params.sort_order = 'desc'
         break
       case 'coding_genes_count_asc':
-        params.sort_by = 'features_statistics.coding_genes.count'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.total_count'
         params.sort_order = 'asc'
         break
       case 'coding_genes_mean_length_desc':
-        params.sort_by = 'features_statistics.coding_genes.length_stats.mean'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.mean'
         params.sort_order = 'desc'
         break
       case 'coding_genes_mean_length_asc':
-        params.sort_by = 'features_statistics.coding_genes.length_stats.mean'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.mean'
         params.sort_order = 'asc'
         break
       case 'coding_genes_min_length_desc':
-        params.sort_by = 'features_statistics.coding_genes.length_stats.min'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.min'
         params.sort_order = 'desc'
         break
       case 'coding_genes_min_length_asc':
-        params.sort_by = 'features_statistics.coding_genes.length_stats.min'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.min'
         params.sort_order = 'asc'
         break
       case 'coding_genes_max_length_desc':
-        params.sort_by = 'features_statistics.coding_genes.length_stats.max'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.max'
         params.sort_order = 'desc'
         break
       case 'coding_genes_max_length_asc':
-        params.sort_by = 'features_statistics.coding_genes.length_stats.max'
+        params.sort_by = 'features_statistics.gene_category_stats.coding.length_stats.max'
         params.sort_order = 'asc'
         break
       case 'none':
@@ -330,6 +340,7 @@ export const useAnnotationsFiltersStore = create<AnnotationsFiltersStore>((set, 
       state.selectedTaxons.length > 0 ||
       state.selectedOrganisms.length > 0 ||
       state.selectedAssemblies.length > 0 ||
+      state.selectedBioprojects.length > 0 ||
       state.selectedAssemblyLevels.length > 0 ||
       state.selectedAssemblyStatuses.length > 0 ||
       state.onlyRefGenomes ||

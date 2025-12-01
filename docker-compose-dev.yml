@@ -2,13 +2,9 @@ services:
 
   annotrieve-nginx:
     build:
-      context: ./nginx
+      context: ./front
       dockerfile: Dockerfile
-      args:
-        - BASE_PATH=$BASE_PATH
     restart: always
-    environment:
-      - BASE_PATH=${BASE_PATH}
     volumes:
       - /home/emilior/annotrieve/files:/data/annotrieve/files:ro
     ports:

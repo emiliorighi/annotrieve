@@ -1,6 +1,5 @@
 import os
 import shutil
-import random
 from celery import shared_task
 from helpers import file as file_helper
 from .services.classes import AnnotationToProcess
@@ -10,7 +9,8 @@ from .services import contigs as contigs_service
 from .services import taxonomy as taxonomy_service
 from .services import stats as stats_service
 from .services import feature_summary as feature_summary_service
-from db.models import GenomeAnnotation
+from .services import feature_stats as feature_stats_service
+from db.models import GenomeAnnotation, GenomeAssembly
 from .services.utils import create_batches
 
 TMP_DIR = "/tmp"
@@ -32,28 +32,49 @@ def import_annotations():
     os.makedirs(TMP_DIR, exist_ok=True)
 
     print("Starting import annotations job...")
-    annotations_to_process = annotation_service.fetch_annotations(URLS_TO_FETCH)
-    if DEV:
-        annotations_to_process = random.sample(annotations_to_process, 10)
-
-    new_annotations_to_process = annotation_service.filter_annotations_by_md5_checksum_and_url_path(annotations_to_process)
-    if not new_annotations_to_process:
-        print("No new annotations to process after filtering by md5 checksum and url path, exiting...")
-        return
+    # fetch annotations and deduplicate by md5 checksum and url path (exact match)
+    new_annotations = []
+    for url in URLS_TO_FETCH:
+        fetched_annotations = annotation_service.fetch_from_url(url)
+        #here we filter those incoming annotations 
+        # that are already in the database by md5 checksum and url path 
+        # exact match (perfect match) of the source file
+        # we will handle later those which url exists but the md5 checksum is different
+        filtered_annotations = annotation_service.filter_annotations_by_md5_checksum_and_url_path(fetched_annotations)
+        new_annotations.extend(filtered_annotations)
     
-    valid_lineages = taxonomy_service.handle_taxonomy(new_annotations_to_process, TMP_DIR) #lineages saved in the database, return a dict of taxid:lineage
+    if DEV:
+        URLS_TO_TEST = [
+            #one of the most annotated
+            "https://ftp.ebi.ac.uk/pub/ensemblorganisms/Mus_musculus/GCA_001624475.1/community/geneset/2018_01/genes.gff3.gz",
+
+            #one with broken relationships same exon point to gene ids
+            "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/916/722/125/GCA_916722125.1_LMJFC_annotationDEFINITIVO/GCA_916722125.1_LMJFC_annotationDEFINITIVO_genomic.gff.gz",
+
+            #human ensembl
+            "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/001/405/GCF_000001405.40_GRCh38.p14/GCF_000001405.40_GRCh38.p14_genomic.gff.gz",
+
+            # a lot of genes around 2gb and 1 million genes
+            "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/026/074/375/GCA_026074375.1_Tcoc_v1.0/GCA_026074375.1_Tcoc_v1.0_genomic.gff.gz"
+            ]
+        new_annotations = [annotation for annotation in new_annotations if annotation.access_url in URLS_TO_TEST]
+    print(f"Found {len(new_annotations)} new annotations to process")
+    # LINEAGE HANDLING STEP
+    valid_lineages = taxonomy_service.handle_taxonomy(new_annotations, TMP_DIR) #lineages saved in the database, return a dict of taxid:lineage
     new_annotations_to_process = annotation_service.filter_annotations_dict_by_field(
-        new_annotations_to_process, 'taxon_id', list(valid_lineages.keys())
+        new_annotations, 'taxon_id', list(valid_lineages.keys())
     )
+
+
     if not new_annotations_to_process:
         print("No new annotations to process after filtering by lineage, exiting...")
         return
     
+    # ASSEMBLY HANDLING STEP (here we also hanlde bioprojects)
     valid_accessions = assembly_service.handle_assemblies(new_annotations_to_process, TMP_DIR, valid_lineages)
     new_annotations_to_process = annotation_service.filter_annotations_dict_by_field(
         new_annotations_to_process, 'assembly_accession', valid_accessions
     )
-
     if not new_annotations_to_process:
         print("No new annotations to process after filtering by assembly, exiting...")
         return
@@ -61,19 +82,15 @@ def import_annotations():
     print(f"Found {len(new_annotations_to_process)} new annotations to process")
     
     existing_annotation_md5s = GenomeAnnotation.objects().scalar('annotation_id') #the annotation id is the md5 of the uncompressed sorted file
-    saved_annotations: list[GenomeAnnotation] = []
+    saved_annotations_ids: list[str] = []
     for annotations in create_batches(new_annotations_to_process, BATCH_SIZE):
         processed_annotations = process_annotations_pipeline(annotations, valid_lineages, existing_annotation_md5s)
-        annotation_service.delete_changed_md5_checksum_annotations(processed_annotations, ANNOTATIONS_PATH)
-        saved_annotations.extend(
-            annotation_service.save_annotations(
-                processed_annotations, ANNOTATIONS_PATH
-            )
-        )
-
-    if saved_annotations:
-        print(f"Saved {len(saved_annotations)} annotations")
-        stats_service.update_db_stats(saved_annotations)
+        saved_annotations_ids.extend(
+            annotation_service.save_annotations(processed_annotations, ANNOTATIONS_PATH)
+            )    
+    if saved_annotations_ids:
+        print(f"Saved {len(saved_annotations_ids)} annotations")
+        stats_service.update_db_stats(saved_annotations_ids)
     else:
         print("No annotations saved")
     
@@ -94,13 +111,17 @@ def process_annotations_pipeline(annotations: list[AnnotationToProcess], valid_l
             md5_checksum, file_size = annotation_service.process_annotation_file(annotation_to_process, tmp_subdir_path, full_bgzipped_path, existing_annotation_md5s)
             indexed_file_info = annotation_service.init_indexed_file_info(md5_checksum, file_size, relative_bgzipped_path, relative_csi_path)
             feature_summary = feature_summary_service.compute_features_summary(full_bgzipped_path)
+            feature_stats = feature_stats_service.compute_features_statistics(full_bgzipped_path)   
             parsed_annotation = annotation_to_process.to_genome_annotation(
                 annotation_id=md5_checksum,
                 taxon_lineage=valid_lineages.get(annotation_to_process.taxon_id, []),
                 indexed_file_info=indexed_file_info,
                 features_summary=feature_summary,
+                features_statistics=feature_stats,
             )
             contigs_service.handle_alias_mapping(parsed_annotation, full_bgzipped_path)
+            #TODO: do we need to set bioprojects to the annotations or just the assemblies?
+            #handle_bioprojects(parsed_annotation)
             processed_annotations.append(parsed_annotation)
         except Exception as e:
             str_error = str(e)
@@ -112,3 +133,16 @@ def process_annotations_pipeline(annotations: list[AnnotationToProcess], valid_l
             shutil.rmtree(tmp_subdir_path)
 
     return processed_annotations
+
+
+def handle_bioprojects(ann_to_save: GenomeAnnotation) -> list[GenomeAnnotation]:
+    """
+    Set the bioprojects for the annotations
+    """
+    #fetch related assembly
+    assembly = GenomeAssembly.objects(assembly_accession=ann_to_save.assembly_accession).first()
+    if not assembly:
+        return
+    #set bioprojects
+    ann_to_save.bioprojects = assembly.bioprojects
+    return ann_to_save

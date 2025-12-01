@@ -2,21 +2,23 @@
 
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { BarChart3, Code, Layers, Workflow, Info, ExternalLink } from "lucide-react"
-import { useState } from "react"
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { BarChart3, Code, Layers, Workflow, Info, ChevronDown, ChevronUp } from "lucide-react"
+import { useState, useCallback } from "react"
 import {
   GENE_CATEGORIES,
   CATEGORY_LABELS,
   getAllTranscriptTypes,
+  getGeneCategoryStats,
+  getTranscriptTypeStats,
   type GeneCategory,
 } from '../file-overview-dialog-helpers'
+import { StatisticsInfoDialog } from './statistics-info-dialog'
 
 interface OverviewSectionProps {
   stats: any
@@ -56,78 +58,146 @@ const renderValue = (value: any): number => {
   return Number(value) || 0
 }
 
+// Biotype Progress Bar Component with Load More
+interface BiotypeProgressBarProps {
+  biotypeCounts: Record<string, number>
+  colorClass?: string
+}
+
+function BiotypeProgressBar({ biotypeCounts, colorClass = 'bg-secondary' }: BiotypeProgressBarProps) {
+  const [showAll, setShowAll] = useState(false)
+  
+  const entries = Object.entries(biotypeCounts)
+    .map(([key, value]) => [key, value as number] as [string, number])
+    .sort(([, a], [, b]) => b - a)
+  
+  const total = entries.reduce((sum, [, count]) => sum + count, 0)
+  const displayLimit = 5
+  const hasMore = entries.length > displayLimit
+  const displayedEntries = showAll ? entries : entries.slice(0, displayLimit)
+  
+  if (entries.length === 0) return null
+  
+  return (
+    <div className="space-y-2">
+      
+      {/* Progress bars */}
+      <div className="space-y-2.5">
+        {displayedEntries.map(([biotype, count]) => {
+          const percentage = total > 0 ? (count / total) * 100 : 0
+          return (
+            <div key={biotype} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-foreground truncate flex-1 mr-2">{biotype}</span>
+                <span className="text-muted-foreground font-mono tabular-nums whitespace-nowrap">
+                  {count.toLocaleString()} ({percentage.toFixed(1)}%)
+                </span>
+              </div>
+              <div className="h-2 bg-muted rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
+                  style={{ width: `${Math.min(percentage, 100)}%` }}
+                  title={`${biotype}: ${count.toLocaleString()} (${percentage.toFixed(2)}%)`}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      
+      {/* Load More button */}
+      {hasMore && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mt-2"
+          aria-label={showAll ? 'Show less biotypes' : 'Show more biotypes'}
+        >
+          {showAll ? (
+            <>
+              Show less
+              <ChevronUp className="h-3 w-3" />
+            </>
+          ) : (
+            <>
+              Show {entries.length - displayLimit} more
+              <ChevronDown className="h-3 w-3" />
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function OverviewSection({ stats }: OverviewSectionProps) {
-  const TRANSCRIPT_TYPE_COUNT = 5
   const allTranscriptTypes = getAllTranscriptTypes(stats)
-  const [showAllTranscripts, setShowAllTranscripts] = useState(false)
-  const [selectedTranscriptType, setSelectedTranscriptType] = useState<string | null>(null)
+  const [expandedCategories, setExpandedCategories] = useState<Record<GeneCategory, boolean>>({
+    coding_genes: false,
+    non_coding_genes: false,
+    pseudogenes: false,
+  })
+  const [expandedTranscriptTypes, setExpandedTranscriptTypes] = useState<Record<string, boolean>>({})
   const [infoDialogOpen, setInfoDialogOpen] = useState(false)
 
-  // Calculate total count of all categories (for percentage calculations)
-  const totalCount = GENE_CATEGORIES.filter(cat => stats[cat])
-    .reduce((sum, cat) => sum + (stats[cat].count || 0), 0)
+  const toggleCategory = useCallback((cat: GeneCategory) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [cat]: !prev[cat],
+    }))
+  }, [])
 
-  // Calculate segments for the stacked bar
-  const segments = GENE_CATEGORIES.filter(cat => stats[cat])
-    .map((cat) => {
-      const config = CATEGORY_CONFIG[cat]
-      const count = stats[cat].count || 0
-      const percentage = totalCount > 0 ? (count / totalCount) * 100 : 0
+  const toggleTranscriptType = useCallback((type: string) => {
+    setExpandedTranscriptTypes(prev => ({
+      ...prev,
+      [type]: !prev[type],
+    }))
+  }, [])
+
+  // Sort transcript types by total count and calculate category breakdowns
+  const sortedTranscriptTypes = allTranscriptTypes
+    .map(type => {
+      const typeStats = getTranscriptTypeStats(stats, type)
+      if (!typeStats) return null
+      
+      const totalCount = typeStats.total_count || 0
+      const associatedGenes = typeStats.associated_genes
+      
+      // Calculate category segments for this transcript type
+      // Get transcript counts from each gene category's transcript_type_counts
+      const segments: Array<{ cat: GeneCategory; count: number; percentage: number }> = []
+      
+      if (totalCount > 0) {
+        GENE_CATEGORIES.forEach(cat => {
+          const categoryStats = getGeneCategoryStats(stats, cat)
+          const transcriptTypeCounts = categoryStats?.transcript_type_counts
+          
+          if (transcriptTypeCounts && transcriptTypeCounts[type]) {
+            const count = transcriptTypeCounts[type] as number
+            if (count > 0) {
+              segments.push({
+                cat,
+                count,
+                percentage: (count / totalCount) * 100,
+              })
+            }
+          }
+        })
+      }
       
       return {
-        cat,
-        config,
-        count,
-        percentage,
-        width: percentage,
+        type,
+        totalCount,
+        stats: typeStats,
+        segments: segments.sort((a, b) => b.count - a.count), // Sort by count descending
       }
     })
-
-  // Calculate cumulative positions for stacking
-  let cumulativePosition = 0
-  const segmentsWithPosition = segments.map((segment) => {
-    const position = cumulativePosition
-    cumulativePosition += segment.width
-    return { ...segment, position }
-  })
-
-  // Aggregate transcript type counts across all categories
-  const transcriptTypeData = allTranscriptTypes.map(type => {
-    let totalCount = 0
-    const categoryCounts: Record<GeneCategory, number> = {
-      coding_genes: 0,
-      non_coding_genes: 0,
-      pseudogenes: 0,
-    }
-    
-    GENE_CATEGORIES.forEach(cat => {
-      const typeData = stats[cat]?.transcripts?.types?.[type]
-      if (typeData) {
-        const count = typeData.count || 0
-        categoryCounts[cat] = count
-        totalCount += count
-      }
-    })
-
-    return {
-      type,
-      totalCount,
-      categoryCounts,
-    }
-  })
-
-  // Sort by total count and get top 10
-  const sortedTranscriptTypes = transcriptTypeData
+    .filter((item): item is NonNullable<typeof item> => item !== null)
     .sort((a, b) => b.totalCount - a.totalCount)
-  
-  const displayedTranscriptTypes = showAllTranscripts 
-    ? sortedTranscriptTypes 
-    : sortedTranscriptTypes.slice(0, TRANSCRIPT_TYPE_COUNT)
 
   return (
     <>
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-4">
+      <Card className="p-4 md:p-6">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary" />
             <h4 className="text-sm font-semibold">GFF Overview</h4>
@@ -137,440 +207,414 @@ export function OverviewSection({ stats }: OverviewSectionProps) {
             size="sm"
             onClick={() => setInfoDialogOpen(true)}
             title="How statistics are computed"
+            className="hover:bg-accent transition-colors"
+            aria-label="View statistics information"
           >
+            <Info className="h-4 w-4 mr-1.5" />
             Info
-            <Info className="h-4 w-4" />
           </Button>
         </div>
       
       <div className="space-y-6">
-        {/* Gene Count Range Bar */}
+        {/* Gene Categories Section */}
         <div>
-          <h5 className="text-xs font-medium mb-4">Gene Counts by Category</h5>
-          
-          {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 mb-3">
-            {segments.map(({ cat, config, count, percentage }) => {
-              const Icon = config.icon
-              return (
-                <div
-                  key={cat}
-                  className="flex items-center gap-2"
-                >
-                  <Icon className={`h-4 w-4 ${config.colorClass}`} />
-                  <span className={`text-sm font-medium ${config.colorClass}`}>
-                    {CATEGORY_LABELS[cat]}
-                  </span>
-                  <span className="text-xs font-bold text-muted-foreground">
-                    {percentage.toFixed(1)}%
-                  </span>
-                </div>
-              )
-            })}
-          </div>
+          <h5 className="text-xs font-medium mb-4 text-foreground">Gene Categories</h5>
+          <div className="space-y-3">
+            {GENE_CATEGORIES.map(cat => {
+              const categoryStats = getGeneCategoryStats(stats, cat)
+              if (!categoryStats) return null
 
-          {/* Stacked Bar */}
-          <div className="relative h-12 rounded-lg overflow-hidden bg-muted border">
-            {segmentsWithPosition.map(({ cat, config, count, percentage, position, width }) => (
-              <div
-                key={cat}
-                className={`absolute h-full transition-all duration-300 ${config.bgClass} ${config.borderClass} border-r last:border-r-0 flex items-center justify-center group`}
-                style={{
-                  left: `${position}%`,
-                  width: `${width}%`,
-                }}
-                title={`${CATEGORY_LABELS[cat]}: ${count.toLocaleString()} (${percentage.toFixed(1)}%)`}
-              >
-                {width > 8 && (
-                  <span className={`text-xs font-semibold ${config.colorClass} whitespace-nowrap`}>
-                    {count.toLocaleString()}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Gene Length Statistics */}
-        <div>
-          <h5 className="text-xs font-medium mb-3">Gene Length Statistics</h5>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {GENE_CATEGORIES.filter(cat => stats[cat]?.length_stats).map((cat) => {
               const config = CATEGORY_CONFIG[cat]
               const Icon = config.icon
-              const lengthStats = stats[cat].length_stats
+              const isExpanded = expandedCategories[cat]
+              const lengthStats = categoryStats.length_stats
               const min = renderValue(lengthStats?.min) || 0
               const max = renderValue(lengthStats?.max) || 0
               const mean = renderValue(lengthStats?.mean) || 0
-              const range = max - min
-              const meanPosition = range > 0 ? ((mean - min) / range) * 100 : 50
 
               return (
-                <div
+                <Collapsible
                   key={cat}
-                  className={`rounded-lg p-4 border-2 ${config.bgClass} ${config.borderClass} shadow-md`}
+                  open={isExpanded}
+                  onOpenChange={() => toggleCategory(cat)}
                 >
-                  <div className="flex items-center gap-2 mb-4">
-                    <Icon className={`h-4 w-4 ${config.colorClass}`} />
-                    <h6 className={`text-sm font-semibold ${config.colorClass}`}>
-                      {CATEGORY_LABELS[cat]}
-                    </h6>
-                  </div>
-
-                  {/* Range Bar Visualization */}
-                  <div className="space-y-3">
-
-                    {/* Statistics */}
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Min Length:</span>
-                        <span className="font-mono font-semibold">
-                          {min.toLocaleString()} bp
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Mean Length:</span>
-                        <span className={`font-mono font-semibold ${config.colorClass}`}>
-                          {mean.toLocaleString()} bp
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-muted-foreground">Max Length:</span>
-                        <span className="font-mono font-semibold">
-                          {max.toLocaleString()} bp
-                        </span>
-                      </div>
-                      {lengthStats?.median && (
-                        <div className="flex justify-between items-center pt-2 border-t">
-                          <span className="text-muted-foreground">Median:</span>
-                          <span className="font-mono">
-                            {renderValue(lengthStats.median).toLocaleString()} bp
-                          </span>
+                  <Card className={`border-2 transition-all duration-200 hover:shadow-md ${config.borderClass} ${isExpanded ? 'shadow-sm' : ''}`}>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="collapse"
+                        className="w-full justify-between p-4 h-auto hover:bg-accent/5 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2"
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${CATEGORY_LABELS[cat]} details`}
+                      >
+                        <div className="flex items-center gap-3 flex-1 text-left">
+                          <div className={`p-2 rounded-lg ${config.bgClass} flex-shrink-0 transition-colors`}>
+                            <Icon className={`h-5 w-5 ${config.colorClass}`} aria-hidden="true" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                              <h6 className={`text-sm font-semibold ${config.colorClass}`}>
+                                {CATEGORY_LABELS[cat]}
+                              </h6>
+                              <Badge variant="outline" className="text-xs font-semibold">
+                                {categoryStats.total_count?.toLocaleString() || 0} genes
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                              <span>Min: <span className="font-mono font-medium">{min.toLocaleString()}</span> bp</span>
+                              <span>Mean: <span className="font-mono font-medium">{mean.toLocaleString()}</span> bp</span>
+                              <span>Max: <span className="font-mono font-medium">{max.toLocaleString()}</span> bp</span>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                        <div className="flex-shrink-0 ml-2">
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground transition-transform duration-200" aria-hidden="true" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200" aria-hidden="true" />
+                          )}
+                        </div>
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent 
+                      className="overflow-hidden transition-all duration-300 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down"
+                    >
+                      <div className="px-4 pb-4" aria-label={`${CATEGORY_LABELS[cat]} details`}>
+                        <div className="space-y-5 pt-4 border-t border-border/50">
+                          {/* Transcript Type Counts */}
+                          {categoryStats.transcript_type_counts && Object.keys(categoryStats.transcript_type_counts).length > 0 ? (
+                            <div>
+                              <h6 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                Transcript Types ({Object.keys(categoryStats.transcript_type_counts).length})
+                              </h6>
+                              <div className="flex flex-wrap gap-2">
+                                {Object.entries(categoryStats.transcript_type_counts)
+                                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                                  .map(([type, count]) => (
+                                    <Badge 
+                                      key={type} 
+                                      variant="outline" 
+                                      className="text-xs transition-colors hover:bg-accent/50 cursor-default"
+                                      title={`${type}: ${(count as number).toLocaleString()} transcripts`}
+                                    >
+                                      <span className="font-semibold">{type}</span>
+                                      <span className="text-muted-foreground ml-1">{(count as number).toLocaleString()}</span>
+                                    </Badge>
+                                  ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground italic py-2">
+                              No transcript types available
+                            </div>
+                          )}
+
+                          {/* Biotype Counts */}
+                          {categoryStats.biotype_counts && Object.keys(categoryStats.biotype_counts).length > 0 ? (
+                            <div>
+                              <h6 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                Biotypes ({Object.keys(categoryStats.biotype_counts).length})
+                              </h6>
+                              <BiotypeProgressBar 
+                                biotypeCounts={categoryStats.biotype_counts as Record<string, number>}
+                                colorClass={config.bgClass.replace('/10', '')}
+                              />
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
               )
             })}
           </div>
         </div>
 
-        {/* Stacked bar: Transcript counts per gene category */}
-        {allTranscriptTypes.length > 0 && (
+        {/* Transcript Types Section */}
+        {sortedTranscriptTypes.length > 0 ? (
           <div>
-            <h5 className="text-xs font-medium">Transcript Counts per Gene Category</h5>
-            <span className="text-xs text-muted-foreground">Click on a transcript type to view detailed statistics</span>
-            
-            <div className="space-y-3 mt-2">
-              {displayedTranscriptTypes.map(({ type, totalCount, categoryCounts }) => {
-                const isSelected = selectedTranscriptType === type
-                
-                // Calculate segment positions (each bar shows 100% of that transcript type)
-                let cumulativePosition = 0
-                const segments = GENE_CATEGORIES
-                  .filter(cat => categoryCounts[cat] > 0)
-                  .map(cat => {
-                    const count = categoryCounts[cat]
-                    const percentage = totalCount > 0 ? (count / totalCount) * 100 : 0
-                    const position = cumulativePosition
-                    cumulativePosition += percentage
-                    return {
-                      cat,
-                      count,
-                      percentage,
-                      position,
-                      width: percentage,
-                    }
-                  })
+            <h5 className="text-xs font-medium mb-4 text-foreground">Transcript Types ({sortedTranscriptTypes.length})</h5>
+            <div className="space-y-3">
+              {sortedTranscriptTypes.map(({ type, totalCount, stats: typeStats, segments }) => {
+                if (!typeStats) return null
+                const isExpanded = expandedTranscriptTypes[type]
+                const lengthStats = typeStats.length_stats
+                const min = renderValue(lengthStats?.min) || 0
+                const max = renderValue(lengthStats?.max) || 0
+                const mean = renderValue(lengthStats?.mean) || 0
 
                 return (
-                  <div key={type} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setSelectedTranscriptType(isSelected ? null : type)}
-                          className="text-sm font-medium hover:opacity-80 transition-opacity"
+                  <Collapsible
+                    key={type}
+                    open={isExpanded}
+                    onOpenChange={() => toggleTranscriptType(type)}
+                  >
+                    <Card className={`transition-all duration-200 hover:shadow-md ${isExpanded ? 'shadow-sm' : ''}`}>
+                      <CollapsibleTrigger asChild>
+                        <Button
+                          variant="collapse"
+                          className="w-full justify-between p-4 h-auto hover:bg-accent/5 transition-colors focus-visible:ring-2 focus-visible:ring-offset-2"
+                          aria-expanded={isExpanded}
+                          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${type} transcript details`}
                         >
-                          {type}
-                        </button>
-                        <div className="flex items-center gap-1.5 text-xs">
-                          {segments.map(({ cat, percentage }) => {
-                            const config = CATEGORY_CONFIG[cat]
-                            return (
-                              <span
-                                key={cat}
-                                className={config.colorClass}
-                                title={`${CATEGORY_LABELS[cat]}: ${percentage.toFixed(2)}%`}
-                              >
-                                {percentage.toFixed(2)}%
-                              </span>
-                            )
-                          })}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 text-sm">
-                        <span className="font-mono font-semibold">
-                          {totalCount.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Stacked Bar */}
-                    <div
-                      onClick={() => setSelectedTranscriptType(isSelected ? null : type)}
-                      className="relative h-8 rounded-lg overflow-hidden bg-muted border cursor-pointer hover:border-primary/50 transition-colors"
-                    >
-                      {segments.map(({ cat, count, percentage, position, width }) => {
-                        const config = CATEGORY_CONFIG[cat]
-                        return (
-                          <div
-                            key={cat}
-                            className={`absolute h-full transition-all duration-300 ${config.bgClass} ${config.borderClass} border-r last:border-r-0 flex items-center justify-end pr-2`}
-                            style={{
-                              left: `${position}%`,
-                              width: `${width}%`,
-                            }}
-                            title={`${CATEGORY_LABELS[cat]}: ${count.toLocaleString()} (${percentage.toFixed(2)}%)`}
-                          >
-                            {width > 8 && (
-                              <span className={`text-xs font-semibold ${config.colorClass} whitespace-nowrap`}>
-                                {count.toLocaleString()}
-                              </span>
+                          <div className="flex items-center gap-3 flex-1 text-left">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                                <h6 className="text-sm font-semibold truncate">
+                                  {type}
+                                </h6>
+                                <Badge variant="outline" className="text-xs font-semibold">
+                                  {totalCount.toLocaleString()} transcripts
+                                </Badge>
+                              </div>
+                              {/* Category breakdown segments */}
+                              {segments && segments.length > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                                  {segments.map(({ cat, percentage }) => {
+                                    const config = CATEGORY_CONFIG[cat]
+                                    return (
+                                      <span
+                                        key={cat}
+                                        className={`text-xs font-medium ${config.colorClass} transition-opacity hover:opacity-80`}
+                                        title={`${CATEGORY_LABELS[cat]}: ${percentage.toFixed(2)}%`}
+                                      >
+                                        {percentage.toFixed(1)}%
+                                      </span>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                                <span>Min: <span className="font-mono font-medium">{min.toLocaleString()}</span> bp</span>
+                                <span>Mean: <span className="font-mono font-medium">{mean.toLocaleString()}</span> bp</span>
+                                <span>Max: <span className="font-mono font-medium">{max.toLocaleString()}</span> bp</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0 ml-2">
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground transition-transform duration-200" aria-hidden="true" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200" aria-hidden="true" />
                             )}
                           </div>
-                        )
-                      })}
-                    </div>
-
-                    {/* Stats Card - Displayed immediately under selected bar */}
-                    {isSelected && (
-                      <Card className="p-4 bg-muted/30 border-2 mt-2">
-                        <div className="flex items-center justify-between mb-4">
-                          <h6 className="text-sm font-semibold">{type} Statistics</h6>
-                          <button
-                            onClick={() => setSelectedTranscriptType(null)}
-                            className="text-xs text-muted-foreground hover:text-foreground"
-                          >
-                            Close
-                          </button>
-                        </div>
-                        
-                        {/* Stats by Category */}
-                        <div className="space-y-4">
-                          <p className="text-xs font-medium text-muted-foreground">By Gene Category</p>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {GENE_CATEGORIES.map(cat => {
-                              const typeData = stats[cat]?.transcripts?.types?.[type]
-                              if (!typeData || !typeData.count) return null
-                              
-                              const config = CATEGORY_CONFIG[cat]
-                              const Icon = config.icon
-                              
-                              return (
-                                <div
-                                  key={cat}
-                                  className={`rounded-lg p-3 border-2 ${config.bgClass} ${config.borderClass}`}
-                                >
-                                  <div className="flex items-center gap-2 mb-3">
-                                    <Icon className={`h-4 w-4 ${config.colorClass}`} />
-                                    <h6 className={`text-xs font-semibold ${config.colorClass}`}>
-                                      {CATEGORY_LABELS[cat]}
-                                    </h6>
-                                  </div>
-                                  
-                                  <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Count:</span>
-                                      <span className="font-mono font-semibold">
-                                        {typeData.count?.toLocaleString() || '0'}
-                                      </span>
+                        </Button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent 
+                        className="overflow-hidden transition-all duration-300 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down"
+                      >
+                        <div className="px-4 pb-4" aria-label={`${type} transcript details`}>
+                        <div className="space-y-5 pt-4 border-t border-border/50">
+                          {/* Associated Genes */}
+                          {typeStats.associated_genes && (
+                            <div>
+                              <div className="mb-3">
+                                <h6 className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">
+                                  Parent Genes
+                                </h6>
+                              </div>
+                              <div className="space-y-3">
+          
+                                {typeStats.associated_genes.gene_categories && Object.keys(typeStats.associated_genes.gene_categories).length > 0 && (
+                                  <div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {Object.entries(typeStats.associated_genes.gene_categories)
+                                        .sort(([, a], [, b]) => (b as number) - (a as number))
+                                        .map(([category, count]) => {
+                                          // Map category keys to GeneCategory type for consistent colors
+                                          const categoryMap: Record<string, GeneCategory> = {
+                                            'coding': 'coding_genes',
+                                            'non_coding': 'non_coding_genes',
+                                            'pseudogene': 'pseudogenes',
+                                          }
+                                          const geneCategory = categoryMap[category]
+                                          const config = geneCategory ? CATEGORY_CONFIG[geneCategory] : null
+                                          const categoryLabel = category === 'coding' ? 'Coding Genes' 
+                                            : category === 'non_coding' ? 'Non-coding Genes'
+                                            : category === 'pseudogene' ? 'Pseudogenes'
+                                            : category
+                                          
+                                          return (
+                                            <Badge 
+                                              key={category} 
+                                              variant="outline" 
+                                              className={`text-xs border-2 transition-colors hover:bg-accent/50 ${config?.borderClass || ''}`}
+                                              title={`${categoryLabel}: ${(count as number).toLocaleString()} parent genes`}
+                                            >
+                                              <span className={config?.colorClass || ''}>{categoryLabel}</span>
+                                              <span className="text-muted-foreground ml-1">{(count as number).toLocaleString()}</span>
+                                            </Badge>
+                                          )
+                                        })}
                                     </div>
-                                    {typeData.per_gene && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Per Gene:</span>
-                                        <span className="font-mono">
-                                          {typeData.per_gene.toFixed(2)}
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.exons_per_transcript && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Exons/Transcript:</span>
-                                        <span className="font-mono">
-                                          {typeData.exons_per_transcript.toFixed(2)}
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.length_stats?.mean && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Mean Length:</span>
-                                        <span className="font-mono">
-                                          {typeData.length_stats.mean.toLocaleString()} bp
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.length_stats?.median && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Median Length:</span>
-                                        <span className="font-mono">
-                                          {typeData.length_stats.median.toLocaleString()} bp
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.spliced_length_stats?.mean && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Mean Spliced:</span>
-                                        <span className="font-mono">
-                                          {typeData.spliced_length_stats.mean.toLocaleString()} bp
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.spliced_length_stats?.median && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Median Spliced:</span>
-                                        <span className="font-mono">
-                                          {typeData.spliced_length_stats.median.toLocaleString()} bp
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.exon_length_stats?.mean && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Mean Exon:</span>
-                                        <span className="font-mono">
-                                          {typeData.exon_length_stats.mean.toLocaleString()} bp
-                                        </span>
-                                      </div>
-                                    )}
-                                    {typeData.exon_length_stats?.median && (
-                                      <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Median Exon:</span>
-                                        <span className="font-mono">
-                                          {typeData.exon_length_stats.median.toLocaleString()} bp
-                                        </span>
-                                      </div>
-                                    )}
                                   </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Biotype Counts */}
+                          {typeStats.biotype_counts && Object.keys(typeStats.biotype_counts).length > 0 ? (
+                            <div>
+                              <h6 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                Biotypes ({Object.keys(typeStats.biotype_counts).length})
+                              </h6>
+                              <BiotypeProgressBar 
+                                biotypeCounts={typeStats.biotype_counts as Record<string, number>}
+                                colorClass="bg-secondary"
+                              />
+                            </div>
+                          ) : null}
+
+                          {/* Exon Stats */}
+                          {typeStats.exon_stats && (
+                            <div>
+                              <h6 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                Exon Statistics
+                              </h6>
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Total Count: </span>
+                                  <span className="font-mono font-semibold">
+                                    {typeStats.exon_stats.total_count?.toLocaleString() || 0}
+                                  </span>
                                 </div>
-                              )
-                            })}
-                          </div>
+                                {typeStats.exon_stats.length?.mean && (
+                                  <div>
+                                    <span className="text-muted-foreground">Mean Length: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.exon_stats.length.mean).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.exon_stats.length?.min && (
+                                  <div>
+                                    <span className="text-muted-foreground">Min Length: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.exon_stats.length.min).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.exon_stats.length?.max && (
+                                  <div>
+                                    <span className="text-muted-foreground">Max Length: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.exon_stats.length.max).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.exon_stats.concatenated_length?.mean && (
+                                  <div>
+                                    <span className="text-muted-foreground">Mean Concatenated: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.exon_stats.concatenated_length.mean).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.exon_stats.concatenated_length?.min && (
+                                  <div>
+                                    <span className="text-muted-foreground">Min Concatenated: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.exon_stats.concatenated_length.min).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.exon_stats.concatenated_length?.max && (
+                                  <div>
+                                    <span className="text-muted-foreground">Max Concatenated: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.exon_stats.concatenated_length.max).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* CDS Stats */}
+                          {typeStats.cds_stats && (
+                            <div>
+                              <h6 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
+                                CDS Statistics
+                              </h6>
+                              <div className="grid grid-cols-2 gap-3 text-sm">
+                                <div>
+                                  <span className="text-muted-foreground">Total Count: </span>
+                                  <span className="font-mono font-semibold">
+                                    {typeStats.cds_stats.total_count?.toLocaleString() || 0}
+                                  </span>
+                                </div>
+                                {typeStats.cds_stats.length?.mean && (
+                                  <div>
+                                    <span className="text-muted-foreground">Mean Length: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.cds_stats.length.mean).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.cds_stats.length?.min && (
+                                  <div>
+                                    <span className="text-muted-foreground">Min Length: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.cds_stats.length.min).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.cds_stats.length?.max && (
+                                  <div>
+                                    <span className="text-muted-foreground">Max Length: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.cds_stats.length.max).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.cds_stats.concatenated_length?.mean && (
+                                  <div>
+                                    <span className="text-muted-foreground">Mean Concatenated: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.cds_stats.concatenated_length.mean).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.cds_stats.concatenated_length?.min && (
+                                  <div>
+                                    <span className="text-muted-foreground">Min Concatenated: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.cds_stats.concatenated_length.min).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                                {typeStats.cds_stats.concatenated_length?.max && (
+                                  <div>
+                                    <span className="text-muted-foreground">Max Concatenated: </span>
+                                    <span className="font-mono font-semibold">
+                                      {renderValue(typeStats.cds_stats.concatenated_length.max).toLocaleString()} bp
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      </Card>
-                    )}
-                  </div>
+                      </div>
+                    </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
                 )
               })}
             </div>
-
-            {/* Load More Button */}
-            {sortedTranscriptTypes.length > 10 && (
-              <div className="mt-4 flex justify-center">
-                <button
-                  onClick={() => setShowAllTranscripts(!showAllTranscripts)}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
-                >
-                  {showAllTranscripts 
-                    ? `Show Less (${sortedTranscriptTypes.length - TRANSCRIPT_TYPE_COUNT} hidden)`
-                    : `Load More (+${sortedTranscriptTypes.length - TRANSCRIPT_TYPE_COUNT} transcript types)`
-                  }
-                </button>
-              </div>
-            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-sm text-muted-foreground">
+            <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" aria-hidden="true" />
+            <p>No transcript types available</p>
           </div>
         )}
         
       </div>
     </Card>
 
-    <Dialog open={infoDialogOpen} onOpenChange={setInfoDialogOpen}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>How Statistics Are Computed</DialogTitle>
-          <DialogDescription>
-            Understanding how genes are categorized in the GFF statistics
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="space-y-4 text-sm">
-          <div>
-            <h4 className="font-semibold mb-2">Gene Categorization Logic</h4>
-            <p className="text-muted-foreground mb-3">
-              Genes are categorized into three main groups based on their features and biotype:
-            </p>
-            
-            <div className="space-y-3">
-              <div className="bg-muted/50 p-3 rounded-lg">
-                <div className="font-mono text-xs mb-2">def categorize_roots(roots: dict) -&gt; dict:</div>
-                <div className="space-y-2 pl-4 text-xs font-mono text-muted-foreground">
-                  <div>root_to_category = {}</div>
-                  <div>for root_id, info in roots.items():</div>
-                  <div className="pl-4 space-y-1">
-                    <div>feature_type = info.feature_type</div>
-                    <div>biotype = info.biotype or ''</div>
-                    <div className="pt-2">
-                      <div className="text-foreground font-semibold">if feature_type == 'pseudogene':</div>
-                      <div className="pl-4">root_to_category[root_id] = 'pseudogene'</div>
-                    </div>
-                    <div className="pt-2">
-                      <div className="text-foreground font-semibold">elif info.has_cds or 'protein_coding' in biotype.lower():</div>
-                      <div className="pl-4">root_to_category[root_id] = 'coding'</div>
-                    </div>
-                    <div className="pt-2">
-                      <div className="text-foreground font-semibold">elif info.has_exon:</div>
-                      <div className="pl-4">root_to_category[root_id] = 'non_coding'</div>
-                    </div>
-                    <div className="pt-2">
-                      <div className="text-foreground font-semibold">else:</div>
-                      <div className="pl-4">root_to_category[root_id] = None</div>
-                    </div>
-                  </div>
-                  <div className="pt-2">return root_to_category</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="font-semibold mb-2">Category Definitions</h4>
-            <ul className="space-y-2 list-disc list-inside text-muted-foreground">
-              <li>
-                <span className="font-semibold text-foreground">Pseudogenes:</span> Features where the feature_type is explicitly 'pseudogene'
-              </li>
-              <li>
-                <span className="font-semibold text-foreground">Coding Genes:</span> Features that either have CDS segments or contain 'protein_coding' in their biotype
-              </li>
-              <li>
-                <span className="font-semibold text-foreground">Non-coding Genes:</span> Features that have exons but don't meet the criteria for pseudogenes or coding genes. This includes various RNA types (tRNA, rRNA, lncRNA, miRNA, snRNA, etc.)
-              </li>
-            </ul>
-          </div>
-
-          <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900/50 p-3 rounded-lg">
-            <h4 className="font-semibold mb-2 text-yellow-900 dark:text-yellow-200">Note</h4>
-            <p className="text-sm text-yellow-800 dark:text-yellow-300">
-              Currently, all non-coding biotypes (tRNA, rRNA, lncRNA, miRNA, snRNA, snoRNA, etc.) are grouped together in the "non_coding_genes" category. 
-              This simplification may not distinguish between biologically distinct classes of non-coding RNAs.
-            </p>
-          </div>
-
-          <div className="pt-2 border-t">
-            <p className="text-sm text-muted-foreground mb-3">
-              Do you think this categorization approach is correct, or would you like to see more granular categories?
-            </p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full"
-              onClick={() => window.open('https://github.com/emiliorighi/annotrieve/issues/3', '_blank')}
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Provide Feedback on GitHub
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <StatisticsInfoDialog open={infoDialogOpen} onOpenChange={setInfoDialogOpen} />
     </>
   )
 }

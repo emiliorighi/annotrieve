@@ -45,14 +45,170 @@ export interface AnnotationRecord {
   taxid?: string
   source_file_info?: SourceFileInfo
   features_statistics?: {
+    // New structure - primary fields to use
+    gene_category_stats?: Record<string, {
+      total_count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+      }
+      biotype_counts?: Record<string, number>
+      transcript_type_counts?: Record<string, number>
+    }>
+    transcript_type_stats?: Record<string, {
+      total_count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+      }
+      biotype_counts?: Record<string, number>
+      associated_genes?: {
+        total_count?: number
+        gene_categories?: Record<string, number>
+      }
+      exon_stats?: {
+        total_count?: number
+        length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+        concatenated_length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+      }
+      cds_stats?: {
+        total_count?: number
+        length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+        concatenated_length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+      }
+    }>
+    // Deprecated: Old fields kept for backwards compatibility only - do not use
+    /** @deprecated Use gene_category_stats['coding'] instead */
     coding_genes?: {
       count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+        median?: number
+      }
+      transcripts?: {
+        count?: number
+        per_gene?: number
+        types?: Record<string, any>
+      }
+      features?: {
+        exons?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        cds?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        introns?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+      }
     }
+    /** @deprecated Use gene_category_stats['non_coding'] instead */
     non_coding_genes?: {
       count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+        median?: number
+      }
+      transcripts?: {
+        count?: number
+        per_gene?: number
+        types?: Record<string, any>
+      }
+      features?: {
+        exons?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        cds?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        introns?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+      }
     }
+    /** @deprecated Use gene_category_stats['pseudogene'] instead */
     pseudogenes?: {
       count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+        median?: number
+      }
+      transcripts?: {
+        count?: number
+        per_gene?: number
+        types?: Record<string, any>
+      }
+      features?: {
+        exons?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        cds?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        introns?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+      }
     }
   }
   [key: string]: unknown
@@ -94,5 +250,14 @@ export interface TaxonRecord {
   annotations_count?: number
   assemblies_count?: number
   children?: TaxonRecord[]
+  [key: string]: unknown
+}
+
+export interface BioProjectRecord {
+  accession: string
+  title: string
+  assemblies_count?: number
+  species_count?: number
+  annotations_count?: number
   [key: string]: unknown
 }

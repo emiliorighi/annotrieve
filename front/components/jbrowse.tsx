@@ -8,6 +8,7 @@ import {
 } from '@jbrowse/react-linear-genome-view2'
 import { getAssembledMolecules } from '@/lib/api/assemblies'
 import { listAnnotations } from '@/lib/api/annotations'
+import { getApiBase, getFilesBase, joinUrl } from '@/lib/config/env'
 
 interface ChromosomeInterface {
   accession_version: string
@@ -23,8 +24,8 @@ interface JBrowseLinearGenomeViewComponentProps {
 }
 // Use relative URLs to leverage Next.js rewrites and avoid CORS issues
 // For GitHub Pages deployment, use absolute URLs
-const baseURL = 'https://genome.crg.es/annotrieve' 
-const apiBaseURL = 'https://genome.crg.es/annotrieve/api/v0'
+const apiBaseURL = getApiBase()
+const filesBaseURL = getFilesBase()
 const configuration = {
   theme: {
     palette: {
@@ -110,20 +111,20 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
       name: annotation.source_file_info.provider || `${annotation.source_file_info.database} - ${annotation.assembly_name}`,
       assemblyNames: [annotation.assembly_name],
       category: [annotation.source_file_info.database],
-      adapter: {
-        type: "Gff3TabixAdapter",
-        gffGzLocation: {
-          uri: `${baseURL}/files${annotation.indexed_file_info.bgzipped_path}`,
-          locationType: "UriLocation",
-        },
-        index: {
-          location: {
-            uri: `${baseURL}/files${annotation.indexed_file_info.csi_path}`,
-            locationType: "UriLocation",
+          adapter: {
+            type: "Gff3TabixAdapter",
+            gffGzLocation: {
+              uri: joinUrl(filesBaseURL, annotation.indexed_file_info.bgzipped_path),
+              locationType: "UriLocation",
+            },
+            index: {
+              location: {
+                uri: joinUrl(filesBaseURL, annotation.indexed_file_info.csi_path),
+                locationType: "UriLocation",
+              },
+              indexType: "CSI"
+            },
           },
-          indexType: "CSI"
-        },
-      },
       displays: [
         {
           type: "LinearBasicDisplay",
@@ -162,7 +163,7 @@ export default function JBrowseLinearGenomeViewComponent({ accession, annotation
       adapter: {
         type: "RefNameAliasAdapter",
         location: {
-          uri: `${apiBaseURL}/assemblies/${accession}/chr_aliases`,
+              uri: joinUrl(apiBaseURL, `assemblies/${accession}/chr_aliases`),
           locationType: "UriLocation"
         }
       }

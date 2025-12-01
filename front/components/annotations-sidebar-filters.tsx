@@ -9,7 +9,8 @@ import { getAssembliesStats } from "@/lib/api/assemblies"
 import { getAnnotationsFrequencies } from "@/lib/api/annotations"
 import { getTaxon, getTaxonRankFrequencies, listTaxons } from "@/lib/api/taxons"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
-import { AssemblyRecord, OrganismRecord, TaxonRecord } from "@/lib/api/types"
+import { AssemblyRecord, OrganismRecord, TaxonRecord, BioProjectRecord } from "@/lib/api/types"
+import { listBioprojects } from "@/lib/api/bioprojects"
 import { cn } from "@/lib/utils"
 import { CompactTaxonomicTree } from "@/components/compact-taxonomic-tree"
 import { createAssemblySearchModel, createOrganismSearchModel, createTaxonSearchModel } from "@/lib/search-models"
@@ -62,6 +63,7 @@ interface CollapsibleSectionProps {
 
 const COLLAPSIBLE_ANIMATION_DURATION = 300
 const COLLAPSIBLE_SKELETON_WIDTHS = ["w-5/6", "w-full", "w-2/3"] as const
+const BIOPROJECTS_PAGE_SIZE = 30
 
 function usePersistentState<T>(key: string, defaultValue: T) {
   const [value, setValue] = useState<T>(() => {
@@ -227,11 +229,11 @@ function CollapsibleSection({
 }
 
 export function AnnotationsSidebarFilters() {
-  const { openRightSidebar } = useUIStore()
   const store = useAnnotationsFiltersStore()
   const {
     selectedTaxons,
     selectedAssemblies,
+    selectedBioprojects,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
     onlyRefGenomes,
@@ -243,6 +245,7 @@ export function AnnotationsSidebarFilters() {
     databaseSources,
     setSelectedTaxons,
     setSelectedAssemblies,
+    setSelectedBioprojects,
     setSelectedAssemblyLevels,
     setSelectedAssemblyStatuses,
     setOnlyRefGenomes,
@@ -282,6 +285,16 @@ export function AnnotationsSidebarFilters() {
   const [treeRankRootsOffset, setTreeRankRootsOffset] = useState(0)
   const [hasMoreTreeRankRoots, setHasMoreTreeRankRoots] = useState(false)
   const [totalTreeRankRoots, setTotalTreeRankRoots] = useState(0)
+
+  // BioProject filters
+  const [bioprojects, setBioprojects] = useState<BioProjectRecord[]>([])
+  const [bioprojectsTotal, setBioprojectsTotal] = useState(0)
+  const [bioprojectOffset, setBioprojectOffset] = useState(0)
+  const [bioprojectHasMore, setBioprojectHasMore] = useState(false)
+  const [loadingBioprojects, setLoadingBioprojects] = useState(false)
+  const bioprojectScrollRef = useRef<HTMLDivElement>(null)
+  const bioprojectObserverRef = useRef<HTMLDivElement>(null)
+  const [isBioprojectSectionOpen, setIsBioprojectSectionOpen] = usePersistentState<boolean>("annotations-sidebar:bioprojects-open", false)
 
   // Assembly filters - lazy loaded
   const [assemblyLevelOptions, setAssemblyLevelOptions] = useState<Record<string, number>>({})
@@ -329,12 +342,63 @@ export function AnnotationsSidebarFilters() {
     ]
   )
 
-  // Info modal
-  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false)
-
   // Cache for filter options to avoid redundant API calls
   const filterCacheRef = useRef<Map<string, { data: Record<string, number>, timestamp: number }>>(new Map())
   const CACHE_TTL = 30000 // 30 seconds
+
+  const fetchBioprojects = useCallback(async (reset = false) => {
+    if (loadingBioprojects) return
+    setLoadingBioprojects(true)
+    try {
+      const currentOffset = reset ? 0 : bioprojectOffset
+      const response = await listBioprojects({
+        limit: BIOPROJECTS_PAGE_SIZE,
+        offset: currentOffset,
+        sort_by: 'annotations_count',
+        sort_order: 'desc'
+      })
+      const results = response?.results ?? []
+      const total = response?.total ?? results.length
+      setBioprojectsTotal(total)
+      const nextOffset = currentOffset + results.length
+      setBioprojectOffset(nextOffset)
+      setBioprojectHasMore(nextOffset < total)
+      setBioprojects(prev => {
+        if (reset) {
+          return results
+        }
+        const seen = new Set(prev.map(bp => bp.accession))
+        const merged = [...prev]
+        results.forEach(bp => {
+          if (!seen.has(bp.accession)) {
+            merged.push(bp)
+          }
+        })
+        return merged
+      })
+    } catch (error) {
+      console.error("Error loading bioprojects:", error)
+    } finally {
+      setLoadingBioprojects(false)
+    }
+  }, [bioprojectOffset, loadingBioprojects])
+
+  const loadMoreBioprojects = useCallback(() => {
+    if (loadingBioprojects || !bioprojectHasMore) return
+    fetchBioprojects(false)
+  }, [bioprojectHasMore, fetchBioprojects, loadingBioprojects])
+
+  const handleBioprojectToggle = useCallback((project: BioProjectRecord) => {
+    if (selectedBioprojects.some(bp => bp.accession === project.accession)) {
+      setSelectedBioprojects(selectedBioprojects.filter(bp => bp.accession !== project.accession))
+    } else {
+      setSelectedBioprojects([...selectedBioprojects, project])
+    }
+  }, [selectedBioprojects, setSelectedBioprojects])
+
+  const clearBioprojectSelection = useCallback(() => {
+    setSelectedBioprojects([])
+  }, [setSelectedBioprojects])
 
   // Build params for filter fetching
   const buildFilterParams = useCallback((excludeField?: string) => {
@@ -345,6 +409,9 @@ export function AnnotationsSidebarFilters() {
     }
     if (selectedAssemblies.length > 0) {
       params.assembly_accessions = selectedAssemblies.map(a => a.assembly_accession).join(',')
+    }
+    if (selectedBioprojects.length > 0) {
+      params.bioproject_accessions = selectedBioprojects.map(bp => bp.accession).join(',')
     }
     if (selectedAssemblyLevels.length > 0) {
       params.assembly_levels = selectedAssemblyLevels.join(',')
@@ -394,7 +461,8 @@ export function AnnotationsSidebarFilters() {
     featureSources,
     pipelines,
     providers,
-    databaseSources
+    databaseSources,
+    selectedBioprojects
   ])
 
   // Track pending loads to prevent duplicate requests
@@ -652,6 +720,38 @@ export function AnnotationsSidebarFilters() {
     }
   }, [treeSelectedRank, loadingTreeRankRoots, hasMoreTreeRankRoots, treeRankRootsOffset])
 
+  useEffect(() => {
+    if (!isBioprojectSectionOpen) return
+    if (bioprojects.length === 0 && !loadingBioprojects) {
+      fetchBioprojects(true)
+    }
+  }, [isBioprojectSectionOpen, bioprojects.length, loadingBioprojects, fetchBioprojects])
+
+  useEffect(() => {
+    if (!isBioprojectSectionOpen) return
+    const target = bioprojectObserverRef.current
+    const rootNode = bioprojectScrollRef.current || undefined
+    if (!target) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreBioprojects()
+        }
+      },
+      {
+        root: rootNode,
+        rootMargin: '80px',
+        threshold: 0.1
+      }
+    )
+
+    observer.observe(target)
+    return () => {
+      observer.disconnect()
+    }
+  }, [isBioprojectSectionOpen, loadMoreBioprojects])
+
   const handleGffSummaryAccordionChange = (value?: string) => {
     const nextValue = value ?? null
 
@@ -825,6 +925,74 @@ export function AnnotationsSidebarFilters() {
                   onLoadMore={loadMoreTreeRankRoots}
                 />
               )}
+            </div>
+          </CollapsibleSection>
+
+          {/* BioProject Filters */}
+          <CollapsibleSection
+            title="BioProjects"
+            description="Select BioProjects associated with the assemblies to limit the annotation results."
+            isOpen={isBioprojectSectionOpen}
+            onToggle={() => setIsBioprojectSectionOpen((prev) => !prev)}
+            isLoading={loadingBioprojects && bioprojects.length === 0}
+          >
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {bioprojectsTotal > 0
+                    ? `${bioprojectsTotal.toLocaleString()} BioProjects`
+                    : 'No BioProjects available'}
+                </span>
+                {selectedBioprojects.length > 0 && (
+                  <Button variant="link" className="h-auto px-0 text-xs" onClick={clearBioprojectSelection}>
+                    Clear selection
+                  </Button>
+                )}
+              </div>
+
+              <div
+                ref={bioprojectScrollRef}
+                className="max-h-72 overflow-y-auto rounded-md border border-border/70 divide-y divide-border/60 bg-card/50"
+              >
+                {bioprojects.length === 0 && !loadingBioprojects ? (
+                  <div className="p-4 text-xs text-muted-foreground text-center">
+                    No BioProjects found. Try adjusting filters.
+                  </div>
+                ) : (
+                  <>
+                    {bioprojects.map((project) => {
+                      const isSelected = selectedBioprojects.some(bp => bp.accession === project.accession)
+                      return (
+                        <button
+                          key={project.accession}
+                          type="button"
+                          onClick={() => handleBioprojectToggle(project)}
+                          className={cn(
+                            "w-full px-3 py-2 text-left flex items-start justify-between gap-3 text-sm transition-colors",
+                            "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            isSelected ? "bg-primary/10 border-l-2 border-primary" : ""
+                          )}
+                        >
+                          <div className="space-y-1">
+                            <p className="font-medium leading-tight line-clamp-2">{project.title}</p>
+                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{project.accession}</p>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground text-right whitespace-nowrap">
+                            {(project.annotations_count ?? 0).toLocaleString()} ann.
+                          </div>
+                        </button>
+                      )
+                    })}
+                    <div ref={bioprojectObserverRef} className="flex items-center justify-center py-2 text-[11px] text-muted-foreground">
+                      {loadingBioprojects
+                        ? "Loading BioProjects..."
+                        : bioprojectHasMore
+                          ? "Scroll to load more"
+                          : "End of list"}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </CollapsibleSection>
 

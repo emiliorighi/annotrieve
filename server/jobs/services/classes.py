@@ -1,4 +1,5 @@
-from db.models import GenomeAnnotation, AnnotationError, Organism, TaxonNode, GenomicSequence, GenomeAssembly   
+from array import array
+from db.models import GenomeAnnotation, AnnotationError, Organism, TaxonNode, GenomicSequence, GenomeAssembly, BioProject   
 from db.embedded_documents import SourceFileInfo, PipelineInfo, AssemblyStats
 import re
 
@@ -66,7 +67,6 @@ class AnnotationToProcess:
             last_modified=self.last_modified,
             source_database=self.source_database,
         )
-
 
 
 class OrganismToProcess:
@@ -268,3 +268,134 @@ class AssemblyToProcess:
             source_database=self.source_database,
             taxon_lineage=lineage,
         )
+
+class GeneToCategorize:
+    __slots__ = ("feature_type", "biotype", "length")
+    def __init__(self, feature_type: str, biotype: str | None=None, length: int=0):
+        self.feature_type = feature_type
+        self.biotype = biotype
+        self.length = length
+        self.has_cds = False
+        self.has_exon = False
+
+class FeatureToCategorize:
+    __slots__ = ("parent_id", "feature_type", "biotype", "length")
+    def __init__(self, parent_id: str | None=None, feature_type: str | None=None, biotype: str | None=None, length: int=0):
+        self.parent_id = parent_id
+        self.feature_type = feature_type
+        self.biotype = biotype
+        self.length = length
+
+class SubFeatureStats:
+    __slots__ = ("total_count", "mean_length", "min_length", "max_length", "concatenated_mean_length", "concatenated_min_length", "concatenated_max_length")
+    def __init__(self):
+        self.total_count = 0
+        self.mean_length = 0.0
+        self.min_length = 0
+        self.max_length = 0
+        self.concatenated_mean_length = 0.0
+        self.concatenated_min_length = 0
+        self.concatenated_max_length = 0
+
+class TranscriptStats:
+    __slots__ = ("total_count", "mean_length", "min_length", "max_length", "gene_counts")
+
+    def __init__(self):
+        self.total_count = 0
+        self.mean_length = 0.0
+        self.min_length = 0
+        self.max_length = 0
+        # gene_id → transcript count for this feature_type
+        self.gene_counts = {}
+
+        
+class TranscriptBuffer: 
+    __slots__ = ("type", "exon_intervals", "cds_intervals")
+
+    def __init__(self, type: str):
+        self.type = type
+        self.exon_lengths = [] #list of tuples (start, end)
+        self.cds_lengths = [] #list of tuples (start, end)
+
+    def add_exon_length(self, length: int):
+        self.exon_lengths.append(length)
+        self.length += length
+
+    def add_cds_length(self, length: int):
+        self.cds_lengths.append(length)
+        self.length += length
+
+class Gene:
+    __slots__ = ("feature_type", "biotype", "length", "has_cds", "has_exon","category")
+
+    def __init__(self, feature_type: str | None=None, biotype: str | None=None, length: int=0):
+        self.feature_type = feature_type
+        self.biotype = biotype
+        self.length = length
+        self.has_cds = False
+        self.has_exon = False
+        self.category = None
+
+    def set_category(self):
+        if self.feature_type == "pseudogene":
+            self.category = "pseudogene"
+        elif self.has_cds or self.biotype == "protein_coding":
+            self.category = "coding"
+        elif self.has_exon:
+            self.category = "non_coding"
+
+
+class Transcript:
+    __slots__ = (
+        "gene_id",
+        "type",
+        "exons_lengths",
+        "exon_len_sum",
+        "exon_count",
+        "cds_len_sum",
+        "cds_count",
+        "cds_lengths",
+        "length",
+    )
+
+    def __init__(self, gene_id: str | None=None, ttype: str | None=None, length: int=0):
+        self.gene_id = gene_id
+        self.type = ttype
+        self.length = length
+        self.exons_lengths = array("i")
+        self.exon_len_sum = 0
+        self.exon_count = 0
+        self.cds_len_sum = 0
+        self.cds_count = 0
+        self.cds_lengths = array("i")
+
+    def add_exon_length(self, length: int):
+        self.exons_lengths.append(length)
+        self.exon_len_sum += length
+        self.exon_count += 1
+
+    def add_cds_length(self, length: int):
+        self.cds_lengths.append(length)
+        self.cds_len_sum += length
+        self.cds_count += 1
+
+
+class MiscFeature:
+    __slots__ = (
+        "count",
+        "mean",
+        "min",
+        "max",
+    )
+
+    def __init__(self):
+        self.count = 0
+        self.mean = 0
+        self.min = 0
+        self.max = 0
+    
+    def add_length(self, length: int):
+        self.count += 1
+        self.mean = (self.mean * (self.count - 1) + length) / self.count
+        self.min = min(self.min, length)
+        self.max = max(self.max, length)

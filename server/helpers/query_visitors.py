@@ -30,6 +30,14 @@ def annotation_query(filter):
     return taxonomic_query(filter) | assembly_query(filter)
 
 
+def bioproject_query(filter):
+    return (
+        Q(accession__iexact=filter) |
+        Q(accession__icontains=filter) |
+        Q(title__iexact=filter) |
+        Q(title__icontains=filter)
+    )
+
 ALLOWED_FIELDS_MAP = {
     'taxid':'taxid',
     'organism_name':'organism_name',
@@ -51,6 +59,7 @@ ALLOWED_FIELDS_MAP_ASSEMBLY = {
     'refseq_category':'refseq_category',
     'assembly_status':'assembly_status',
     'assembly_type':'assembly_type',
+    'bioprojects':'bioprojects',
 }
 def get_frequencies(items:QuerySet, field:str, type:str = 'annotation'):
     if type == 'annotation':

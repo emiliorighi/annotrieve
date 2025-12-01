@@ -27,7 +27,7 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
         chr_map[uid] = chr
     try:
         sequences_to_save = []
-        for contig in pysam_helper.stream_contigs(bgzipped_path):
+        for contig in pysam_helper.stream_contigs_names(bgzipped_path):
             seqid = contig.strip()
             if not seqid:
                 continue
@@ -53,11 +53,13 @@ def handle_alias_mapping(parsed_annotation: GenomeAnnotation, bgzipped_path: str
                         aliases=chr.aliases, 
                     ))
         if not sequences_to_save:
-            raise Exception("No sequences to save found")
-        
+            print(f"No sequences to save found for {parsed_annotation.source_file_info.url_path}, chromosomes found in the db {chromosomes.count()} for assembly {parsed_annotation.assembly_accession}")
+            return 
+
         AnnotationSequenceMap.objects.insert(sequences_to_save)
         parsed_annotation.mapped_regions=[sequence_map.sequence_id for sequence_map in sequences_to_save]
     except Exception as e:
+        print(f"Error mapping sequences for {parsed_annotation.source_file_info.url_path}: {e}")
         raise e
 
 def is_number(s: str) -> bool:

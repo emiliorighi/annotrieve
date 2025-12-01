@@ -2,15 +2,15 @@
 def category_stats_pipeline(category_name: str):
     return [
             {
+                "$match": {
+                    f"features_statistics.{category_name}.count": {"$exists": True, "$ne": None}
+                }
+            },
+            {
                 "$project": {
                     "count": f"$features_statistics.{category_name}.count",
                     "mean_length": f"$features_statistics.{category_name}.length_stats.mean",
                     "transcript_types": f"$features_statistics.{category_name}.transcripts.types"
-                }
-            },
-            {
-                "$match": {
-                    "count": {"$ne": None}
                 }
             },
             {

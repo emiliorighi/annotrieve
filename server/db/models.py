@@ -1,5 +1,5 @@
 from datetime import datetime
-from .embedded_documents import AssemblyStats, SourceFileInfo, IndexedFileInfo, FeatureOverview, GFFStats, GeneStats
+from .embedded_documents import AssemblyStats, SourceFileInfo, IndexedFileInfo, FeatureOverview, GFFStats
 from mongoengine import (
     Document,
     DynamicDocument,
@@ -19,6 +19,7 @@ def drop_all_collections():
     AnnotationError.objects().delete()
     GenomeAnnotation.objects().delete()
     TaxonNode.objects().delete()
+    BioProject.objects().delete()
 
 class GenomeAssembly(DynamicDocument):
     assembly_accession = StringField(required=True, unique=True)
@@ -31,9 +32,10 @@ class GenomeAssembly(DynamicDocument):
     refseq_category = StringField() #reference genome, etc.
     taxid = StringField(required=True)
     organism_name = StringField(required=True)
-    taxon_lineage = ListField(StringField())
+    taxon_lineage = ListField(StringField()) #ordered list of taxonomic ranks from the organism to the root
     assembly_stats = EmbeddedDocumentField(AssemblyStats)
     release_date = DateTimeField()
+    bioprojects = ListField(StringField()) #list of bioprojects
     submitter = StringField()
     annotations_count = IntField()
     download_url = URLField(required=True, unique=True)
@@ -43,9 +45,25 @@ class GenomeAssembly(DynamicDocument):
             "source_database",
             "taxid",
             "organism_name",
-            "taxon_lineage"
+            "taxon_lineage",
+            "bioprojects",
+            "assembly_level",
+            "assembly_status",
+            "refseq_category",
         ],
     }
+
+class BioProject(DynamicDocument):
+    accession = StringField(required=True, unique=True)
+    title = StringField(required=True)
+    assemblies_count = IntField()
+    meta = {
+        'indexes': [
+            'accession',
+            'title',
+        ]
+    }
+
 
 class Organism(DynamicDocument):
     taxid = StringField(required=True, unique=True)
@@ -59,7 +77,7 @@ class Organism(DynamicDocument):
             'taxid', 
             'organism_name', 
             'taxon_lineage', 
-            'common_name'
+            'common_name',
             ]
     }
 
@@ -122,7 +140,6 @@ class GenomeAnnotation(DynamicDocument):
     organism_name = StringField(required=True)
     taxid = StringField(required=True)
     taxon_lineage = ListField(StringField(), required=True)
-
     #MAPPED REGIONS
     mapped_regions = ListField(StringField()) #Mapped seqid of the gff file (AnnotationSequenceMap ids)
 
@@ -135,6 +152,7 @@ class GenomeAnnotation(DynamicDocument):
     #FEATURE OVERVIEW
     features_summary = EmbeddedDocumentField(FeatureOverview)
 
+    #FEATURE STATISTICS gene and transcript types
     features_statistics = EmbeddedDocumentField(GFFStats)
 
     # Time
@@ -146,11 +164,14 @@ class GenomeAnnotation(DynamicDocument):
             "assembly_accession",
             "assembly_name",
             "taxon_lineage",
-            "source_file_info.release_date",
-            "source_file_info.last_modified",
             "features_summary.sources",
             "features_summary.types",
             "features_summary.biotypes",
+            "source_file_info.database",
+            "source_file_info.provider",
+            "source_file_info.release_date",
+            "source_file_info.last_modified",
+            "source_file_info.pipeline.name",
         ]
     }
     def parse_iso_date(iso_date: str) -> datetime:

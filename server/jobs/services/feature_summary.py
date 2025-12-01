@@ -2,6 +2,8 @@ from db.embedded_documents import FeatureOverview
 from helpers import pysam_helper
 
 
+
+
 def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
     """
     Compute the feature summary of the gff file
@@ -18,8 +20,7 @@ def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
         'has_cds': False,
         'has_exon': False
     }
-    
-    
+
     for line in pysam_helper.stream_tabix_gff_file(bgzipped_path):
         fields = line.split('\t')
         
@@ -39,7 +40,7 @@ def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
                 elif key == 'Parent':
                     has_parent = True
                 feature_summary['attribute_keys'].add(key)
-                if key in ("biotype", "gene_biotype", "transcript_biotype", "gbkey") or key.endswith("biotype"):
+                if key == "biotype" or key == "gene_biotype" or key == "transcript_biotype":
                     feature_summary['biotypes'].add(value)
 
         if not has_id:
@@ -63,4 +64,3 @@ def compute_features_summary(bgzipped_path: str) -> FeatureOverview:
     feature_summary['biotypes'] = list(feature_summary['biotypes'])
     feature_summary['types_missing_id'] = list(feature_summary['types_missing_id'])
     return FeatureOverview(**feature_summary)
-

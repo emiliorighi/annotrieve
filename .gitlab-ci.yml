@@ -1,7 +1,6 @@
 variables:
     APP_NAME_FRONT: annotrieve-nginx
     APP_NAME_BACK: annotrieve-fastapi
-    BASE_PATH: /annotrieve
 
 stages: 
   - build
@@ -22,7 +21,7 @@ build_containers:
     - echo $CI_REGISTRY_PASSWORD | docker login $CI_REGISTRY -u $CI_REGISTRY_USER --password-stdin
 
   script:
-    - docker build --build-arg BASE_PATH="$BASE_PATH" -t gitlab.hpc.crg.es:5005/monstre/annotrieve/$APP_NAME_FRONT ./nginx
+    - docker build -t gitlab.hpc.crg.es:5005/monstre/annotrieve/$APP_NAME_FRONT ./front
     - docker push gitlab.hpc.crg.es:5005/monstre/annotrieve/$APP_NAME_FRONT
     - docker build -t gitlab.hpc.crg.es:5005/monstre/annotrieve/$APP_NAME_BACK ./server
     - docker push gitlab.hpc.crg.es:5005/monstre/annotrieve/$APP_NAME_BACK

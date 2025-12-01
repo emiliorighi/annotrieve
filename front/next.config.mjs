@@ -9,36 +9,36 @@ const nextConfig = {
     unoptimized: true
   },
   
-  // For development, keep the rewrites
+  /**
+   * During development we still want the Next.js dev server to proxy API and file
+   * requests to the running backend / nginx containers. In production this config
+   * is ignored because the app is exported statically and nginx handles the routing.
+   */
   async rewrites() {
-    // Only apply rewrites in development
-      const apiTarget = "https://genome.crg.es/annotrieve/api/v0"
-      const nginxTarget = "https://genome.crg.es/annotrieve"
-      
-      return [
-        // API routes to FastAPI backend
-        {
-          source: '/annotations/:path*',
-          destination: `${apiTarget}/annotations/:path*`
-        },
-        {
-          source: '/assemblies/:path*',
-          destination: `${apiTarget}/assemblies/:path*`
-        },
-        {
-          source: '/organisms/:path*',
-          destination: `${apiTarget}/organisms/:path*`
-        },
-        {
-          source: '/taxons/:path*',
-          destination: `${apiTarget}/taxons/:path*`
-        },
-        // File serving through nginx
-        {
-          source: '/files/:path*',
-          destination: `${nginxTarget}/files/:path*`
-        }
-      ]
+    if (process.env.NODE_ENV !== 'development') {
+      return []
+    }
+
+    const stripTrailingSlash = (value = '') =>
+      value.endsWith('/') ? value.slice(0, -1) : value
+
+    const devApiOrigin = stripTrailingSlash(
+      process.env.NEXT_DEV_API_ORIGIN ?? 'http://localhost:94/annotrieve'
+    )
+    const devFilesOrigin = stripTrailingSlash(
+      process.env.NEXT_DEV_FILES_ORIGIN ?? 'http://localhost:94/annotrieve'
+    )
+
+    return [
+      {
+        source: '/api/v0/:path*',
+        destination: `${devApiOrigin}/api/v0/:path*`,
+      },
+      {
+        source: '/files/:path*',
+        destination: `${devFilesOrigin}/files/:path*`,
+      },
+    ]
   },
 }
 

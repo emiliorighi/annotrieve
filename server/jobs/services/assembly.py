@@ -1,5 +1,5 @@
 import os
-from db.models import GenomeAssembly, AssemblyStats, GenomicSequence
+from db.models import BioProject, GenomeAssembly, AssemblyStats, GenomicSequence
 from clients import ncbi_datasets as ncbi_datasets_client
 from .classes import AnnotationToProcess, AssemblyReportSequence, AssemblyToProcess
 from .utils import create_batches
@@ -30,10 +30,10 @@ def handle_assemblies(annotations: list[AnnotationToProcess], tmp_dir: str, vali
         return existing_accessions
     
     print(f"Found {len(new_accessions)} new assemblies to fetch")
-    saved_accessions = fetch_new_assemblies(list(new_accessions), tmp_dir, valid_lineages, batch_size)
+    saved_accessions = fetch_new_assemblies_and_bioprojects(list(new_accessions), tmp_dir, valid_lineages, batch_size)
     if not saved_accessions:
         return existing_accessions
-    
+    # get the assemblies and save the chromosomes
     print(f"Saved {len(saved_accessions)} new assemblies")
     chrless_assemblies = GenomeAssembly.objects(assembly_accession__in=saved_accessions).scalar('assembly_accession', 'assembly_name')
     acc_to_name = {assembly_accession: assembly_name for assembly_accession, assembly_name in chrless_assemblies}
@@ -48,13 +48,17 @@ def handle_assemblies(annotations: list[AnnotationToProcess], tmp_dir: str, vali
     
     return get_existing_accessions(all_accessions)
 
-def fetch_new_assemblies(new_accessions: list[str], tmp_dir: str, valid_lineages: dict[str, list[str]], batch_size: int=5000) -> list[str]:
+
+def fetch_new_assemblies_and_bioprojects(new_accessions: list[str], tmp_dir: str, valid_lineages: dict[str, list[str]], batch_size: int=5000) -> list[str]:
     """
-    Fetch the new assemblies from the accessions and save them. Return the list of saved accessions
+    Fetch the new assemblies from the accessions and save them, Here we also handle bioprojects. Return the list of saved accessions
     """
     saved_accessions = []
+    bioprojects_to_save = dict() #accession: BioProject to ensure we don't save the same bioproject multiple times
+
     batches = create_batches(new_accessions, batch_size)
     for idx, batch in enumerate(batches):
+
         assemblies_path = os.path.join(tmp_dir, f'assemblies_{idx}_{len(batch)}.txt')
         with open(assemblies_path, 'w') as f:
             for assembly in batch: 
@@ -62,7 +66,7 @@ def fetch_new_assemblies(new_accessions: list[str], tmp_dir: str, valid_lineages
         cmd = ['genome', 'accession', '--inputfile', assemblies_path]
         ncbi_report = ncbi_datasets_client.get_data_from_ncbi(cmd)
         assemblies_to_save: list[GenomeAssembly] = [
-            parse_assembly_from_ncbi(assembly, valid_lineages) 
+            parse_assembly_from_ncbi(assembly, valid_lineages, bioprojects_to_save) 
             for assembly in ncbi_report.get('reports', [])
         ]
         if not assemblies_to_save:
@@ -74,9 +78,20 @@ def fetch_new_assemblies(new_accessions: list[str], tmp_dir: str, valid_lineages
             saved_accessions.extend(found_accessions)
         except Exception as e:
             print(f"Error upserting assembly batch: {e}")
-            #delete the assemblies that were saved
+            #delete the assemblies that were saved, we will retry it in the next job
             GenomeAssembly.objects(assembly_accession__in=found_accessions).delete()
             continue
+    existing_bioprojects = BioProject.objects(accession__in=list(bioprojects_to_save.keys())).scalar('accession')
+    bioprojects_to_save = {accession: bioproject for accession, bioproject in bioprojects_to_save.items() if accession not in existing_bioprojects}
+    if bioprojects_to_save:
+        #filter out existing bioprojects
+        try:
+            BioProject.objects.insert(list(bioprojects_to_save.values()))
+        except Exception as e:
+            print(f"Error upserting bioproject batch: {e}")
+            #delete the bioprojects that were saved
+            BioProject.objects(accession__in=list(bioprojects_to_save.keys())).delete()        
+            raise e
     return saved_accessions
 
 def save_chromosomes(chromosomes_tuples: list[tuple[str, list[AssemblyReportSequence]]], acc_to_name: dict[str, str], batch_size: int=5000):
@@ -279,10 +294,35 @@ def create_ftp_path(accession: str, assembly_name: str) -> str:
     assembly_name = assembly_name.replace(' ', '_')
     return f"https://ftp.ncbi.nlm.nih.gov/genomes/all/{accession[0:3]}/{accession[4:7]}/{accession[7:10]}/{accession[10:13]}/{accession}_{assembly_name}/{accession}_{assembly_name}_genomic.fna.gz"
 
-def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list[str]]) -> GenomeAssembly:
+def parse_bioprojects(assembly_info: dict, bioprojects_to_save: dict[str, BioProject]) -> list[str]:
+    """
+    Parse the bioprojects from the assembly info and return the list of accessions related to the assembly
+    """
+    
+    accessions = set()
+    lineages = assembly_info.get('bioproject_lineage', [])
+    for lin in lineages:
+        bioprojects = lin.get('bioprojects', [])
+        for bioproject in bioprojects:
+            accession = bioproject.get('accession')
+            if not accession:
+                continue
+            accessions.add(accession)
+            if accession in bioprojects_to_save: #already seen before
+                continue
+            bioprojects_to_save[accession] = BioProject(
+                accession=accession,
+                title=bioproject.get('title', accession), #accession is the title if not provided
+            )
+    return list(accessions)
+
+
+
+def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list[str]], bioprojects: dict[str, BioProject]) -> GenomeAssembly:
     assembly_stats = assembly_dict.get('assembly_stats', dict())
     assembly_info = assembly_dict.get('assembly_info', dict())
     organism_info = assembly_dict.get('organism', dict())
+    bp_accessions = parse_bioprojects(assembly_info, bioprojects) #keep collecting the bioprojects accessions:BioProject objects
     return GenomeAssembly(
         assembly_accession=assembly_dict.get('accession'),
         paired_assembly_accession=assembly_dict.get('paired_accession'),
@@ -299,4 +339,5 @@ def parse_assembly_from_ncbi(assembly_dict: dict, valid_lineages: dict[str, list
         taxon_lineage=valid_lineages.get(str(organism_info.get('tax_id')), []),
         release_date=assembly_info.get('release_date'),
         submitter=assembly_info.get('submitter'),
+        bioprojects=bp_accessions,
     )

@@ -169,9 +169,9 @@ function JBrowseContent() {
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     {annotations.map((annotation) => {
-                      const codingGenes = annotation.features_statistics?.coding_genes?.count
-                      const nonCodingGenes = annotation.features_statistics?.non_coding_genes?.count
-                      const pseudogenes = annotation.features_statistics?.pseudogenes?.count
+                      const codingGenes = annotation.features_statistics?.gene_category_stats?.['coding']?.total_count
+                      const nonCodingGenes = annotation.features_statistics?.gene_category_stats?.['non_coding']?.total_count
+                      const pseudogenes = annotation.features_statistics?.gene_category_stats?.['pseudogene']?.total_count
                       const hasGeneCounts = codingGenes !== undefined || nonCodingGenes !== undefined || pseudogenes !== undefined
 
                       return (

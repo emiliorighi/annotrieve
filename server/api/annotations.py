@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Body, HTTPException, Response
 from typing import Optional, Dict, Any
 from services import annotations_service
 from helpers import parameters as params_helper
-import inspect
 from helpers import query_visitors as query_visitors_helper
 from jobs.import_annotations import import_annotations
 router = APIRouter()
@@ -42,20 +41,67 @@ async def get_annotations_report(commons: Dict[str, Any] = Depends(params_helper
     return annotations_service.get_annotations(params, response_type='tsv')
 
 
-
-@router.get("/annotations/stats/summary")
-@router.post("/annotations/stats/summary")
-async def get_annotations_stats_summary(response: Response, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
-    """
-    Get annotations stats summary across all annotations in the queryset
-    """
-    params = params_helper.handle_request_params(commons, payload)
+#TODO: uncomment this when we have the summary stats ready
+# @router.get("/annotations/stats/summary")
+# @router.post("/annotations/stats/summary")
+# async def get_annotations_stats_summary(response: Response, commons: Dict[str, Any] = Depends(params_helper.common_params), payload: Optional[Dict[str, Any]] = Body(None)):
+#     """
+#     Get annotations stats summary across all annotations in the queryset
+#     """
+#     params = params_helper.handle_request_params(commons, payload)
     
-    # Add cache control headers (nginx will respect these)
-    response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
-    response.headers["Vary"] = "Accept-Encoding"
+#     # Add cache control headers (nginx will respect these)
+#     response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
+#     response.headers["Vary"] = "Accept-Encoding"
     
-    return annotations_service.get_annotations(params, response_type='summary_stats')
+#     return annotations_service.get_annotations(params, response_type='summary_stats')
+# TODO: uncomment this when we have the distribution stats ready
+# @router.get("/annotations/stats/distribution")
+# @router.post("/annotations/stats/distribution")
+# async def get_annotations_stats_distribution(
+#     response: Response,
+#     metric: str = 'all',
+#     category: str = 'all',
+#     commons: Dict[str, Any] = Depends(params_helper.common_params),
+#     payload: Optional[Dict[str, Any]] = Body(None)
+# ):
+#     """
+#     Get distribution data from annotations for box/violin plots.
+    
+#     Parameters:
+#     - metric: One of 'counts', 'mean_lengths', 'ratios', or 'all' (default: 'all')
+#     - category: One of 'coding_genes', 'non_coding_genes', 'pseudogenes', or 'all' (default: 'all')
+#     - All standard annotation filter parameters are supported via commons/payload
+    
+#     Returns:
+#     - counts: Dict mapping category names to lists of count values
+#     - mean_lengths: Dict mapping category names to lists of mean length values
+#     - ratios: Dict with 'coding_ratio', 'non_coding_ratio', 'pseudogene_ratio' lists
+#     """
+#     params = params_helper.handle_request_params(commons, payload)
+    
+#     # Extract metric and category from params if provided, then remove them
+#     # since get_annotation_records() doesn't accept these parameters
+#     if 'metric' in params:
+#         metric = params.pop('metric')
+#     if 'category' in params:
+#         category = params.pop('category')
+    
+#     # Also check payload for metric and category (these won't be in params if in payload)
+#     if payload:
+#         if 'metric' in payload:
+#             metric = payload.get('metric', metric)
+#         if 'category' in payload:
+#             category = payload.get('category', category)
+    
+#     # Add cache control headers
+#     response.headers["Cache-Control"] = "public, max-age=600"  # 10 minutes
+#     response.headers["Vary"] = "Accept-Encoding"
+    
+#     # Get annotation records with same filtering as other endpoints (excluding metric and category)
+#     annotations = annotations_service.get_annotation_records(**params)
+    
+#     return annotations_service.get_annotations_distribution_data(annotations, metric=metric, category=category)
 
 @router.get("/annotations/frequencies")
 async def get_frequency_fields():

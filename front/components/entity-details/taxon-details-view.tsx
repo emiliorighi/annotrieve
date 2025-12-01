@@ -23,6 +23,7 @@ import { Bar } from 'react-chartjs-2'
 import { CategoryScale, LinearScale, BarElement } from 'chart.js'
 import Link from "next/link"
 import { buildEntityDetailsUrl } from "@/lib/utils"
+import { AnnotationsDistributionPlot } from "@/components/annotations-distribution-plot"
 
 // Register Chart.js components
 ChartJS.register(ArcElement, Tooltip, Legend)
@@ -710,6 +711,42 @@ export function TaxonDetailsView({ taxid: taxidProp, onClose }: TaxonDetailsView
                 </div>
               </Card>
             )}
+
+            {/* Gene Statistics Distribution 
+            {taxid && (
+              <AnnotationsDistributionPlot
+                params={{ taxids: taxid }}
+                metric="counts"
+                category="all"
+                plotType="box"
+                title="Gene counts distribution"
+                height={300}
+              />
+            )}*/}
+
+            {/* Mean Length Distribution 
+            {taxid && (
+              <AnnotationsDistributionPlot
+                params={{ taxids: taxid }}
+                metric="mean_lengths"
+                category="all"
+                plotType="box"
+                title="Mean gene length distribution"
+                height={300}
+              />
+            )}*/}
+
+            {/* Gene Ratios Distribution 
+            {taxid && (
+              <AnnotationsDistributionPlot
+                params={{ taxids: taxid }}
+                metric="ratios"
+                category="all"
+                plotType="violin"
+                title="Gene category ratios distribution"
+                height={300}
+              />
+            )}*/}
           </div>
         </div>
       </div>

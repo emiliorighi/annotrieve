@@ -1,8 +1,9 @@
 "use client"
 
-import { useCallback, useMemo, type ReactNode } from "react"
+import { useCallback, useMemo, useState, useEffect, useRef, type ReactNode } from "react"
+import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
-import { Database, Network } from "lucide-react"
+import { Database, Network, Filter } from "lucide-react"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 import { FilterChip } from "./active-filters/filter-chip"
 import { Button } from "@/components/ui/button"
@@ -14,6 +15,7 @@ export function ActiveFilters() {
   const {
     selectedTaxons,
     selectedAssemblies,
+    selectedBioprojects,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
     onlyRefGenomes,
@@ -25,6 +27,7 @@ export function ActiveFilters() {
     databaseSources,
     setSelectedTaxons,
     setSelectedAssemblies,
+    setSelectedBioprojects,
     setSelectedAssemblyLevels,
     setSelectedAssemblyStatuses,
     setOnlyRefGenomes,
@@ -37,6 +40,120 @@ export function ActiveFilters() {
     clearAllFilters,
   } = store
 
+  const [tooltipKeys, setTooltipKeys] = useState<Set<string>>(new Set())
+  const [tooltipPositions, setTooltipPositions] = useState<Map<string, { top: number; left: number }>>(new Map())
+  const chipRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const previousTaxonKeys = useRef<Set<string>>(new Set())
+  const previousAssemblyKeys = useRef<Set<string>>(new Set())
+  const shownTooltipsRef = useRef<Set<string>>(new Set())
+  
+  // Load previously shown tooltips from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("annotrieve-shown-tooltips")
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored) as string[]
+          shownTooltipsRef.current = new Set(parsed)
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+  }, [])
+
+  // Track new taxon/assembly filters and show tooltip for 3 seconds (only once per filter)
+  useEffect(() => {
+    const currentTaxonKeys = new Set(selectedTaxons.map(t => `taxon-${String(t.taxid ?? "")}`))
+    const currentAssemblyKeys = new Set(selectedAssemblies.map(a => `assembly-${a.assembly_accession || ""}`))
+
+    // Find newly added taxons (only those that haven't shown tooltip before)
+    const newTaxonKeys = new Set<string>()
+    currentTaxonKeys.forEach(key => {
+      if (!previousTaxonKeys.current.has(key) && !shownTooltipsRef.current.has(key)) {
+        newTaxonKeys.add(key)
+      }
+    })
+
+    // Find newly added assemblies (only those that haven't shown tooltip before)
+    const newAssemblyKeys = new Set<string>()
+    currentAssemblyKeys.forEach(key => {
+      if (!previousAssemblyKeys.current.has(key) && !shownTooltipsRef.current.has(key)) {
+        newAssemblyKeys.add(key)
+      }
+    })
+
+    // Show tooltips for new filters that haven't been shown before
+    if (newTaxonKeys.size > 0 || newAssemblyKeys.size > 0) {
+      const newTooltipKeys = new Set([...newTaxonKeys, ...newAssemblyKeys])
+      
+      // Mark these tooltips as shown
+      newTooltipKeys.forEach(key => {
+        shownTooltipsRef.current.add(key)
+      })
+      
+      // Save to localStorage
+      if (typeof window !== "undefined") {
+        localStorage.setItem("annotrieve-shown-tooltips", JSON.stringify(Array.from(shownTooltipsRef.current)))
+      }
+      
+      setTooltipKeys(newTooltipKeys)
+
+      // Calculate positions for tooltips
+      const updatePositions = () => {
+        const positions = new Map<string, { top: number; left: number }>()
+        newTooltipKeys.forEach(key => {
+          const chipElement = chipRefs.current.get(key)
+          if (chipElement) {
+            const rect = chipElement.getBoundingClientRect()
+            positions.set(key, {
+              top: rect.top + window.scrollY - 8,
+              left: rect.left + rect.width / 2 + window.scrollX
+            })
+          }
+        })
+        setTooltipPositions(prev => {
+          const updated = new Map(prev)
+          positions.forEach((pos, key) => updated.set(key, pos))
+          return updated
+        })
+      }
+
+      // Update positions after a short delay to ensure DOM is ready
+      setTimeout(updatePositions, 0)
+      window.addEventListener('scroll', updatePositions, true)
+      window.addEventListener('resize', updatePositions)
+
+      // Hide tooltips after 3 seconds
+      const timeout = setTimeout(() => {
+        setTooltipKeys(prev => {
+          const updated = new Set(prev)
+          newTooltipKeys.forEach(key => updated.delete(key))
+          return updated
+        })
+        setTooltipPositions(prev => {
+          const updated = new Map(prev)
+          newTooltipKeys.forEach(key => updated.delete(key))
+          return updated
+        })
+      }, 3000)
+
+      // Update previous keys
+      previousTaxonKeys.current = currentTaxonKeys
+      previousAssemblyKeys.current = currentAssemblyKeys
+
+      return () => {
+        clearTimeout(timeout)
+        window.removeEventListener('scroll', updatePositions, true)
+        window.removeEventListener('resize', updatePositions)
+      }
+    } else {
+      // Update previous keys even if no new filters
+      previousTaxonKeys.current = currentTaxonKeys
+      previousAssemblyKeys.current = currentAssemblyKeys
+    }
+  }, [selectedTaxons, selectedAssemblies])
+
   // Remove handlers for each filter type
   const handleRemoveTaxid = useCallback((taxid: string) => {
     setSelectedTaxons(selectedTaxons.filter(t => String(t.taxid) !== taxid))
@@ -45,6 +162,10 @@ export function ActiveFilters() {
   const handleRemoveAssembly = useCallback((accession: string) => {
     setSelectedAssemblies(selectedAssemblies.filter(a => a.assembly_accession !== accession))
   }, [selectedAssemblies, setSelectedAssemblies])
+
+  const handleRemoveBioproject = useCallback((accession: string) => {
+    setSelectedBioprojects(selectedBioprojects.filter(bp => bp.accession !== accession))
+  }, [selectedBioprojects, setSelectedBioprojects])
 
   const handleRemoveAssemblyLevel = useCallback((level: string) => {
     setSelectedAssemblyLevels(selectedAssemblyLevels.filter(l => l !== level))
@@ -82,19 +203,6 @@ export function ActiveFilters() {
     setFeatureSources(featureSources.filter(f => f !== featureSource))
   }, [featureSources, setFeatureSources])
 
-  const totalFilterCount =
-    selectedTaxons.length +
-    selectedAssemblies.length +
-    selectedAssemblyLevels.length +
-    selectedAssemblyStatuses.length +
-    (onlyRefGenomes ? 1 : 0) +
-    biotypes.length +
-    featureTypes.length +
-    pipelines.length +
-    providers.length +
-    featureSources.length +
-    databaseSources.length
-
   const chipColorScheme = {
     bg: "bg-card/70",
     bgHover: "hover:bg-card",
@@ -126,7 +234,7 @@ export function ActiveFilters() {
         label: taxon.scientific_name || taxid,
         value: taxid,
         onRemove: () => handleRemoveTaxid(taxid),
-        icon: <Network className="h-3.5 w-3.5" />,
+        icon: <Network className="h-3.5 w-3.5 text-blue-500" />,
         colorScheme: chipColorScheme,
         onClick: () => router.push(buildEntityDetailsUrl("taxon", taxid)),
       })
@@ -139,9 +247,21 @@ export function ActiveFilters() {
         label: assembly.assembly_name || accession,
         value: accession,
         onRemove: () => handleRemoveAssembly(accession),
-        icon: <Database className="h-3.5 w-3.5" />,
+        icon: <Database className="h-3.5 w-3.5 text-purple-500" />,
         colorScheme: chipColorScheme,
         onClick: () => router.push(buildEntityDetailsUrl("assembly", accession)),
+      })
+    })
+
+    selectedBioprojects.forEach((bioproject) => {
+      const accession = bioproject.accession
+      chips.push({
+        key: `bioproject-${accession}`,
+        label: accession,
+        value: accession,
+        onRemove: () => handleRemoveBioproject(accession),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
+        colorScheme: chipColorScheme,
       })
     })
 
@@ -151,6 +271,7 @@ export function ActiveFilters() {
         label: level,
         value: level,
         onRemove: () => handleRemoveAssemblyLevel(level),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -161,6 +282,7 @@ export function ActiveFilters() {
         label: status,
         value: status,
         onRemove: () => handleRemoveAssemblyStatus(status),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -171,6 +293,7 @@ export function ActiveFilters() {
         label: "Reference genome",
         value: "reference_genome",
         onRemove: handleRemoveRefseqCategory,
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     }
@@ -181,6 +304,7 @@ export function ActiveFilters() {
         label: biotype,
         value: biotype,
         onRemove: () => handleRemoveBiotype(biotype),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -191,6 +315,7 @@ export function ActiveFilters() {
         label: featureType,
         value: featureType,
         onRemove: () => handleRemoveFeatureType(featureType),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -201,6 +326,7 @@ export function ActiveFilters() {
         label: pipeline,
         value: pipeline,
         onRemove: () => handleRemovePipeline(pipeline),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -211,6 +337,7 @@ export function ActiveFilters() {
         label: provider,
         value: provider,
         onRemove: () => handleRemoveProvider(provider),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -221,6 +348,7 @@ export function ActiveFilters() {
         label: databaseSource,
         value: databaseSource,
         onRemove: () => handleRemoveDatabaseSource(databaseSource),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -231,6 +359,7 @@ export function ActiveFilters() {
         label: featureSource,
         value: featureSource,
         onRemove: () => handleRemoveFeatureSource(featureSource),
+        icon: <Filter className="h-3.5 w-3.5 text-muted-foreground" />,
         colorScheme: chipColorScheme,
       })
     })
@@ -239,6 +368,7 @@ export function ActiveFilters() {
   }, [
     selectedTaxons,
     selectedAssemblies,
+    selectedBioprojects,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
     onlyRefGenomes,
@@ -259,6 +389,8 @@ export function ActiveFilters() {
     handleRemoveProvider,
     handleRemoveDatabaseSource,
     handleRemoveFeatureSource,
+    handleRemoveBioproject,
+    router,
   ])
 
   const hasActiveFilters = store.hasActiveFilters()
@@ -268,25 +400,91 @@ export function ActiveFilters() {
   }
 
   return (
-    <div className="flex items-center gap-3 w-full overflow-x-auto">
-      <div className="flex items-center gap-2 overflow-x-auto flex-1">
-        {filterChips.map((chip) => (
-          <FilterChip
-            key={chip.key}
-            label={chip.label}
-            value={chip.value}
-            onRemove={chip.onRemove}
-            icon={chip.icon}
-            isActive={chip.isActive}
-            onClick={chip.onClick}
-            colorScheme={chip.colorScheme}
-          />
-        ))}
+    <>
+      <div className="flex items-center gap-3 w-full overflow-x-auto">
+        <div className="flex items-center gap-2 overflow-x-auto flex-1">
+          {filterChips.map((chip) => {
+            const showTooltip = tooltipKeys.has(chip.key) && chip.onClick
+            const isTaxon = chip.key.startsWith("taxon-")
+            const isAssembly = chip.key.startsWith("assembly-")
+            const tooltipText = isTaxon 
+              ? "Click on the chip to see the taxon details"
+              : isAssembly
+              ? "Click on the chip to see the assembly details"
+              : undefined
+
+            return (
+              <div 
+                key={chip.key} 
+                ref={(el) => {
+                  if (el) {
+                    chipRefs.current.set(chip.key, el)
+                  } else {
+                    chipRefs.current.delete(chip.key)
+                  }
+                }}
+              >
+                <FilterChip
+                  label={chip.label}
+                  value={chip.value}
+                  onRemove={chip.onRemove}
+                  icon={chip.icon}
+                  isActive={chip.isActive}
+                  onClick={chip.onClick}
+                  colorScheme={chip.colorScheme}
+                />
+              </div>
+            )
+          })}
+        </div>
+        <Button variant="secondary" size="sm" className="h-7 px-2 text-xs flex-shrink-0" onClick={clearAllFilters}>
+          Clear all
+        </Button>
       </div>
-      <Button variant="secondary" size="sm" className="h-7 px-2 text-xs flex-shrink-0" onClick={clearAllFilters}>
-        Clear all
-      </Button>
-    </div>
+      {typeof window !== 'undefined' && tooltipKeys.size > 0 && createPortal(
+        <>
+          {Array.from(tooltipKeys).map((key) => {
+            const position = tooltipPositions.get(key)
+            if (!position) return null
+            
+            const chip = filterChips.find(c => c.key === key)
+            if (!chip || !chip.onClick) return null
+            
+            const isTaxon = key.startsWith("taxon-")
+            const isAssembly = key.startsWith("assembly-")
+            const tooltipText = isTaxon 
+              ? "Click on the chip to see the taxon details"
+              : isAssembly
+              ? "Click on the chip to see the assembly details"
+              : undefined
+
+            if (!tooltipText) return null
+
+            return (
+              <div
+                key={key}
+                className="fixed z-[9999] px-3 py-1.5 rounded-md border bg-popover text-popover-foreground shadow-lg text-sm whitespace-nowrap animate-in fade-in-0 zoom-in-95 pointer-events-none"
+                style={{
+                  top: `${position.top}px`,
+                  left: `${position.left}px`,
+                  transform: 'translate(-50%, -100%)',
+                  marginTop: '-8px'
+                }}
+              >
+                <p>{tooltipText}</p>
+                <div 
+                  className="absolute top-full left-1/2 -translate-x-1/2 -mt-px"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  <div className="border-4 border-transparent border-t-popover"></div>
+                </div>
+              </div>
+            )
+          })}
+        </>,
+        document.body
+      )}
+    </>
   )
 }
 

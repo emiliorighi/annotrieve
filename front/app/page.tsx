@@ -4,6 +4,7 @@ import { Hero } from "@/components/hero"
 import { LatestReleases } from "@/components/latest-releases"
 import { TopAnnotations } from "@/components/top-annotated-records"
 import { DatabaseFrequencies } from "@/components/database-frequencies"
+import { ReleaseDateChart } from "@/components/release-date-chart"
 import { FeaturesSection } from "@/components/features-section"
 import { SectionWrapper } from "@/components/ui/section-wrapper"
 
@@ -41,6 +42,19 @@ export default function Home() {
         />
       </SectionWrapper>
 
+      <SectionWrapper id="release-timeline" backgroundVariant="muted">
+        <ReleaseDateChart
+          title="Annotation release timeline"
+          description={
+            <>
+              Explore how annotation releases have evolved over time across{" "}
+              <span className="font-medium">Ensembl</span>,{" "}
+              <span className="font-medium">NCBI RefSeq</span>, and{" "}
+              <span className="font-medium">NCBI GenBank</span>. The chart shows monthly annotation counts grouped by database source.
+            </>
+          }
+        />
+      </SectionWrapper>
 
       <SectionWrapper id="latest-releases" backgroundVariant="muted">
         <LatestReleases

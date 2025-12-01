@@ -7,6 +7,7 @@ import type { Annotation } from "@/lib/types"
 import { useRouter } from "next/navigation"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 import { useUIStore } from "@/lib/stores/ui"
+import { getFilesBase, joinUrl } from "@/lib/config/env"
 
 interface AnnotationActionsProps {
   annotation: Annotation
@@ -28,7 +29,7 @@ export function AnnotationActions({ annotation }: AnnotationActionsProps) {
   const handleDownload = () => {
     // Create a temporary anchor element to trigger download
     const link = document.createElement('a')
-    link.href = `https://genome.crg.es/annotrieve/files/${annotation.indexed_file_info.bgzipped_path}`
+    link.href = joinUrl(getFilesBase(), annotation.indexed_file_info.bgzipped_path)
     link.download = '' // optional: set a filename if needed
     link.target = '_blank' // open in a new tab if preferred
     link.rel = 'noopener noreferrer'

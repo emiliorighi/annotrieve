@@ -38,6 +38,7 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
   const fetchAnnotationsStats = useAnnotationsFiltersStore((state) => state.fetchAnnotationsStats)
   const selectedTaxons = useAnnotationsFiltersStore((state) => state.selectedTaxons)
   const selectedAssemblies = useAnnotationsFiltersStore((state) => state.selectedAssemblies)
+  const selectedBioprojects = useAnnotationsFiltersStore((state) => state.selectedBioprojects)
   const selectedAssemblyLevels = useAnnotationsFiltersStore((state) => state.selectedAssemblyLevels)
   const selectedAssemblyStatuses = useAnnotationsFiltersStore((state) => state.selectedAssemblyStatuses)
   const onlyRefGenomes = useAnnotationsFiltersStore((state) => state.onlyRefGenomes)
@@ -177,6 +178,7 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
       showFavs: false,
       selectedTaxons,
       selectedAssemblies,
+      selectedBioprojects,
       selectedAssemblyLevels,
       selectedAssemblyStatuses,
       onlyRefGenomes,
@@ -201,6 +203,7 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
     showFavs,
     selectedTaxons,
     selectedAssemblies,
+    selectedBioprojects,
     selectedAssemblyLevels,
     selectedAssemblyStatuses,
     onlyRefGenomes,

@@ -1,5 +1,12 @@
 export type FilterType = "taxon" | "organism" | "assembly" | null
 
+export interface FilterOption {
+  value: string
+  label: string
+  count: number
+  subtitle?: string
+}
+
 export interface TaxonNode {
   id: string
   name: string
@@ -99,22 +106,169 @@ export interface Annotation {
     has_exon: boolean
   }
   features_statistics?: {
+    // New structure - primary fields to use
+    gene_category_stats?: Record<string, {
+      total_count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+      }
+      biotype_counts?: Record<string, number>
+      transcript_type_counts?: Record<string, number>
+    }>
+    transcript_type_stats?: Record<string, {
+      total_count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+      }
+      biotype_counts?: Record<string, number>
+      associated_genes?: {
+        total_count?: number
+        gene_categories?: Record<string, number>
+      }
+      exon_stats?: {
+        total_count?: number
+        length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+        concatenated_length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+      }
+      cds_stats?: {
+        total_count?: number
+        length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+        concatenated_length?: {
+          min?: number
+          max?: number
+          mean?: number
+        }
+      }
+    }>
+    // Deprecated: Old fields kept for backwards compatibility only - do not use
+    /** @deprecated Use gene_category_stats['coding'] instead */
     coding_genes?: {
-      count?: number,
+      count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+        median?: number
+      }
       transcripts?: {
-        types: Record<string, any>
+        count?: number
+        per_gene?: number
+        types?: Record<string, any>
+      }
+      features?: {
+        exons?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        cds?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        introns?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
       }
     }
+    /** @deprecated Use gene_category_stats['non_coding'] instead */
     non_coding_genes?: {
       count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+        median?: number
+      }
       transcripts?: {
-        types: Record<string, any>
+        count?: number
+        per_gene?: number
+        types?: Record<string, any>
+      }
+      features?: {
+        exons?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        cds?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        introns?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
       }
     }
+    /** @deprecated Use gene_category_stats['pseudogene'] instead */
     pseudogenes?: {
       count?: number
+      length_stats?: {
+        min?: number
+        max?: number
+        mean?: number
+        median?: number
+      }
       transcripts?: {
-        types: Record<string, any>
+        count?: number
+        per_gene?: number
+        types?: Record<string, any>
+      }
+      features?: {
+        exons?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        cds?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
+        introns?: {
+          count?: number
+          length_stats?: {
+            mean?: number
+            median?: number
+          }
+        }
       }
     }
   }

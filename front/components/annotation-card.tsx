@@ -25,10 +25,10 @@ export function AnnotationCard({ annotation, isSelected }: AnnotationCardProps) 
   const topBiotypes = annotation.features_summary?.biotypes?.slice(0, 4) || [];
   const hasMoreBiotypes = (annotation.features_summary?.biotypes?.length || 0) > 4;
   
-  // Get gene counts
-  const codingGenes = annotation.features_statistics?.coding_genes?.count;
-  const nonCodingGenes = annotation.features_statistics?.non_coding_genes?.count;
-  const pseudogenes = annotation.features_statistics?.pseudogenes?.count;
+  // Get gene counts from new structure
+  const codingGenes = annotation.features_statistics?.gene_category_stats?.['coding']?.total_count;
+  const nonCodingGenes = annotation.features_statistics?.gene_category_stats?.['non_coding']?.total_count;
+  const pseudogenes = annotation.features_statistics?.gene_category_stats?.['pseudogene']?.total_count;
   const hasGeneCounts = codingGenes !== undefined || nonCodingGenes !== undefined || pseudogenes !== undefined;
   
   return (

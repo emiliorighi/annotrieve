@@ -46,6 +46,33 @@ export function getAnnotationsStatsSummary(params?: Query) {
   return apiGet<any>('/annotations/stats/summary', params)
 }
 
+export interface DistributionData {
+  counts?: {
+    coding_genes?: number[]
+    non_coding_genes?: number[]
+    pseudogenes?: number[]
+  }
+  mean_lengths?: {
+    coding_genes?: number[]
+    non_coding_genes?: number[]
+    pseudogenes?: number[]
+  }
+  ratios?: {
+    coding_ratio?: number[]
+    non_coding_ratio?: number[]
+    pseudogene_ratio?: number[]
+  }
+}
+
+export interface DistributionParams extends Query {
+  metric?: 'counts' | 'mean_lengths' | 'ratios' | 'all'
+  category?: 'coding_genes' | 'non_coding_genes' | 'pseudogenes' | 'all'
+}
+
+export function getAnnotationsDistribution(params?: DistributionParams) {
+  return apiGet<DistributionData>('/annotations/stats/distribution', params)
+}
+
 export function getAnnotationsFrequencies(field: string, params?: Query) {
   return apiGet<Record<string, number>>(`/annotations/frequencies/${encodeURIComponent(field)}`, params)
 }

@@ -5,15 +5,14 @@ from helpers import parameters as params_helper
 from helpers import pysam_helper
 from helpers import annotation as annotation_helper
 from helpers import pipelines as pipelines_helper
-from db.models import GenomeAnnotation, AnnotationError, AnnotationSequenceMap, drop_all_collections, TaxonNode, GenomeAssembly, Organism, GenomicSequence
+from db.models import GenomeAnnotation, AnnotationError, AnnotationSequenceMap, drop_all_collections, TaxonNode, GenomeAssembly, Organism, GenomicSequence, BioProject
 from fastapi.responses import StreamingResponse, Response
 from fastapi import HTTPException
 from typing import Optional
 import os
 from jobs.import_annotations import import_annotations
-from jobs.updates import update_annotation_fields
+from jobs.updates import update_annotation_fields, update_feature_stats
 import statistics
-import io
 from datetime import datetime
 
 FIELD_TSV_MAP = {
@@ -32,8 +31,7 @@ FIELD_TSV_MAP = {
 NO_VALUE_KEY = "no_value"
 def get_annotations(args: dict, field: str = None, response_type: str = 'metadata'):
     try:
-
-        #pop limit, offset and fields from args
+        #drop_all_collections()
         limit = args.pop('limit', 20)
         offset = args.pop('offset', 0)
         fields = args.pop('fields', None)
@@ -78,13 +76,13 @@ def get_annotation_records(
     db_sources: Optional[str] = None, #GenBank, RefSeq, Ensembl
     feature_sources: Optional[str] = None, #second column in the gff file
     assembly_accessions: Optional[str] = None,
+    bioproject_accessions: Optional[str] = None,
     biotypes: Optional[str] = None, #biotype present in the 9th column in the gff file
     feature_types: Optional[str] = None,# third column in the gff file
     has_stats: Optional[bool] = None, #True, False, None for all
     pipelines: Optional[str] = None, #pipeline name
     providers: Optional[str] = None, #annotation provider list separated by comma
     md5_checksums: Optional[str] = None, 
-    latest_release_by: str = None, #organism, assembly, taxon / None for no grouping
     refseq_categories: str = None, #true
     assembly_levels: str = None,
     assembly_statuses: str = None,
@@ -111,7 +109,7 @@ def get_annotation_records(
     )
     annotations = GenomeAnnotation.objects(**mongoengine_query).exclude('id')
     #check if any assembly related param is present
-    if any([refseq_categories, assembly_levels, assembly_statuses, assembly_types]):
+    if any([refseq_categories, assembly_levels, assembly_statuses, assembly_types, bioproject_accessions]):
         query = {}
         if refseq_categories:
             query['refseq_category__in'] = refseq_categories.split(',') if isinstance(refseq_categories, str) else refseq_categories
@@ -121,17 +119,13 @@ def get_annotation_records(
             query['assembly_status__in'] = assembly_statuses.split(',') if isinstance(assembly_statuses, str) else assembly_statuses
         if assembly_types:
             query['assembly_type__in'] = assembly_types.split(',') if isinstance(assembly_types, str) else assembly_types
+        if bioproject_accessions:
+            query['bioprojects__in'] = bioproject_accessions.split(',') if isinstance(bioproject_accessions, str) else bioproject_accessions
         #fetch assemblies from the assemblies collection
         assemblies = GenomeAssembly.objects(**query).scalar('assembly_accession')
         annotations = annotations.filter(assembly_accession__in=assemblies)
     if filter:
         annotations = annotations.filter(query_visitors_helper.annotation_query(filter))
-    if latest_release_by:
-        pymongo_query = annotations.aggregate(
-            *annotation_helper.get_latest_release_by_group_pipeline(latest_release_by)
-            )
-        #query again to get the queryset object
-        annotations = GenomeAnnotation.objects(_id__in=[doc['_id'] for doc in pymongo_query]).exclude('id')
     if sort_by:
         sort = '-' + sort_by if sort_order == 'desc' else sort_by
         annotations = annotations.order_by(sort)
@@ -153,8 +147,141 @@ def get_annotation(md5_checksum):
 def trigger_annotation_fields_update(auth_key: str):
     if auth_key != os.getenv('AUTH_KEY'):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    update_annotation_fields.delay()
-    return {"message": "Annotation fields update task triggered"}
+    import_annotations.delay()
+    return {"message": "Import annotations task triggered"}
+
+def get_annotations_distribution_data(annotations, metric: str = 'all', category: str = 'all'):
+    """
+    Extract distribution data from annotations for box/violin plots.
+    
+    Args:
+        annotations: QuerySet of GenomeAnnotation objects
+        metric: One of 'counts', 'mean_lengths', 'ratios', or 'all' (default: 'all')
+        category: One of 'coding_genes', 'non_coding_genes', 'pseudogenes', or 'all' (default: 'all')
+    
+    Returns:
+        Dict with distribution data suitable for plotting
+    """
+    valid_metrics = ['counts', 'mean_lengths', 'ratios', 'all']
+    valid_categories = ['coding_genes', 'non_coding_genes', 'pseudogenes', 'all']
+    
+    if metric not in valid_metrics:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid metric: {metric}. Must be one of: {', '.join(valid_metrics)}"
+        )
+    
+    if category not in valid_categories:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category: {category}. Must be one of: {', '.join(valid_categories)}"
+        )
+    
+    # Determine which categories to process
+    categories_to_process = ['coding_genes', 'non_coding_genes', 'pseudogenes']
+    if category != 'all':
+        categories_to_process = [category]
+    
+    # Extract raw data for each category using aggregation pipelines
+    # Note: The pipeline already filters for annotations with stats, so we use the full queryset
+    category_data = {}
+    for cat_name in categories_to_process:
+        pipeline = pipelines_helper.category_stats_pipeline(cat_name)
+        result = list(annotations.aggregate(pipeline))
+        
+        if result and result[0]:
+            data = result[0]
+            counts = [c for c in data.get('counts', []) if c is not None]
+            mean_lengths = [ml for ml in data.get('mean_lengths', []) if ml is not None]
+            
+            category_data[cat_name] = {
+                'counts': counts,
+                'mean_lengths': mean_lengths
+            }
+        else:
+            category_data[cat_name] = {
+                'counts': [],
+                'mean_lengths': []
+            }
+    
+    # Build response based on requested metrics
+    response = {}
+    
+    if metric in ['counts', 'all']:
+        response['counts'] = {
+            cat: category_data[cat]['counts'] 
+            for cat in categories_to_process
+        }
+    
+    if metric in ['mean_lengths', 'all']:
+        response['mean_lengths'] = {
+            cat: category_data[cat]['mean_lengths'] 
+            for cat in categories_to_process
+        }
+    
+    if metric in ['ratios', 'all']:
+        # Calculate ratios - need all three categories to compute ratios
+        if category == 'all':
+            # Use aggregation pipeline to extract all counts together for ratio calculation
+            ratio_pipeline = [
+                {
+                    "$project": {
+                        "coding_count": "$features_statistics.coding_genes.count",
+                        "non_coding_count": "$features_statistics.non_coding_genes.count",
+                        "pseudogene_count": "$features_statistics.pseudogenes.count"
+                    }
+                },
+                {
+                    "$match": {
+                        "$or": [
+                            {"coding_count": {"$ne": None}},
+                            {"non_coding_count": {"$ne": None}},
+                            {"pseudogene_count": {"$ne": None}}
+                        ]
+                    }
+                },
+                {
+                    "$project": {
+                        "coding_count": {"$ifNull": ["$coding_count", 0]},
+                        "non_coding_count": {"$ifNull": ["$non_coding_count", 0]},
+                        "pseudogene_count": {"$ifNull": ["$pseudogene_count", 0]},
+                        "total": {
+                            "$add": [
+                                {"$ifNull": ["$coding_count", 0]},
+                                {"$ifNull": ["$non_coding_count", 0]},
+                                {"$ifNull": ["$pseudogene_count", 0]}
+                            ]
+                        }
+                    }
+                },
+                {
+                    "$match": {
+                        "total": {"$gt": 0}
+                    }
+                },
+                {
+                    "$project": {
+                        "coding_ratio": {"$divide": ["$coding_count", "$total"]},
+                        "non_coding_ratio": {"$divide": ["$non_coding_count", "$total"]},
+                        "pseudogene_ratio": {"$divide": ["$pseudogene_count", "$total"]}
+                    }
+                }
+            ]
+            
+            ratio_results = list(annotations.aggregate(ratio_pipeline))
+            
+            ratios = {
+                'coding_ratio': [r['coding_ratio'] for r in ratio_results],
+                'non_coding_ratio': [r['non_coding_ratio'] for r in ratio_results],
+                'pseudogene_ratio': [r['pseudogene_ratio'] for r in ratio_results]
+            }
+            
+            response['ratios'] = ratios
+        else:
+            # For single category, ratios don't make sense
+            response['ratios'] = {}
+    
+    return response
 
 def get_annotations_summary_stats(annotations):
     """

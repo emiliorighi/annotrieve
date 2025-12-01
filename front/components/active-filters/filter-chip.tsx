@@ -36,7 +36,7 @@ export function FilterChip({ label, onRemove, icon, onClick, colorScheme, isActi
       tabIndex={onClick ? 0 : undefined}
       aria-pressed={onClick ? isActive : undefined}
     >
-      {icon && <span className="text-muted-foreground flex-shrink-0">{icon}</span>}
+      {icon && <span className="flex-shrink-0">{icon}</span>}
       <span className={cn("font-medium whitespace-nowrap", colorScheme.text)}>{label}</span>
       <Button
         variant="ghost"

@@ -26,8 +26,13 @@ PIPELINE_INFO = {
 def handle_annotation_error(annotation_to_process: AnnotationToProcess, error: str):
     """Handle annotation processing errors."""
 
+    url_path = annotation_to_process.access_url
     source_md5 = annotation_to_process.md5_checksum
-    annotation_error = AnnotationError.objects(source_md5=source_md5).first()
+    
+    # Check by url_path first (unique constraint), then by source_md5 as fallback
+    annotation_error = AnnotationError.objects(url_path=url_path).first()
+    if not annotation_error:
+        annotation_error = AnnotationError.objects(source_md5=source_md5).first()
     
     if isinstance(error, Exception):
         error = str(error)
@@ -57,46 +62,74 @@ def fetch_annotations(urls_to_fetch) -> list[AnnotationToProcess]:
     for url in urls_to_fetch:
         try:
             with requests.get(url, stream=True) as r:
+                annotations_to_append = []
                 r.raise_for_status()
                 lines = (line.decode("utf-8") for line in r.iter_lines() if line)
                 reader = csv.DictReader(lines, delimiter="\t")
                 for row in reader:
-                    annotations.append(AnnotationToProcess(**row))
+                    annotations_to_append.append(AnnotationToProcess(**row))
+            annotations.extend(filter_annotations_by_md5_checksum_and_url_path(annotations_to_append))
         except Exception as e:
             print(f"Unexpected error occurred while fetching TSV file: {e}")
             continue
     return annotations
 
-def save_annotations(annotations: list[GenomeAnnotation], annotations_path: str, batch_size: int=1000) -> bool:
+def fetch_from_url(url: str) -> list[AnnotationToProcess]:
     """
-    Save the annotations to the database and delete the annotation errors
+    Fetch the annotations from the url and yield them
     """
-    batches = create_batches(annotations, batch_size)
-    saved_annotations = []
-    for batch in batches:
-        try:
-            GenomeAnnotation.objects.insert(batch)
-            #DELETE ANNOTATION ERRORS
-            md5s = [annotation.source_file_info.uncompressed_md5 for annotation in batch]
-            AnnotationError.objects(source_md5__in=md5s).delete()
-            saved_annotations.extend(batch)
-        except Exception as e:
-            #remove files from the annotations present in the batch
-            for annotation in batch:
-                bgzipped_path = file_helper.get_annotation_file_path(annotation)
-                csi_path = f"{bgzipped_path}.csi"
-                file_helper.remove_files([bgzipped_path, csi_path], annotations_path)
-            print(f"Error saving annotations to the database: {e}")
-            continue
-    return saved_annotations
+    annotations: list[AnnotationToProcess] = []
+    try:
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            lines = (line.decode("utf-8") for line in r.iter_lines() if line)
+            reader = csv.DictReader(lines, delimiter="\t")
+            for row in reader:
+                annotations.append(AnnotationToProcess(**row))
+    except Exception as e:
+        print(f"Unexpected error occurred while fetching TSV file: {e}")
+        return []
+    return annotations
     
+
+def save_annotations(annotations: list[GenomeAnnotation], annotations_path: str) -> list[str]:
+    """
+    Save the annotations to the database, delete the annotation errors and return the ids of the saved annotations
+    if the url path is the same but the md5 checksum is different, the annotation is deleted and the new one is saved
+    return the ids of the saved annotations
+    """
+    saved_annotations_ids = []
+    #fetch potential existing url paths
+    url_paths = [annotation.source_file_info.url_path for annotation in annotations]
+
+    # delete existing annotations where md5 changed and url path is the same
+    # we delete the metadata as the files are already updated
+    GenomeAnnotation.objects(source_file_info__url_path__in=url_paths).delete()
+
+    try:
+        #here we are sure that the annotations are not already in the database
+        GenomeAnnotation.objects.insert(annotations)
+
+        #those where the md5 checksum of the original file is the same as the one in the errors or the url path
+        source_md5s = [annotation.source_file_info.uncompressed_md5 for annotation in annotations]
+        AnnotationError.objects(Q(source_md5__in=source_md5s) | Q(source_file_info__url_path__in=url_paths)).delete()
+        saved_annotations_ids = [annotation.annotation_id for annotation in annotations]
+    except Exception as e:
+        #remove files from the annotations present in the batch
+        for annotation in annotations:
+            bgzipped_path = file_helper.get_annotation_file_path(annotation)
+            csi_path = f"{bgzipped_path}.csi"
+            file_helper.remove_files([bgzipped_path, csi_path], annotations_path)
+        print(f"Error saving annotations to the database: {e}")
+    return saved_annotations_ids
+
 def filter_annotations_dict_by_field(annotations: list[AnnotationToProcess], field: str, list_of_values: list[str]) -> list[AnnotationToProcess]:
     """
     Filter the annotations by a field and a list of values, return the filtered annotations
     """
     return [annotation for annotation in annotations if getattr(annotation, field) in list_of_values]
 
-def delete_changed_md5_checksum_annotations(annotations: list[GenomeAnnotation], annotations_path: str) -> tuple[int, int]:
+def delete_changed_md5_checksum_annotations(saved_annotations_ids: list[str], annotations_path: str) -> tuple[int, int]:
     """
     Handle the annotations which incoming md5 checksum changed
     """
@@ -105,6 +138,8 @@ def delete_changed_md5_checksum_annotations(annotations: list[GenomeAnnotation],
     deleted_count = annotations_to_delete.count()
     deleted_files_count = remove_files_from_annotations(annotations_to_delete, annotations_path)
     annotations_to_delete.delete()
+    print(f"Deleted {deleted_count} annotations")
+    print(f"Deleted {deleted_files_count} files")
     return deleted_count, deleted_files_count
 
 def filter_annotations_by_md5_checksum_and_url_path(annotations: list[AnnotationToProcess]) -> list[AnnotationToProcess]:

@@ -9,14 +9,10 @@ import { listAnnotations } from "@/lib/api/annotations"
 import { useSelectedAnnotationsStore } from "@/lib/stores/selected-annotations"
 import type { Annotation } from "@/lib/types"
 import { RightSidebar } from "@/components/right-sidebar"
-import { INSDCSearchModal } from "@/components/insdc-search-sidebar"
-import { useUIStore } from "@/lib/stores/ui"
 import { AlertCircle, ArrowLeft, GitCompare, Loader2, RefreshCw, Star } from "lucide-react"
 
 export default function FavoritesComparePage() {
   const router = useRouter()
-  const insdcSearchModal = useUIStore((state) => state.insdcSearchModal)
-  const closeInsdcSearchModal = useUIStore((state) => state.closeInsdcSearchModal)
 
   const annotationsCart = useSelectedAnnotationsStore((state) => state.annotationsCart)
   const favoriteSelections = useMemo(
@@ -170,11 +166,6 @@ export default function FavoritesComparePage() {
   return (
     <>
       <RightSidebar />
-      <INSDCSearchModal
-        open={insdcSearchModal.isOpen}
-        onOpenChange={(open) => !open && closeInsdcSearchModal()}
-        initialQuery={insdcSearchModal.initialQuery}
-      />
       <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
         <header className="px-6 pt-6 pb-4 border-b border-border bg-background/95 supports-[backdrop-filter]:bg-background/75 backdrop-blur flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-4">
