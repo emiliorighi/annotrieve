@@ -8,3 +8,4 @@ docker-compose-dev.yml
 celerybeat-schedule
 /server/static/tree.json
 test.py
+post_stats.py

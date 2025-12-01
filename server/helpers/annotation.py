@@ -1,6 +1,6 @@
 from helpers import parameters as parameters_helper
 from typing import Optional, Dict, List, Any
-from db.embedded_documents import GeneStats, GeneLengthStats, TranscriptStats, LengthStats, FeatureStats, TranscriptTypeStats, FeatureTypeStats, GFFStats
+from db.embedded_documents import GeneStats, GeneLengthStats, TranscriptStats, LengthStats, FeatureStats, TranscriptTypeStats, FeatureTypeStats, GFFStats, GeneCategoryFeatureStats, GenericTranscriptTypeStats, GenericLengthStats, AssociatedGenesStats, SubFeatureStats
 import statistics
 from fastapi import HTTPException
 from db.models import AnnotationSequenceMap
@@ -65,6 +65,132 @@ def map_to_gff_stats(features_stats: Dict[str, Any]) -> GFFStats:
             for key, value in features_stats.items() if value
             }
         )
+
+def map_to_stats(features_stats: Dict[str, Any]) -> tuple[Dict[str, GeneCategoryFeatureStats], Dict[str, GenericTranscriptTypeStats]]:
+    """
+    Map the feature stats to the new GeneCategoryFeatureStats and GenericTranscriptTypeStats embedded documents.
+    Returns dictionaries mapping category/type names to their respective embedded document instances.
+    """
+    gene_category_stats_dict = {}
+    transcript_type_stats_dict = {}
+    
+    # Process gene_category_stats
+    gene_category_stats = features_stats.get('gene_category_stats', {})
+    if gene_category_stats:
+        for category, stats in gene_category_stats.items():
+            if not stats:
+                continue
+            
+            # Build length_stats
+            length_stats_data = stats.get('length_stats', {})
+            length_stats = None
+            if length_stats_data:
+                length_stats = GenericLengthStats(
+                    min=length_stats_data.get('min', 0),
+                    max=length_stats_data.get('max', 0),
+                    mean=length_stats_data.get('mean', 0.0)
+                )
+            
+            gene_category_stats_dict[category] = GeneCategoryFeatureStats(
+                total_count=stats.get('total_count', 0),
+                length_stats=length_stats,
+                biotype_counts=stats.get('biotype_counts', {}),
+                transcript_type_counts=stats.get('transcript_type_counts', {})
+            )
+    
+    # Process transcript_type_stats
+    transcript_type_stats = features_stats.get('transcript_type_stats', {})
+    if transcript_type_stats:
+        for transcript_type, stats in transcript_type_stats.items():
+            if not stats:
+                continue
+            
+            # Build length_stats
+            length_stats_data = stats.get('length_stats', {})
+            length_stats = None
+            if length_stats_data:
+                length_stats = GenericLengthStats(
+                    min=length_stats_data.get('min', 0),
+                    max=length_stats_data.get('max', 0),
+                    mean=length_stats_data.get('mean', 0.0)
+                )
+            
+            # Build associated_genes
+            associated_genes_data = stats.get('associated_genes', {})
+            associated_genes = None
+            if associated_genes_data:
+                associated_genes = AssociatedGenesStats(
+                    total_count=associated_genes_data.get('total_count', 0),
+                    gene_categories=associated_genes_data.get('gene_categories', {})
+                )
+            
+            # Build exon_stats
+            exon_stats_data = stats.get('exon_stats', {})
+            exon_stats = None
+            if exon_stats_data:
+                exon_length_data = exon_stats_data.get('length', {})
+                exon_length = None
+                if exon_length_data:
+                    exon_length = GenericLengthStats(
+                        min=exon_length_data.get('min', 0),
+                        max=exon_length_data.get('max', 0),
+                        mean=exon_length_data.get('mean', 0.0)
+                    )
+                
+                exon_concat_data = exon_stats_data.get('concatenated_length', {})
+                exon_concat = None
+                if exon_concat_data:
+                    exon_concat = GenericLengthStats(
+                        min=exon_concat_data.get('min', 0),
+                        max=exon_concat_data.get('max', 0),
+                        mean=exon_concat_data.get('mean', 0.0)
+                    )
+                
+                exon_stats = SubFeatureStats(
+                    total_count=exon_stats_data.get('total_count', 0),
+                    length=exon_length,
+                    concatenated_length=exon_concat
+                )
+            
+            # Build cds_stats
+            cds_stats_data = stats.get('cds_stats', {})
+            cds_stats = None
+            if cds_stats_data:
+                cds_length_data = cds_stats_data.get('length', {})
+                cds_length = None
+                if cds_length_data:
+                    cds_length = GenericLengthStats(
+                        min=cds_length_data.get('min', 0),
+                        max=cds_length_data.get('max', 0),
+                        mean=cds_length_data.get('mean', 0.0)
+                    )
+                
+                cds_concat_data = cds_stats_data.get('concatenated_length', {})
+                cds_concat = None
+                if cds_concat_data:
+                    cds_concat = GenericLengthStats(
+                        min=cds_concat_data.get('min', 0),
+                        max=cds_concat_data.get('max', 0),
+                        mean=cds_concat_data.get('mean', 0.0)
+                    )
+                
+                cds_stats = SubFeatureStats(
+                    total_count=cds_stats_data.get('total_count', 0),
+                    length=cds_length,
+                    concatenated_length=cds_concat
+                )
+            
+            transcript_type_stats_dict[transcript_type] = GenericTranscriptTypeStats(
+                length_stats=length_stats,
+                total_count=stats.get('total_count', 0),
+                biotype_counts=stats.get('biotype_counts', {}),
+                associated_genes=associated_genes,
+                exon_stats=exon_stats,
+                cds_stats=cds_stats
+            )
+    
+    return gene_category_stats_dict, transcript_type_stats_dict
+
 
 def map_to_gene_stats(gene_stats: Dict[str, Any]) -> GeneStats:
     """

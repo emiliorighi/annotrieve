@@ -444,7 +444,11 @@ def update_annotation_stats(md5_checksum, payload):
     if auth_key != os.getenv('AUTH_KEY'):
         raise HTTPException(status_code=401, detail="Unauthorized")
     annotation = get_annotation(md5_checksum)
-    annotation.features_statistics = annotation_helper.map_to_gff_stats(payload.get('features_statistics'))
+    gene_stats, transcript_stats = annotation_helper.map_to_stats(payload.get('features_statistics'))
+    if gene_stats:
+        annotation.features_statistics.gene_category_stats = gene_stats
+    if transcript_stats:
+        annotation.features_statistics.transcript_type_stats = transcript_stats
     annotation.save()
 
 def get_mapped_regions(md5_checksum, offset_param, limit_param):
