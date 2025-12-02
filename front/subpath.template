@@ -43,14 +43,16 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Origin $http_origin;  # Pass Origin header to FastAPI for CORS
         client_max_body_size 100M;
         
         # IMPORTANT: Let FastAPI handle CORS - do NOT add CORS headers here
         # FastAPI's CORSMiddleware already adds the correct headers based on Origin
         # Adding headers here creates duplicate Access-Control-Allow-Origin headers
         # which causes browsers to reject the response
+        # OPTIONS requests are passed through to FastAPI which handles them correctly
 
-        # Enable caching for GET requests
+        # Enable caching for GET requests (OPTIONS requests bypass cache)
         proxy_cache my_cache;
         proxy_cache_methods GET HEAD;
         proxy_cache_key "$scheme$request_method$host$request_uri$is_args$args";
