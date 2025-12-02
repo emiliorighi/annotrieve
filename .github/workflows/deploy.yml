@@ -24,27 +24,10 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
       
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: front/package-lock.json
-        
-    - name: Install dependencies
-      run: |
-        cd front
-        npm ci --legacy-peer-deps
-        
-    - name: Build
-      run: |
-        cd front
-        npm run build
-        
     - name: Upload artifact
       uses: actions/upload-pages-artifact@v3
       with:
-        path: ./front/out
+        path: ./gh-pages-redirect
 
   deploy:
     environment:
