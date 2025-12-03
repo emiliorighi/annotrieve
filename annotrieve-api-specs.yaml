@@ -260,6 +260,482 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /annotations/gene-stats:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getGeneStats"
+      summary: "Get gene stats summary"
+      description: "Returns gene stats summary with aggregated statistics across all categories (coding, non_coding, pseudogene)."
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Gene stats summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneStatsSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postGeneStats"
+      summary: "Get gene stats summary via POST"
+      description: "Same as GET /annotations/gene-stats, but accepts filters in the request body."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Gene stats summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneStatsSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/gene-stats/{category}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getGeneCategoryDetails"
+      summary: "Get detailed statistics for a specific gene category"
+      description: "Returns detailed statistics for a specific gene category (coding, non_coding, or pseudogene)."
+      parameters:
+        - name: category
+          in: path
+          required: true
+          description: "Gene category name (coding, non_coding, or pseudogene)"
+          schema:
+            type: string
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Gene category details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneCategoryDetailsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postGeneCategoryDetails"
+      summary: "Get gene category details via POST"
+      description: "Same as GET /annotations/gene-stats/{category}, but accepts filters in the request body."
+      parameters:
+        - name: category
+          in: path
+          required: true
+          description: "Gene category name (coding, non_coding, or pseudogene)"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Gene category details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneCategoryDetailsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/gene-stats/{category}/{metric}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getGeneCategoryMetricValues"
+      summary: "Get raw values for a specific metric in a gene category"
+      description: "Returns raw values for a specific metric in a specific gene category (for plotting histograms)."
+      parameters:
+        - name: category
+          in: path
+          required: true
+          description: "Gene category name (coding, non_coding, or pseudogene)"
+          schema:
+            type: string
+        - name: metric
+          in: path
+          required: true
+          description: "Metric name (total_count or average_mean_length)"
+          schema:
+            type: string
+        - name: include_annotations
+          in: query
+          description: "If true, include annotation_ids list in response"
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Metric values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneCategoryMetricValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postGeneCategoryMetricValues"
+      summary: "Get gene category metric values via POST"
+      description: "Same as GET /annotations/gene-stats/{category}/{metric}, but accepts filters in the request body."
+      parameters:
+        - name: category
+          in: path
+          required: true
+          description: "Gene category name (coding, non_coding, or pseudogene)"
+          schema:
+            type: string
+        - name: metric
+          in: path
+          required: true
+          description: "Metric name (total_count or average_mean_length)"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AnnotationQueryParams"
+                - type: object
+                  properties:
+                    include_annotations:
+                      type: boolean
+                      description: "If true, include annotation_ids list in response"
+                      default: false
+      responses:
+        "200":
+          description: "Metric values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneCategoryMetricValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/transcript-stats:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getTranscriptStats"
+      summary: "Get transcript stats summary"
+      description: "Returns transcript stats summary with aggregated statistics across all transcript types."
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Transcript stats summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptStatsSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postTranscriptStats"
+      summary: "Get transcript stats summary via POST"
+      description: "Same as GET /annotations/transcript-stats, but accepts filters in the request body."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Transcript stats summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptStatsSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/transcript-stats/{type}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getTranscriptTypeDetails"
+      summary: "Get detailed statistics for a specific transcript type"
+      description: "Returns detailed statistics for a specific transcript type."
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: "Transcript type name"
+          schema:
+            type: string
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Transcript type details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptTypeDetailsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postTranscriptTypeDetails"
+      summary: "Get transcript type details via POST"
+      description: "Same as GET /annotations/transcript-stats/{type}, but accepts filters in the request body."
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: "Transcript type name"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "Transcript type details"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptTypeDetailsResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/transcript-stats/{type}/{metric}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getTranscriptTypeMetricValues"
+      summary: "Get raw values for a specific metric in a transcript type"
+      description: "Returns raw values for a specific metric in a specific transcript type (for plotting histograms)."
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: "Transcript type name"
+          schema:
+            type: string
+        - name: metric
+          in: path
+          required: true
+          description: "Metric name (e.g., total_count, average_mean_length, exon_total_count, cds_total_count, etc.)"
+          schema:
+            type: string
+        - name: include_annotations
+          in: query
+          description: "If true, include annotation_ids list in response"
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Metric values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptTypeMetricValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postTranscriptTypeMetricValues"
+      summary: "Get transcript type metric values via POST"
+      description: "Same as GET /annotations/transcript-stats/{type}/{metric}, but accepts filters in the request body."
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: "Transcript type name"
+          schema:
+            type: string
+        - name: metric
+          in: path
+          required: true
+          description: "Metric name (e.g., total_count, average_mean_length, exon_total_count, cds_total_count, etc.)"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AnnotationQueryParams"
+                - type: object
+                  properties:
+                    include_annotations:
+                      type: boolean
+                      description: "If true, include annotation_ids list in response"
+                      default: false
+      responses:
+        "200":
+          description: "Metric values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TranscriptTypeMetricValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /annotations/{md5_checksum}:
     get:
       tags:
@@ -1953,3 +2429,227 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BioProject"
+
+    GeneStatsSummaryResponse:
+      type: object
+      properties:
+        total_annotations:
+          type: integer
+          description: "Total number of annotations in queryset"
+        summary:
+          type: object
+          properties:
+            genes:
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/GeneCategorySummary"
+        categories:
+          type: array
+          items:
+            type: string
+          description: "List of available gene categories (coding, non_coding, pseudogene)"
+        metrics:
+          type: array
+          items:
+            type: string
+          description: "List of available metrics (total_count, average_mean_length)"
+      required:
+        - total_annotations
+        - summary
+        - categories
+        - metrics
+
+    GeneCategorySummary:
+      type: object
+      properties:
+        annotations_count:
+          type: integer
+          description: "Number of annotations with this category"
+        missing_annotations_count:
+          type: integer
+          description: "Number of annotations missing this category"
+        average_count:
+          type: number
+          nullable: true
+          description: "Average number of genes of this category per annotation"
+        average_mean_length:
+          type: number
+          nullable: true
+          description: "Average mean length of genes in this category"
+      required:
+        - annotations_count
+        - missing_annotations_count
+
+    GeneCategoryDetailsResponse:
+      type: object
+      properties:
+        category:
+          type: string
+          description: "The gene category name"
+        annotations_count:
+          type: integer
+          description: "Number of annotations with this category"
+        missing_annotations_count:
+          type: integer
+          description: "Number of annotations missing this category"
+        summary:
+          type: object
+          description: "Aggregated statistics (mean) for all metrics"
+          additionalProperties:
+            type: object
+            properties:
+              mean:
+                type: number
+        metrics:
+          type: array
+          items:
+            type: string
+          description: "List of metrics available for this category"
+      required:
+        - category
+        - annotations_count
+        - missing_annotations_count
+        - summary
+        - metrics
+
+    GeneCategoryMetricValuesResponse:
+      type: object
+      properties:
+        category:
+          type: string
+          description: "The gene category name"
+        metric:
+          type: string
+          description: "The metric name"
+        values:
+          type: array
+          items:
+            type: number
+          description: "List of values (ordered by annotation_id)"
+        annotation_ids:
+          type: array
+          items:
+            type: string
+          description: "List of annotation_ids (only if include_annotations=true, ordered to match values)"
+        missing:
+          type: array
+          items:
+            type: string
+          description: "List of annotation_ids missing this metric"
+      required:
+        - category
+        - metric
+        - values
+        - missing
+
+    TranscriptStatsSummaryResponse:
+      type: object
+      properties:
+        total_annotations:
+          type: integer
+          description: "Total number of annotations in queryset"
+        summary:
+          type: object
+          properties:
+            types:
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/TranscriptTypeSummary"
+        types:
+          type: array
+          items:
+            type: string
+          description: "List of available transcript types"
+        metrics:
+          type: array
+          items:
+            type: string
+          description: "List of available metrics (varies by transcript type)"
+      required:
+        - total_annotations
+        - summary
+        - types
+        - metrics
+
+    TranscriptTypeSummary:
+      type: object
+      properties:
+        annotations_count:
+          type: integer
+          description: "Number of annotations with this transcript type"
+        missing_annotations_count:
+          type: integer
+          description: "Number of annotations missing this transcript type"
+        average_count:
+          type: number
+          nullable: true
+          description: "Average number of transcripts of this type per annotation"
+        average_mean_length:
+          type: number
+          nullable: true
+          description: "Average mean length of transcripts in this type"
+      required:
+        - annotations_count
+        - missing_annotations_count
+
+    TranscriptTypeDetailsResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          description: "The transcript type name"
+        annotations_count:
+          type: integer
+          description: "Number of annotations with this type"
+        missing_annotations_count:
+          type: integer
+          description: "Number of annotations missing this type"
+        summary:
+          type: object
+          description: "Aggregated statistics (mean) for all metrics"
+          additionalProperties:
+            type: object
+            properties:
+              mean:
+                type: number
+        metrics:
+          type: array
+          items:
+            type: string
+          description: "List of metrics available for this type"
+      required:
+        - type
+        - annotations_count
+        - missing_annotations_count
+        - summary
+        - metrics
+
+    TranscriptTypeMetricValuesResponse:
+      type: object
+      properties:
+        type:
+          type: string
+          description: "The transcript type name"
+        metric:
+          type: string
+          description: "The metric name"
+        values:
+          type: array
+          items:
+            type: number
+          description: "List of values (ordered by annotation_id)"
+        annotation_ids:
+          type: array
+          items:
+            type: string
+          description: "List of annotation_ids (only if include_annotations=true, ordered to match values)"
+        missing:
+          type: array
+          items:
+            type: string
+          description: "List of annotation_ids missing this metric"
+      required:
+        - type
+        - metric
+        - values
+        - missing

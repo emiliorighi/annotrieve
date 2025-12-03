@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { FileText, Star, Loader2, ArrowUp, ArrowDown, PanelLeftClose, PanelLeftOpen, Network, Database, BarChart3 } from "lucide-react"
+import { FileText, Loader2, ArrowUp, ArrowDown, PanelLeftClose, PanelLeftOpen, Database, BarChart3 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { AnnotationsStatsDashboard } from "@/components/annotations-stats-dashboard"
 import { AnnotationCard } from "@/components/annotation-card"
-import type { Annotation } from "@/lib/types"
 import type { AnnotationRecord } from "@/lib/api/types"
 import { Button } from "./ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -25,7 +24,6 @@ interface AnnotationsListProps {
 
 export function AnnotationsList({ annotations, totalAnnotations, loading }: AnnotationsListProps) {
   // Get sidebar state from UI store
-  const searchParams = useSearchParams()
   const router = useRouter()
 
   // Use store for filters and pagination
