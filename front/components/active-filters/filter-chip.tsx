@@ -12,6 +12,7 @@ interface FilterChipProps {
   icon?: ReactNode
   onClick?: () => void
   isActive?: boolean
+  readOnly?: boolean
   colorScheme: {
     bg: string
     bgHover: string
@@ -20,7 +21,7 @@ interface FilterChipProps {
   }
 }
 
-export function FilterChip({ label, onRemove, icon, onClick, colorScheme, isActive = false }: FilterChipProps) {
+export function FilterChip({ label, onRemove, icon, onClick, colorScheme, isActive = false, readOnly = false }: FilterChipProps) {
   return (
     <div
       className={cn(
@@ -38,18 +39,20 @@ export function FilterChip({ label, onRemove, icon, onClick, colorScheme, isActi
     >
       {icon && <span className="flex-shrink-0">{icon}</span>}
       <span className={cn("font-medium whitespace-nowrap", colorScheme.text)}>{label}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-5 w-5 p-0 hover:bg-destructive/10 hover:text-destructive"
-        onClick={(event) => {
-          event.stopPropagation()
-          onRemove()
-        }}
-        title="Remove filter"
-      >
-        <X className="h-3 w-3" />
-      </Button>
+      {!readOnly && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-5 w-5 p-0 hover:bg-destructive/10 hover:text-destructive"
+          onClick={(event) => {
+            event.stopPropagation()
+            onRemove()
+          }}
+          title="Remove filter"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   )
 }

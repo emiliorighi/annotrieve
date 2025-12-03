@@ -10,7 +10,11 @@ import { FilterChip } from "./active-filters/filter-chip"
 import { Button } from "@/components/ui/button"
 import { buildEntityDetailsUrl } from "@/lib/utils"
 
-export function ActiveFilters() {
+interface ActiveFiltersProps {
+  readOnly?: boolean
+}
+
+export function ActiveFilters({ readOnly = false }: ActiveFiltersProps = {}) {
   const router = useRouter()
   const store = useAnnotationsFiltersStore()
   const {
@@ -412,15 +416,18 @@ export function ActiveFilters() {
                   icon={chip.icon}
                   isActive={chip.isActive}
                   onClick={chip.onClick}
+                  readOnly={readOnly}
                   colorScheme={chip.colorScheme}
                 />
               </div>
             )
           })}
         </div>
-        <Button variant="secondary" size="sm" className="h-7 px-2 text-xs flex-shrink-0" onClick={clearAllFilters}>
-          Clear all
-        </Button>
+        {!readOnly && (
+          <Button variant="secondary" size="sm" className="h-7 px-2 text-xs flex-shrink-0" onClick={clearAllFilters}>
+            Clear all
+          </Button>
+        )}
       </div>
       {typeof window !== 'undefined' && tooltipKeys.size > 0 && createPortal(
         <>

@@ -130,3 +130,103 @@ export function downloadContigs(md5_checksum: string): Promise<Response> {
   const url = `${API_BASE}/annotations/${md5_checksum}/contigs`
   return fetch(url, { method: 'GET', headers: { 'Accept': 'text/plain' } })
 }
+
+// Gene Stats API
+export interface GeneStatsSummary {
+  total_annotations: number
+  summary: {
+    genes: Record<string, {
+      annotations_count: number
+      missing_annotations_count: number
+      average_count: number | null
+      average_mean_length: number | null
+    }>
+  }
+  categories: string[]
+  metrics: string[]
+}
+
+export function getGeneStats(params?: Query) {
+  return apiPost<GeneStatsSummary>('/annotations/gene-stats', params)
+}
+
+export interface GeneCategoryDetails {
+  category: string
+  annotations_count: number
+  missing_annotations_count: number
+  summary: Record<string, { mean?: number; median?: number }>
+  metrics: string[]
+}
+
+export function getGeneCategoryDetails(category: string, params?: Query) {
+  return apiPost<GeneCategoryDetails>(`/annotations/gene-stats/${encodeURIComponent(category)}`, params)
+}
+
+export interface GeneCategoryMetricValues {
+  category: string
+  metric: string
+  values: number[]
+  annotation_ids?: string[]
+  missing: string[]
+}
+
+export function getGeneCategoryMetricValues(
+  category: string,
+  metric: string,
+  params?: Query & { include_annotations?: boolean }
+) {
+  return apiPost<GeneCategoryMetricValues>(
+    `/annotations/gene-stats/${encodeURIComponent(category)}/${encodeURIComponent(metric)}`,
+    params
+  )
+}
+
+// Transcript Stats API
+export interface TranscriptStatsSummary {
+  total_annotations: number
+  summary: {
+    types: Record<string, {
+      annotations_count: number
+      missing_annotations_count: number
+      average_count: number | null
+      average_mean_length: number | null
+    }>
+  }
+  types: string[]
+  metrics: string[]
+}
+
+export function getTranscriptStats(params?: Query) {
+  return apiPost<TranscriptStatsSummary>('/annotations/transcript-stats', params)
+}
+
+export interface TranscriptTypeDetails {
+  type: string
+  annotations_count: number
+  missing_annotations_count: number
+  summary: Record<string, { mean?: number; median?: number }>
+  metrics: string[]
+}
+
+export function getTranscriptTypeDetails(type: string, params?: Query) {
+  return apiPost<TranscriptTypeDetails>(`/annotations/transcript-stats/${encodeURIComponent(type)}`, params)
+}
+
+export interface TranscriptTypeMetricValues {
+  type: string
+  metric: string
+  values: number[]
+  annotation_ids?: string[]
+  missing: string[]
+}
+
+export function getTranscriptTypeMetricValues(
+  type: string,
+  metric: string,
+  params?: Query & { include_annotations?: boolean }
+) {
+  return apiPost<TranscriptTypeMetricValues>(
+    `/annotations/transcript-stats/${encodeURIComponent(type)}/${encodeURIComponent(metric)}`,
+    params
+  )
+}

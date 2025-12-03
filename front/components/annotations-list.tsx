@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
-import { FileText, Star, Loader2, ArrowUp, ArrowDown, PanelLeftClose, PanelLeftOpen, Network, Database } from "lucide-react"
+import { FileText, Star, Loader2, ArrowUp, ArrowDown, PanelLeftClose, PanelLeftOpen, Network, Database, BarChart3 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { AnnotationsStatsDashboard } from "@/components/annotations-stats-dashboard"
 import { AnnotationCard } from "@/components/annotation-card"
 import type { Annotation } from "@/lib/types"
@@ -290,6 +291,23 @@ export function AnnotationsList({ annotations, totalAnnotations, loading }: Anno
               </div>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full md:w-auto justify-start md:justify-end min-w-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push('/annotations/stats')}
+                className="h-9 px-2 sm:px-3 gap-1.5 sm:gap-2 shrink-0 relative"
+                title="View gene and transcript statistics"
+              >
+                <BarChart3 className="h-4 w-4 shrink-0" />
+                <span className="hidden md:inline">Stats</span>
+                <span className="md:hidden">Stats</span>
+                <Badge 
+                  variant="default" 
+                  className="absolute -top-2 -right-2 h-5 px-1.5 text-[10px] font-semibold bg-accent text-accent-foreground border-2 border-background"
+                >
+                  NEW
+                </Badge>
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
