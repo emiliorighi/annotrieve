@@ -2,7 +2,6 @@
 
 import Link from "next/link"
 import {
-  BookOpen,
   ExternalLink,
   FileText,
   Github,
@@ -26,6 +25,7 @@ type ExternalRef = {
   key: string
   href: string
   label: string
+  sublabel?: string
   icon: typeof Globe
   iconClass: string
   iconBg: string
@@ -54,21 +54,12 @@ export function buildProviderRefs(provider: CommunityProvider): ExternalRef[] {
       iconBg: "bg-muted",
     })
   }
-  if (provider.preprintUrl) {
-    refs.push({
-      key: "preprint",
-      href: provider.preprintUrl,
-      label: "Preprint",
-      icon: BookOpen,
-      iconClass: "text-violet-600 dark:text-violet-400",
-      iconBg: "bg-violet-500/10",
-    })
-  }
   if (provider.doi) {
     refs.push({
       key: "doi",
       href: doiUrl(provider.doi),
-      label: provider.doi,
+      label: "DOI",
+      sublabel: provider.doi,
       icon: Link2,
       iconClass: "text-indigo-600 dark:text-indigo-400",
       iconBg: "bg-indigo-500/10",
@@ -130,13 +121,13 @@ export function ProviderDetailsDialog({
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 Links
               </p>
-              {(provider.doi || provider.preprintUrl) ? (
+              {provider.doi ? (
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  To cite this dataset, use the DOI or preprint link below.
+                  To cite this dataset, use the DOI link below.
                 </p>
               ) : null}
               <ul className="space-y-1.5">
-                {refs.map(({ key, href, label, icon: Icon, iconClass, iconBg }) => (
+                {refs.map(({ key, href, label, sublabel, icon: Icon, iconClass, iconBg }) => (
                   <li key={key}>
                     <Link
                       href={href}
@@ -156,8 +147,15 @@ export function ProviderDetailsDialog({
                       >
                         <Icon className={cn("h-4 w-4", iconClass)} aria-hidden />
                       </span>
-                      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                        {label}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-foreground">
+                          {label}
+                        </span>
+                        {sublabel ? (
+                          <span className="block truncate text-xs text-muted-foreground font-mono">
+                            {sublabel}
+                          </span>
+                        ) : null}
                       </span>
                       <ExternalLink
                         className="h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-70"

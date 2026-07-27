@@ -18,8 +18,6 @@ export type CommunityProvider = {
   homepageUrl?: string
   /** Provider / project GitHub repository */
   githubUrl?: string
-  /** bioRxiv (or journal) page */
-  preprintUrl?: string
   /** Optional; UI shows DOI only when set */
   doi?: string
   /** Integration / data README */
@@ -48,7 +46,7 @@ export const COMMUNITY_PROVIDERS: CommunityProvider[] = [
       "Comparative gene annotations generated with the TOGA2 pipeline. Different vertebrate clades were annotated using clade-specific reference assemblies for mammals, birds, testudines, and percomorph fishes. See the project homepage for details on reference assemblies and methodology.",
     homepageUrl: "https://genome.senckenberg.de",
     githubUrl: "https://github.com/hillerlab/TOGA2",
-    preprintUrl: "https://www.biorxiv.org/content/10.64898/2026.06.30.735536v1",
+    doi: "10.64898/2026.06.30.735536",
     dataReadmeUrl:
       "https://genome.senckenberg.de/download/TOGA2/TOGA2integration/README.txt",
     filterProvider: "Hiller Lab, Senckenberg Research Institute",

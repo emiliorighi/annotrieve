@@ -8,16 +8,18 @@ import {
   Clock,
   ExternalLink,
   Info,
+  Link2,
   ListChecks,
   Loader2,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Badge, badgeVariants } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ProviderDetailsDialog } from "@/components/community/provider-details-dialog"
 import {
   type CommunityProvider,
   type CommunityProviderStatus,
+  doiUrl,
 } from "@/lib/community-providers"
 import { buildAnnotationsListUrl } from "@/lib/annotations-url"
 import { cn } from "@/lib/utils"
@@ -63,6 +65,7 @@ export function ProviderCard({
   const isPending = provider.status === "import_pending"
   const canBrowse = provider.status === "available" && annotationCount != null && annotationCount > 0
   const browseHref = buildAnnotationsListUrl({ providers: [provider.filterProvider] })
+  const doiHref = provider.doi ? doiUrl(provider.doi) : undefined
 
   useEffect(() => {
     if (autoOpenDetails) {
@@ -92,6 +95,21 @@ export function ProviderCard({
               <StatusIcon className="h-3 w-3" aria-hidden />
               {STATUS_LABEL[provider.status]}
             </Badge>
+            {doiHref ? (
+              <Link
+                href={doiHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  badgeVariants({ variant: "outline" }),
+                  "inline-flex items-center gap-1 font-medium text-[11px] px-2 py-0",
+                  "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300"
+                )}
+              >
+                <Link2 className="h-3 w-3" aria-hidden />
+                DOI
+              </Link>
+            ) : null}
           </div>
 
           {/* Hero metric */}
