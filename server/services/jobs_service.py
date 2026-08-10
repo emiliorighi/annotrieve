@@ -4,6 +4,7 @@ import secrets
 from jobs.import_annotations import import_annotations
 from jobs.assemblies import sync_new_assemblies_from_summary
 from jobs.migration import (
+    backfill_placeholder_assembly_download_urls,
     backfill_taxon_parent_id,
     remap_all_assemblies_and_annotations,
     unset_genome_annotation_mapped_regions_task,
@@ -115,6 +116,16 @@ def trigger_remap_all_assemblies_and_annotations(auth_key: str):
     _validate_auth_key(auth_key)
     remap_all_assemblies_and_annotations.delay()
     return {"message": "Full sequence rebuild task triggered"}
+
+
+def trigger_backfill_placeholder_assembly_download_urls(auth_key: str):
+    """
+    Re-resolve download_url/ncbi_ftp_directory_url for assemblies still stuck on the
+    placeholder URL (mostly non-chromosome-level assemblies).
+    """
+    _validate_auth_key(auth_key)
+    backfill_placeholder_assembly_download_urls.delay()
+    return {"message": "Backfill placeholder assembly download urls task triggered"}
 
 
 def trigger_sync_new_assemblies_from_summary(auth_key: str, accessions: list[str]):

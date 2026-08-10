@@ -783,15 +783,16 @@ def sync_assemblies_ftp_and_sequences(
         acc = assembly.assembly_accession
         acc_to_taxid[acc] = assembly.taxid
         has_real_dir = bool(assembly.ncbi_ftp_directory_url)
-        if not seq_files.is_chromosome_level_assembly(assembly.assembly_level):
-            continue
-        has_chromosomes = seq_files.chromosomes_file_exists(assembly.taxid, acc)
-        if not overwrite_sequences and has_chromosomes:
+        is_chromosome = seq_files.is_chromosome_level_assembly(assembly.assembly_level)
+
+        if is_chromosome and not overwrite_sequences and seq_files.chromosomes_file_exists(assembly.taxid, acc):
             if assembly_report_status(assembly) != REPORT_STATUS_OK:
                 update_assembly_report(acc, REPORT_STATUS_OK)
             stats["paths_skipped_complete"] += 1
             continue
 
+        # FTP path / download_url resolution runs for every assembly (chromosome-level
+        # or not); only chromosome-level assemblies additionally need report/sequence files.
         ftp_path = ftp_path_index.get(acc)
         path_just_updated = False
         if ftp_path:
@@ -807,7 +808,9 @@ def sync_assemblies_ftp_and_sequences(
         elif not has_real_dir:
             print(f"No ftp_path in assembly summaries for {acc}")
 
-        if overwrite_sequences or path_just_updated or not seq_files.chromosomes_file_exists(assembly.taxid, acc):
+        if is_chromosome and (
+            overwrite_sequences or path_just_updated or not seq_files.chromosomes_file_exists(assembly.taxid, acc)
+        ):
             accessions_needing_sequences.append(acc)
 
     still_missing_path = [

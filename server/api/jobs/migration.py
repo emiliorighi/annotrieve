@@ -30,6 +30,19 @@ async def trigger_remap_all_assemblies_and_annotations(
     return jobs_service.trigger_remap_all_assemblies_and_annotations(x_auth_key)
 
 
+@router.post("/jobs/backfill/assembly-download-urls")
+async def trigger_backfill_placeholder_assembly_download_urls(
+    x_auth_key: str = Header(..., alias="X-Auth-Key"),
+):
+    """
+    Re-resolve download_url/ncbi_ftp_directory_url for assemblies still stuck on the
+    placeholder URL (mostly non-chromosome-level assemblies, e.g. TOGA2 targets).
+
+    Requires X-Auth-Key header for authentication.
+    """
+    return jobs_service.trigger_backfill_placeholder_assembly_download_urls(x_auth_key)
+
+
 @router.post("/jobs/unset/mapped-regions")
 async def trigger_unset_genome_annotation_mapped_regions(
     x_auth_key: str = Header(..., alias="X-Auth-Key"),

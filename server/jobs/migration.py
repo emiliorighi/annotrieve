@@ -1,5 +1,5 @@
 from celery import shared_task
-from db.models import TaxonNode
+from db.models import GenomeAssembly, TaxonNode
 from pymongo.operations import UpdateOne
 
 from .services import assembly as assembly_service
@@ -128,6 +128,31 @@ def remap_all_assemblies_and_annotations(
     }
     print(f"Full sequence rebuild finished: {result}")
     return result
+
+
+@shared_task(name="backfill_placeholder_assembly_download_urls", ignore_result=False)
+def backfill_placeholder_assembly_download_urls(chunk_size: int = 500):
+    """
+    One-off: re-resolve download_url/ncbi_ftp_directory_url for every assembly still
+    stuck on the placeholder URL (mostly non-chromosome-level assemblies affected by
+    the sync_assemblies_ftp_and_sequences chromosome-only gate). Idempotent.
+    """
+    accessions = list(
+        GenomeAssembly.objects(
+            download_url__startswith=assembly_service.PLACEHOLDER_DOWNLOAD_URL_PREFIX
+        ).scalar("assembly_accession")
+    )
+    if not accessions:
+        return {"targets": 0}
+    stats = assembly_service.sync_assemblies_ftp_and_sequences(
+        accessions=accessions, chunk_size=chunk_size
+    )
+    stats["still_placeholder"] = GenomeAssembly.objects(
+        assembly_accession__in=accessions,
+        download_url__startswith=assembly_service.PLACEHOLDER_DOWNLOAD_URL_PREFIX,
+    ).count()
+    print(f"Backfill placeholder download_url finished: {stats}")
+    return stats
 
 
 @shared_task(name="unset_genome_annotation_mapped_regions", ignore_result=False)
