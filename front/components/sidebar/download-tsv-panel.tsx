@@ -1,0 +1,228 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Loader2 } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import {
+  downloadAnnotationsReport,
+  type FetchAnnotationsParams,
+} from "@/lib/api/annotations"
+import {
+  buildSelectedFieldsParam,
+  getAssemblyTsvFields,
+  getDefaultTsvFields,
+  getExtendedTsvFields,
+} from "@/lib/annotations-tsv-fields"
+import { useUIStore } from "@/lib/stores/ui"
+
+interface DownloadTsvPanelProps {
+  totalAnnotations: number
+  buildDownloadParams: () => FetchAnnotationsParams
+}
+
+export function DownloadTsvPanel({
+  totalAnnotations,
+  buildDownloadParams,
+}: DownloadTsvPanelProps) {
+  const closeRightSidebar = useUIStore((state) => state.closeRightSidebar)
+  const [loading, setLoading] = useState(false)
+  const [checkedExtended, setCheckedExtended] = useState<Set<string>>(new Set())
+
+  const defaultFields = useMemo(() => getDefaultTsvFields(), [])
+  const extendedFields = useMemo(() => getExtendedTsvFields(), [])
+  const assemblyFields = useMemo(() => getAssemblyTsvFields(), [])
+  const additionalCount = checkedExtended.size
+  const totalColumnCount = defaultFields.length + additionalCount
+
+  useEffect(() => {
+    setCheckedExtended(new Set())
+  }, [])
+
+  const toggleExtendedField = useCallback((key: string, checked: boolean) => {
+    setCheckedExtended((prev) => {
+      const next = new Set(prev)
+      if (checked) {
+        next.add(key)
+      } else {
+        next.delete(key)
+      }
+      return next
+    })
+  }, [])
+
+  const handleDownload = useCallback(async () => {
+    try {
+      setLoading(true)
+      const params = { ...buildDownloadParams() }
+      delete params.limit
+      delete params.offset
+
+      const selectedFields = buildSelectedFieldsParam(checkedExtended)
+      if (selectedFields) {
+        params.selected_fields = selectedFields
+      }
+
+      const blob = await downloadAnnotationsReport(params)
+      const url = window.URL.createObjectURL(blob)
+      const anchor = document.createElement("a")
+      anchor.href = url
+      anchor.download = "annotations_report.tsv"
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(url)
+      closeRightSidebar()
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }, [buildDownloadParams, checkedExtended, closeRightSidebar])
+
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          Generate a TSV report of the current annotation results based on your active filters.
+        </p>
+
+        <div className="p-3 rounded-md border bg-muted/20">
+          <div className="font-medium text-foreground">Default columns (always included)</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {defaultFields.map((field) => (
+              <span
+                key={field.key}
+                className="inline-flex items-center rounded-md border bg-background px-2 py-0.5 text-xs font-mono text-muted-foreground"
+              >
+                {field.key}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-md border">
+          <div className="font-medium text-foreground">Additional columns</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Select extra fields to append after the default columns.
+          </p>
+          <div className="mt-3 max-h-72 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              {extendedFields.map((field) => {
+                const checkboxId = `tsv-field-${field.key}`
+                return (
+                  <div key={field.key} className="flex items-start gap-2">
+                    <Checkbox
+                      id={checkboxId}
+                      checked={checkedExtended.has(field.key)}
+                      onCheckedChange={(value) =>
+                        toggleExtendedField(field.key, value === true)
+                      }
+                      disabled={loading}
+                    />
+                    <Label
+                      htmlFor={checkboxId}
+                      className="cursor-pointer text-sm leading-snug"
+                    >
+                      <span className="font-medium text-foreground">{field.label}</span>
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        {field.key}
+                      </span>
+                    </Label>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3 rounded-md border">
+          <div className="font-medium text-foreground">Assembly fields</div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Resolved from the parent genome assembly record (joined on assembly accession),
+            so you can get both the GFF and the FASTA download link in one TSV.
+          </p>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+            {assemblyFields.map((field) => {
+              const checkboxId = `tsv-field-${field.key}`
+              return (
+                <div key={field.key} className="flex items-start gap-2">
+                  <Checkbox
+                    id={checkboxId}
+                    checked={checkedExtended.has(field.key)}
+                    onCheckedChange={(value) =>
+                      toggleExtendedField(field.key, value === true)
+                    }
+                    disabled={loading}
+                  />
+                  <Label
+                    htmlFor={checkboxId}
+                    className="cursor-pointer text-sm leading-snug"
+                  >
+                    <span className="font-medium text-foreground">{field.label}</span>
+                    <span className="block font-mono text-xs text-muted-foreground">
+                      {field.key}
+                    </span>
+                  </Label>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="p-3 rounded-md border bg-muted/40 space-y-2">
+          <div className="font-medium text-foreground">Summary</div>
+          <ul className="text-muted-foreground list-disc list-inside space-y-1">
+            <li>
+              Total annotations in current result set:{" "}
+              <span className="text-foreground font-semibold">
+                {totalAnnotations.toLocaleString()}
+              </span>
+            </li>
+            <li>
+              Columns to export:{" "}
+              <span className="text-foreground font-semibold">{totalColumnCount}</span>{" "}
+              ({defaultFields.length} default
+              {additionalCount > 0 ? ` + ${additionalCount} additional` : ""})
+            </li>
+          </ul>
+        </div>
+
+        <div className="p-3 rounded-md border bg-amber-50 dark:bg-amber-900/20">
+          <div className="font-medium text-foreground">About file URLs in the report</div>
+          <ul className="mt-2 text-amber-800 dark:text-amber-200 text-xs space-y-1">
+            <li>
+              <span className="font-semibold text-foreground">source_url</span>: direct link to
+              the original source file provided by the data source.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">bgzip_path/csi_path</span>: relative path of
+              the file processed by Annotrieve (sorted, bgzipped, and indexed). To download,
+              prepend{" "}
+              <span className="font-mono text-foreground">
+                https://genome.crg.es/annotrieve/files
+              </span>{" "}
+              to this path.
+            </li>
+            <li>
+              <span className="font-semibold text-foreground">assembly_download_url</span>: direct
+              link to the genome assembly FASTA file, resolved from the assembly record. Left
+              empty when the URL is not yet resolved.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div className="border-t p-3 flex justify-end gap-2 shrink-0 bg-background">
+        <Button variant="outline" onClick={closeRightSidebar} disabled={loading}>
+          Cancel
+        </Button>
+        <Button onClick={handleDownload} disabled={loading} className="gap-2">
+          {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+          {loading ? "Preparing…" : "Download TSV"}
+        </Button>
+      </div>
+    </div>
+  )
+}

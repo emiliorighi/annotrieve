@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type RightSidebarView = "file-overview" | "taxonomic-tree" | "assemblies-list" | "taxon-details" | null
+export type RightSidebarView = "file-overview" | "taxonomic-tree" | "assemblies-list" | "taxon-details" | "download-tsv" | null
 
 export type Theme = 'light' | 'dark'
 
@@ -22,6 +22,8 @@ interface UIState {
       annotation?: any // For file-overview
       taxid?: string // For taxonomic-tree
       assemblyAccession?: string // For assemblies-list
+      totalAnnotations?: number // For download-tsv
+      buildDownloadParams?: () => any // For download-tsv
     }
   }
   
