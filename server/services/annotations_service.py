@@ -46,9 +46,13 @@ TSV_BUFFER_SIZE = 5000
 
 def stream_annotation_tsv(annotations, selected_fields=None):
     field_map = tsv_fields_helper.resolve_tsv_field_map(selected_fields)
+    assembly_field_map = tsv_fields_helper.resolve_assembly_tsv_field_map(selected_fields)
     mongo_paths = list(field_map.values())
-    column_keys = list(field_map.keys())
-    extended_keys = set(constants_helper.FIELD_TSV_EXTENDED_MAP.keys())
+    column_keys = list(field_map.keys()) + list(assembly_field_map.keys())
+    accession_index = mongo_paths.index("assembly_accession")
+    extended_keys = set(constants_helper.FIELD_TSV_EXTENDED_MAP.keys()) | set(
+        constants_helper.FIELD_TSV_ASSEMBLY_MAP.keys()
+    )
     use_extended_formatting = selected_fields is not None and bool(
         params_helper.normalize_to_list(selected_fields)
     )
@@ -69,6 +73,13 @@ def stream_annotation_tsv(annotations, selected_fields=None):
             annotations, mongo_paths, batch_size=TSV_BUFFER_SIZE
         )
         while batch := list(itertools.islice(cursor, TSV_BUFFER_SIZE)):
+            if assembly_field_map:
+                # One batched join query per buffer instead of per row, keyed on
+                # the distinct assembly_accessions already present in the batch.
+                assembly_values = tsv_fields_helper.resolve_assembly_rows(
+                    batch, accession_index, assembly_field_map
+                )
+                batch = [row + extra for row, extra in zip(batch, assembly_values)]
             yield "".join(format_row(row) for row in batch).encode()
     return StreamingResponse(
         row_iterator(),

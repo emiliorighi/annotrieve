@@ -19,6 +19,7 @@ import {
 } from "@/lib/api/annotations"
 import {
   buildSelectedFieldsParam,
+  getAssemblyTsvFields,
   getDefaultTsvFields,
   getExtendedTsvFields,
 } from "@/lib/annotations-tsv-fields"
@@ -41,6 +42,7 @@ export function DownloadTsvDialog({
 
   const defaultFields = useMemo(() => getDefaultTsvFields(), [])
   const extendedFields = useMemo(() => getExtendedTsvFields(), [])
+  const assemblyFields = useMemo(() => getAssemblyTsvFields(), [])
   const additionalCount = checkedExtended.size
   const totalColumnCount = defaultFields.length + additionalCount
 
@@ -151,7 +153,39 @@ export function DownloadTsvDialog({
             </div>
           </div>
 
-
+          <div className="p-3 rounded-md border">
+            <div className="font-medium text-foreground">Assembly fields</div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Resolved from the parent genome assembly record (joined on assembly accession),
+              so you can get both the GFF and the FASTA download link in one TSV.
+            </p>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              {assemblyFields.map((field) => {
+                const checkboxId = `tsv-field-${field.key}`
+                return (
+                  <div key={field.key} className="flex items-start gap-2">
+                    <Checkbox
+                      id={checkboxId}
+                      checked={checkedExtended.has(field.key)}
+                      onCheckedChange={(value) =>
+                        toggleExtendedField(field.key, value === true)
+                      }
+                      disabled={loading}
+                    />
+                    <Label
+                      htmlFor={checkboxId}
+                      className="cursor-pointer text-sm leading-snug"
+                    >
+                      <span className="font-medium text-foreground">{field.label}</span>
+                      <span className="block font-mono text-xs text-muted-foreground">
+                        {field.key}
+                      </span>
+                    </Label>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
 
           <div className="p-3 rounded-md border bg-muted/40 space-y-2">
             <div className="font-medium text-foreground">Summary</div>
@@ -185,6 +219,11 @@ export function DownloadTsvDialog({
                   https://genome.crg.es/annotrieve/files
                 </span>{" "}
                 to this path.
+              </li>
+              <li>
+                <span className="font-semibold text-foreground">assembly_download_url</span>: direct
+                link to the genome assembly FASTA file, resolved from the assembly record. Left
+                empty when the URL is not yet resolved.
               </li>
             </ul>
           </div>
