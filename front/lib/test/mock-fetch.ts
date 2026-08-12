@@ -34,47 +34,34 @@ export function mockJsonResponse(
   body: unknown,
   init?: { status?: number; headers?: HeadersInit },
 ): Response {
-  const status = init?.status ?? 200
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: new Headers(init?.headers),
-    json: async () => body,
-    blob: async () => new Blob([JSON.stringify(body)]),
-    text: async () => JSON.stringify(body),
-  } as Response
+  const headers = new Headers(init?.headers)
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json")
+  }
+  return new Response(JSON.stringify(body), {
+    status: init?.status ?? 200,
+    headers,
+  })
 }
 
 export function mockBlobResponse(
   blob: Blob,
   init?: { status?: number; headers?: HeadersInit },
 ): Response {
-  const status = init?.status ?? 200
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: new Headers(init?.headers),
-    json: async () => {
-      throw new Error("mockBlobResponse: json() not available")
-    },
-    blob: async () => blob,
-    text: async () => blob.text(),
-  } as Response
+  return new Response(blob, {
+    status: init?.status ?? 200,
+    headers: init?.headers,
+  })
 }
 
 export function mockTextResponse(
   text: string,
   init?: { status?: number; headers?: HeadersInit },
 ): Response {
-  const status = init?.status ?? 200
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    headers: new Headers(init?.headers),
-    json: async () => JSON.parse(text),
-    blob: async () => new Blob([text]),
-    text: async () => text,
-  } as Response
+  return new Response(text, {
+    status: init?.status ?? 200,
+    headers: init?.headers,
+  })
 }
 
 export function getFetchCalls(): FetchCall[] {

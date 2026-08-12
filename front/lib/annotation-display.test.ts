@@ -22,13 +22,20 @@ function portal(id: string, name = "Org"): PortalAnnotation {
     assembly_name: "asm",
     source_file_info: {
       database: "RefSeq",
-      url: "https://example.com",
+      provider: "NCBI",
       last_modified: "2020-01-01",
+      uncompressed_md5: id,
+      pipeline: { name: "x", version: "1", method: "m" },
+      release_date: "2020-01-01",
+      source_database: "RefSeq",
     },
     indexed_file_info: {
       uncompressed_md5: id,
       file_size: 1,
       bgzipped_path: "/x",
+      csi_path: "/x.csi",
+      processed_at: "2020-01-01T00:00:00Z",
+      pipeline: { name: "x", version: "1", method: "m" },
     },
     features_summary: summary,
   }
