@@ -10,6 +10,7 @@ from db.models import (
     AssemblyStats,
 )
 from helpers import assembly_sequence_files as seq_files
+from helpers.constants import PLACEHOLDER_DOWNLOAD_URL_PREFIX
 from mongoengine import Q
 from clients import ncbi_datasets as ncbi_datasets_client
 from .classes import (
@@ -26,7 +27,6 @@ import time
 
 FTP_BASE = "https://ftp.ncbi.nlm.nih.gov/genomes/all"
 NCBI_FTP_SITE = "https://ftp.ncbi.nlm.nih.gov"
-PLACEHOLDER_DOWNLOAD_URL_PREFIX = "http://localhost/annotrieve/pending/"
 REQUEST_TIMEOUT = 15
 _FTP_REQUEST_COUNT = 0
 _FTP_RATE_LIMIT_EVERY = 3

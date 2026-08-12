@@ -24,7 +24,12 @@ const TSV_FIELD_GROUP_LABELS: Record<string, string> = {
   feature_summary: "Feature summary",
   gene_stats: "Gene statistics",
   deprecated: "Deprecated",
+  assembly: "Assembly",
 }
+
+// Groups that are handled by their own dedicated UI section instead of the
+// generic "Additional columns" list (see getAssemblyTsvFields / download-tsv-dialog.tsx).
+const EXTENDED_GROUP_EXCLUDE_LIST = new Set(["deprecated", "assembly"])
 
 const TSV_FIELD_META: Array<{
   key: string
@@ -79,6 +84,10 @@ const TSV_FIELD_META: Array<{
   { key: "pseudogene_gene_count", label: "Pseudogene count", group: "gene_stats", isDefault: false },
   { key: "pseudogene_gene_length_mean", label: "Pseudogene length mean", group: "gene_stats", isDefault: false },
   { key: "mapped_regions", label: "Mapped regions (deprecated)", group: "deprecated", isDefault: false },
+  // Assembly (joined from the parent GenomeAssembly model)
+  { key: "assembly_refseq_category", label: "RefSeq category (reference genome)", group: "assembly", isDefault: false },
+  { key: "assembly_download_url", label: "Assembly download URL", group: "assembly", isDefault: false },
+  { key: "assembly_gc_percent", label: "Assembly GC content (%)", group: "assembly", isDefault: false },
 ]
 
 function buildFieldGroups(includeDefault: boolean): TsvFieldGroup[] {
@@ -115,8 +124,16 @@ export function getDefaultTsvFields(): TsvFieldDefinition[] {
 
 export function getExtendedTsvFields(): TsvFieldDefinition[] {
   return TSV_FIELD_META.filter(
-    (field) => !field.isDefault && field.group !== "deprecated"
+    (field) => !field.isDefault && !EXTENDED_GROUP_EXCLUDE_LIST.has(field.group)
   ).map((field) => ({
+    key: field.key,
+    label: field.label,
+    isDefault: false,
+  }))
+}
+
+export function getAssemblyTsvFields(): TsvFieldDefinition[] {
+  return TSV_FIELD_META.filter((field) => field.group === "assembly").map((field) => ({
     key: field.key,
     label: field.label,
     isDefault: false,

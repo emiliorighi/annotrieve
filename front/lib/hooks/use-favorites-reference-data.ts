@@ -7,6 +7,11 @@ import {
   getGeneCategoryMetricValues,
   getTranscriptTypeMetricValues,
 } from "@/lib/api/annotations"
+import {
+  filterFiniteMetricValues,
+  meanOf,
+  medianOf,
+} from "@/lib/annotation-metric-values"
 
 export type EntityType = "genes" | "transcripts"
 
@@ -75,7 +80,7 @@ export function useFavoritesReferenceData({
         }
 
         if (!cancelled) {
-          setValues(result.values.filter((v) => typeof v === "number" && isFinite(v)))
+          setValues(filterFiniteMetricValues(result.values))
         }
       } catch (err) {
         if (!cancelled) {
@@ -95,19 +100,8 @@ export function useFavoritesReferenceData({
     }
   }, [enabled, entityType, categoryOrType, metric, favoriteIds.join(","), buildAnnotationsParams])
 
-  const mean = useMemo(() => {
-    if (values.length === 0) return null
-    return values.reduce((a, b) => a + b, 0) / values.length
-  }, [values])
-
-  const median = useMemo(() => {
-    if (values.length === 0) return null
-    const sorted = [...values].sort((a, b) => a - b)
-    const mid = Math.floor(sorted.length / 2)
-    return sorted.length % 2 === 0
-      ? (sorted[mid - 1] + sorted[mid]) / 2
-      : sorted[mid]
-  }, [values])
+  const mean = useMemo(() => meanOf(values), [values])
+  const median = useMemo(() => medianOf(values), [values])
 
   return { values, mean, median, loading, error }
 }

@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { listAnnotationsByMd5Checksums } from "@/lib/api/annotations"
-import { mergeFavoriteAnnotations, migrateToPortalAnnotation } from "@/lib/annotation-display"
+import {
+  mergeFavoriteAnnotations,
+  migrateToPortalAnnotation,
+  remoteFavoriteIds as filterRemoteFavoriteIds,
+} from "@/lib/annotation-display"
 import type { Annotation, CustomAnnotation, PortalAnnotation } from "@/lib/types"
 
 export interface UseMergedFavoriteAnnotationsOptions {
@@ -34,7 +38,7 @@ export function useMergedFavoriteAnnotations({
   )
 
   const remoteFavoriteIds = useMemo(
-    () => favoriteIds.filter((id) => !customIdsSet.has(id)),
+    () => filterRemoteFavoriteIds(favoriteIds, customIdsSet),
     [favoriteIds, customIdsSet],
   )
 

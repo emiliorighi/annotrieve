@@ -1,0 +1,18 @@
+name: Main pipeline (test then build)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  front-tests:
+    uses: ./.github/workflows/front-test.yml
+
+  server-tests:
+    uses: ./.github/workflows/server-test.yml
+
+  build-and-push:
+    needs: [front-tests, server-tests]
+    uses: ./.github/workflows/build-all.yml
+    secrets: inherit

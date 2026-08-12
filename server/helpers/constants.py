@@ -8,6 +8,13 @@ class TsvFieldMeta(TypedDict):
     is_default: bool
 
 
+# Canonical placeholder prefix used for GenomeAssembly.download_url before the real
+# NCBI FTP path is resolved. Kept here (instead of jobs/services/assembly.py) so
+# lightweight consumers (e.g. the TSV export) don't need to import that module's
+# heavier dependencies (aiohttp, requests, ncbi client) just for this constant.
+PLACEHOLDER_DOWNLOAD_URL_PREFIX = "http://localhost/annotrieve/pending/"
+
+
 # Frozen production default — do not remove, reorder, or rename keys.
 FIELD_TSV_MAP: dict[str, str] = {
     "annotation_id": "annotation_id",
@@ -69,9 +76,22 @@ FIELD_TSV_EXTENDED_MAP: dict[str, str] = {
     "mapped_regions": "mapped_regions",
 }
 
+# Assembly-derived columns. Unlike FIELD_TSV_EXTENDED_MAP, these paths resolve
+# against the GenomeAssembly collection (joined on assembly_accession), not
+# GenomeAnnotation, so they are kept in a separate map and require a dedicated
+# resolver/join step (see helpers/tsv_fields.py). Column keys are prefixed with
+# `assembly_` and reuse the exact GenomeAssembly field name to make the parent
+# model they come from unambiguous.
+FIELD_TSV_ASSEMBLY_MAP: dict[str, str] = {
+    "assembly_refseq_category": "refseq_category",
+    "assembly_download_url": "download_url",
+    "assembly_gc_percent": "assembly_stats__gc_percent",
+}
+
 FIELD_TSV_ALL_MAP: dict[str, str] = {
     **FIELD_TSV_MAP,
     **FIELD_TSV_EXTENDED_MAP,
+    **FIELD_TSV_ASSEMBLY_MAP,
 }
 
 TSV_FIELD_META: list[TsvFieldMeta] = [
@@ -122,6 +142,10 @@ TSV_FIELD_META: list[TsvFieldMeta] = [
     {"key": "pseudogene_gene_count", "label": "Pseudogene count", "group": "gene_stats", "is_default": False},
     {"key": "pseudogene_gene_length_mean", "label": "Pseudogene length mean", "group": "gene_stats", "is_default": False},
     {"key": "mapped_regions", "label": "Mapped regions (deprecated)", "group": "deprecated", "is_default": False},
+    # Assembly (joined from the parent GenomeAssembly model)
+    {"key": "assembly_refseq_category", "label": "RefSeq category (reference genome)", "group": "assembly", "is_default": False},
+    {"key": "assembly_download_url", "label": "Assembly download URL", "group": "assembly", "is_default": False},
+    {"key": "assembly_gc_percent", "label": "Assembly GC content (%)", "group": "assembly", "is_default": False},
 ]
 
 TSV_FIELD_GROUP_LABELS: dict[str, str] = {
@@ -133,6 +157,7 @@ TSV_FIELD_GROUP_LABELS: dict[str, str] = {
     "feature_summary": "Feature summary",
     "gene_stats": "Gene statistics",
     "deprecated": "Deprecated",
+    "assembly": "Assembly",
 }
 
 NO_VALUE_KEY = "no_value"

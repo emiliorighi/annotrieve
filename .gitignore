@@ -2,6 +2,7 @@ __pycache__
 *.db
 .DS_Store
 venv
+.venv
 files/
 .env
 docker-compose-dev.yml
@@ -19,4 +20,7 @@ annotrieve_missing_from_tracker.tsv
 broken_source_urls.jsonl
 TODO.txt
 .pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
 graphify-out/
