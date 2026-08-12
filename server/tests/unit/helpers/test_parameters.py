@@ -1,7 +1,11 @@
 import unittest
 
+import pytest
+
 from helpers import parameters as parameters_helper
 from helpers import annotation as annotation_helper
+
+pytestmark = pytest.mark.unit
 
 
 class SplitStringParamTests(unittest.TestCase):

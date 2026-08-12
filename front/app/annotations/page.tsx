@@ -21,7 +21,6 @@ import { listAnnotations, type FetchAnnotationsParams } from "@/lib/api/annotati
 import type { AnnotationRecord } from "@/lib/api/types"
 import { RightSidebar } from "@/components/sidebar/right-sidebar"
 import { FavoritesFloatingButton } from "@/components/layout/favorites-floating-button"
-import { DownloadTsvDialog } from "@/components/annotations/download-tsv-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -84,7 +83,6 @@ function AnnotationsContent() {
   const [annotations, setAnnotations] = useState<AnnotationRecord[]>([])
   const [totalAnnotations, setTotalAnnotations] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [reportOpen, setReportOpen] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
   const hasInitializedRef = useRef(false)
   const fetchRequestIdRef = useRef(0)
@@ -108,6 +106,10 @@ function AnnotationsContent() {
   const buildDownloadParams = useCallback((): FetchAnnotationsParams => {
     return buildAnnotationsParams(false, []) as FetchAnnotationsParams
   }, [buildAnnotationsParams])
+
+  const handleDownloadTsv = useCallback(() => {
+    openRightSidebar("download-tsv", { totalAnnotations, buildDownloadParams })
+  }, [openRightSidebar, totalAnnotations, buildDownloadParams])
 
   // ── Redirect legacy entity query params ───────────────────────────────────
   useEffect(() => {
@@ -307,7 +309,7 @@ function AnnotationsContent() {
                       <Database className="h-4 w-4 mr-2" />
                       Browse Assemblies
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setReportOpen(true)}>
+                    <DropdownMenuItem onClick={handleDownloadTsv}>
                       <FileText className="h-4 w-4 mr-2" />
                       Download TSV
                     </DropdownMenuItem>
@@ -336,7 +338,7 @@ function AnnotationsContent() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setReportOpen(true)}
+                  onClick={handleDownloadTsv}
                   className="hidden lg:flex h-9 px-3 gap-1.5 shrink-0"
                   title="Download TSV report for current filters"
                 >
@@ -355,13 +357,6 @@ function AnnotationsContent() {
               <ActiveFilters hideToggle />
             </div>
           </header>
-
-          <DownloadTsvDialog
-            open={reportOpen}
-            onOpenChange={setReportOpen}
-            totalAnnotations={totalAnnotations}
-            buildDownloadParams={buildDownloadParams}
-          />
 
           {/* Scrollable content */}
           <div className="flex-1 overflow-y-auto">

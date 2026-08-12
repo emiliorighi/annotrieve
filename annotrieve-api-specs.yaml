@@ -22,6 +22,8 @@ tags:
     description: "Taxonomy information endpoints"
   - name: "bioprojects"
     description: "BioProject information endpoints"
+  - name: "analytics"
+    description: "Public usage analytics endpoints"
 
 paths:
   /annotations:
@@ -96,7 +98,7 @@ paths:
         - "annotations"
       operationId: "getAnnotationsReport"
       summary: "Download annotation metadata as TSV"
-      description: "Streams a TSV file with annotation metadata columns. By default exports annotation_id, assembly_accession, assembly_name, organism_name, taxid, database, provider, source_url, bgzip_path, and csi_path. Use selected_fields to append additional extended columns."
+      description: "Streams a TSV file with annotation metadata columns. By default exports annotation_id, assembly_accession, assembly_name, organism_name, taxid, database, provider, source_url, bgzip_path, and csi_path. Use selected_fields to append additional extended columns, including assembly-derived fields (assembly_refseq_category, assembly_download_url, assembly_gc_percent) resolved via a join on assembly_accession."
       parameters:
         - $ref: "#/components/parameters/filter"
         - $ref: "#/components/parameters/limit"
@@ -138,7 +140,7 @@ paths:
         - "annotations"
       operationId: "postAnnotationsReport"
       summary: "Download annotation metadata via POST"
-      description: "Same as GET /annotations/report, but accepts filters in the request body. Omit selected_fields to preserve the default production column set; provide it to append extended columns after the defaults."
+      description: "Same as GET /annotations/report, but accepts filters in the request body. Omit selected_fields to preserve the default production column set; provide it to append extended columns after the defaults, including assembly-derived fields (assembly_refseq_category, assembly_download_url, assembly_gc_percent) resolved via a join on assembly_accession."
       requestBody:
         required: true
         content:
@@ -256,6 +258,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaginatedAnnotationErrorsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/aggregates/taxons:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getAnnotationsAggregatesByTaxonRank"
+      summary: "Get annotation aggregates grouped by taxon rank"
+      description: "Returns one record per taxon at the given rank with average coding/non-coding/pseudogene gene counts and annotation count."
+      parameters:
+        - name: rank
+          in: query
+          required: true
+          description: "Taxonomic rank to aggregate by."
+          schema:
+            type: string
+            enum: ["domain", "kingdom", "phylum", "class", "order", "family", "genus"]
+      responses:
+        "200":
+          description: "Aggregates by taxon"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnnotationsAggregatesByTaxonResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "500":
@@ -734,6 +763,245 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/busco-stats:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getBuscoStats"
+      summary: "Get BUSCO stats summary"
+      description: "Returns BUSCO stats summary with aggregated statistics for metrics only (complete, single_copy, duplicated, fragmented, missing). No categories."
+      parameters:
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "BUSCO stats summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuscoStatsSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postBuscoStats"
+      summary: "Get BUSCO stats summary via POST"
+      description: "Same as GET /annotations/busco-stats, but accepts filters in the request body."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationQueryParams"
+      responses:
+        "200":
+          description: "BUSCO stats summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuscoStatsSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/busco-stats/{metric}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getBuscoMetricValues"
+      summary: "Get raw values for a specific BUSCO metric"
+      description: "Returns raw values for a specific BUSCO metric (for plotting histograms)."
+      parameters:
+        - name: metric
+          in: path
+          required: true
+          description: "BUSCO metric name (complete, single_copy, duplicated, fragmented, or missing)"
+          schema:
+            type: string
+            enum: ["complete", "single_copy", "duplicated", "fragmented", "missing"]
+        - name: include_annotations
+          in: query
+          description: "If true, include annotation_ids list in response"
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/filter"
+        - $ref: "#/components/parameters/taxids"
+        - $ref: "#/components/parameters/assembly_accessions"
+        - $ref: "#/components/parameters/bioproject_accessions"
+        - $ref: "#/components/parameters/db_sources"
+        - $ref: "#/components/parameters/feature_sources"
+        - $ref: "#/components/parameters/biotypes"
+        - $ref: "#/components/parameters/feature_types"
+        - $ref: "#/components/parameters/pipelines"
+        - $ref: "#/components/parameters/providers"
+        - $ref: "#/components/parameters/md5_checksums"
+        - $ref: "#/components/parameters/has_stats"
+        - $ref: "#/components/parameters/refseq_categories"
+        - $ref: "#/components/parameters/assembly_levels"
+        - $ref: "#/components/parameters/assembly_statuses"
+        - $ref: "#/components/parameters/assembly_types"
+        - $ref: "#/components/parameters/release_date_from"
+        - $ref: "#/components/parameters/release_date_to"
+      responses:
+        "200":
+          description: "Metric values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuscoMetricValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags:
+        - "annotations"
+      operationId: "postBuscoMetricValues"
+      summary: "Get BUSCO metric values via POST"
+      description: "Same as GET /annotations/busco-stats/{metric}, but accepts filters in the request body."
+      parameters:
+        - name: metric
+          in: path
+          required: true
+          description: "BUSCO metric name (complete, single_copy, duplicated, fragmented, or missing)"
+          schema:
+            type: string
+            enum: ["complete", "single_copy", "duplicated", "fragmented", "missing"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/AnnotationQueryParams"
+                - type: object
+                  properties:
+                    include_annotations:
+                      type: boolean
+                      description: "If true, include annotation_ids list in response"
+                      default: false
+      responses:
+        "200":
+          description: "Metric values"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuscoMetricValuesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/upload-gff:
+    post:
+      tags:
+        - "annotations"
+      operationId: "uploadCustomGff"
+      summary: "Upload a custom GFF/GFF3 file"
+      description: "Upload a custom GFF/GFF3 file and enqueue a background job to compute feature summary and statistics. Subject to a per-client daily rate limit."
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - custom_name
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: "GFF/GFF3 file (.gff, .gff3, .gff.gz, or .gff3.gz)"
+                custom_name:
+                  type: string
+                  description: "Display name for the uploaded annotation"
+      responses:
+        "200":
+          description: "Upload accepted and job enqueued"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadGffResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "413":
+          description: "Uploaded file is too large"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: "Daily upload limit reached"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/upload-gff/jobs/{task_id}:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getUploadGffJobStatus"
+      summary: "Get custom GFF upload job status"
+      description: "Returns the status of a custom GFF upload background job."
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: "Celery task ID returned by POST /annotations/upload-gff"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "Job status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadJobStatusResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /annotations/upload-gff/rate-limit:
+    get:
+      tags:
+        - "annotations"
+      operationId: "getUploadGffRateLimit"
+      summary: "Get custom GFF upload rate-limit status"
+      description: "Returns how many uploads were used in the last 24 hours and remaining quota for the calling client."
+      responses:
+        "200":
+          description: "Rate-limit status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadRateLimitResponse"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -1296,6 +1564,39 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /taxons/flattened-tree:
+    get:
+      tags:
+        - "taxons"
+      operationId: "getFlattenedTree"
+      summary: "Get flattened taxonomy tree"
+      description: "Returns a flattened taxonomy tree. When a prebuilt export exists, responds with a 307 redirect to the static file under /annotrieve/files/taxonomy/. Otherwise returns an on-the-fly aggregation as JSON ({fields, rows}) or a TSV stream depending on format."
+      parameters:
+        - name: format
+          in: query
+          description: "Response format: json (default) or tsv."
+          schema:
+            type: string
+            enum: ["json", "tsv"]
+            default: "json"
+      responses:
+        "200":
+          description: "Flattened taxonomy tree"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FlattenedTreeResponse"
+            text/tab-separated-values:
+              schema:
+                type: string
+                description: "TSV payload streamed line by line"
+        "307":
+          description: "Redirect to prebuilt static flattened-tree file when available"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /taxons/{taxid}:
     get:
       tags:
@@ -1451,6 +1752,127 @@ paths:
                 $ref: "#/components/schemas/BioProject"
         "404":
           $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/frequencies/country:
+    get:
+      tags:
+        - "analytics"
+      operationId: "getCountryFrequencies"
+      summary: "Get unique users by country"
+      description: "Returns frequency counts of unique users by country. Each user is identified by an anonymous fingerprint (HMAC of IP)."
+      responses:
+        "200":
+          description: "Country frequency counts"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FrequencyCounts"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/top-visitors:
+    get:
+      tags:
+        - "analytics"
+      operationId: "getTopVisitors"
+      summary: "Get top anonymous visitors by visit days"
+      deprecated: true
+      description: "Top anonymous visitors by distinct visit days. Prefer /analytics/top-countries for public usage UI. Never returns fingerprints or IPs."
+      parameters:
+        - name: limit
+          in: query
+          description: "Maximum number of visitors to return (capped at 5)"
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 5
+            default: 5
+      responses:
+        "200":
+          description: "Top visitors"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopVisitorsResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/summary:
+    get:
+      tags:
+        - "analytics"
+      operationId: "getUsageSummary"
+      summary: "Get public usage summary metrics"
+      description: "Public usage hero metrics from UserAnalytics (API-activity users). Never returns fingerprints or IPs."
+      responses:
+        "200":
+          description: "Usage summary"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageSummaryResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/top-countries:
+    get:
+      tags:
+        - "analytics"
+      operationId: "getTopCountries"
+      summary: "Get top countries by unique users"
+      description: "Top countries by unique users (fingerprints), not visit-day counts."
+      parameters:
+        - name: limit
+          in: query
+          description: "Maximum number of countries to return"
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        "200":
+          description: "Top countries"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopCountriesResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/capabilities:
+    get:
+      tags:
+        - "analytics"
+      operationId: "getUsageCapabilities"
+      summary: "Get product-capability usage"
+      description: "Product-capability usage from UsageRollup (unique users who touched each bucket). Empty items if the daily rollup has not run yet."
+      responses:
+        "200":
+          description: "Capability usage"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageCapabilitiesResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /analytics/top-entities:
+    get:
+      tags:
+        - "analytics"
+      operationId: "getTopEntities"
+      summary: "Get top opened entities"
+      description: "Top-10 opened assemblies, annotations, and taxons by unique users."
+      responses:
+        "200":
+          description: "Top entities"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopEntitiesResponse"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -1621,10 +2043,10 @@ components:
     selected_fields:
       name: "selected_fields"
       in: "query"
-      description: "Comma-separated list of extended TSV column keys to append after the default export columns. Only applies to /annotations/report. Omit to keep the production default column set."
+      description: "Comma-separated list of extended TSV column keys to append after the default export columns. Only applies to /annotations/report. Omit to keep the production default column set. Assembly-derived columns (assembly_refseq_category, assembly_download_url, assembly_gc_percent) are resolved via a join on assembly_accession; assembly_download_url is left empty when the URL is still a localhost placeholder."
       schema:
         type: "string"
-        example: "release_date,taxon_lineage,busco_complete"
+        example: "release_date,taxon_lineage,busco_complete,assembly_gc_percent"
     rank:
       name: "rank"
       in: "query"
@@ -1726,7 +2148,7 @@ components:
           type: string
         selected_fields:
           type: string
-          description: "Comma-separated extended TSV column keys to append after default columns (report export only)."
+          description: "Comma-separated extended TSV column keys to append after default columns (report export only). Includes annotation extended fields and assembly-derived columns (assembly_refseq_category, assembly_download_url, assembly_gc_percent)."
 
     AssemblyQueryParams:
       type: object
@@ -2781,3 +3203,282 @@ components:
         - metric
         - values
         - missing
+
+    AnnotationsAggregatesByTaxonResponse:
+      type: object
+      description: "Annotation aggregates grouped by taxon at a given rank. fields lists the fixed column order used by rows."
+      properties:
+        fields:
+          type: array
+          items:
+            type: string
+          description: "Fixed column names: taxid, taxon_name, annotations_count, avg_coding_genes_count, avg_non_coding_genes_count, avg_pseudogenes_count"
+        rows:
+          type: array
+          items:
+            type: array
+            items: {}
+          description: "One row per taxon, values aligned with fields"
+      required:
+        - fields
+        - rows
+
+    BuscoStatsSummaryResponse:
+      type: object
+      properties:
+        total_annotations:
+          type: integer
+          description: "Total number of annotations in queryset"
+        summary:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/BuscoMetricSummary"
+          description: "Per-metric stats keyed by complete, single_copy, duplicated, fragmented, missing"
+        metrics:
+          type: array
+          items:
+            type: string
+          description: "List of available BUSCO metrics"
+      required:
+        - total_annotations
+        - summary
+        - metrics
+
+    BuscoMetricSummary:
+      type: object
+      properties:
+        annotations_count:
+          type: integer
+          description: "Number of annotations with BUSCO data"
+        missing_annotations_count:
+          type: integer
+          description: "Number of annotations missing BUSCO data"
+        mean:
+          type: number
+          nullable: true
+          description: "Mean value for this metric"
+      required:
+        - annotations_count
+        - missing_annotations_count
+
+    BuscoMetricValuesResponse:
+      type: object
+      properties:
+        metric:
+          type: string
+          description: "The BUSCO metric name"
+        values:
+          type: array
+          items:
+            type: number
+          description: "List of values (ordered by annotation_id)"
+        annotation_ids:
+          type: array
+          items:
+            type: string
+          description: "List of annotation_ids (only if include_annotations=true, ordered to match values)"
+      required:
+        - metric
+        - values
+
+    UploadGffResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+          description: "Celery task ID for the upload job"
+        remaining_quota:
+          type: integer
+          description: "Remaining uploads allowed for this client in the current 24h window"
+      required:
+        - task_id
+        - remaining_quota
+
+    UploadJobStatusResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+        state:
+          type: string
+          description: "Celery task state (PENDING, PROGRESS, SUCCESS, FAILURE, etc.)"
+        meta:
+          type: object
+          additionalProperties: true
+          description: "Progress metadata when state is PROGRESS"
+        result:
+          description: "Job result when state is SUCCESS"
+        error:
+          type: string
+          description: "Error message when state is FAILURE"
+      required:
+        - task_id
+        - state
+
+    UploadRateLimitResponse:
+      type: object
+      properties:
+        used:
+          type: integer
+          description: "Uploads used in the last 24 hours"
+        remaining:
+          type: integer
+          description: "Remaining uploads in the current 24h window"
+      required:
+        - used
+        - remaining
+
+    FlattenedTreeResponse:
+      type: object
+      description: "Flattened taxonomy tree as fields + rows. Column order is fixed."
+      properties:
+        fields:
+          type: array
+          items:
+            type: string
+          description: "Fixed column names: taxid, parent_taxid, scientific_name, annotations_count, assemblies_count, organisms_count, rank, coding_mean_count, non_coding_mean_count, pseudogene_mean_count, mRNA_mean_count, lncRNA_mean_count, tRNA_mean_count, miRNA_mean_count, busco_single_copy_mean, busco_duplicated_mean, busco_fragmented_mean, busco_missing_mean"
+        rows:
+          type: array
+          items:
+            type: array
+            items: {}
+          description: "One row per taxon, values aligned with fields"
+      required:
+        - fields
+        - rows
+
+    TopVisitor:
+      type: object
+      properties:
+        country:
+          type: string
+        visits_count:
+          type: integer
+      required:
+        - country
+        - visits_count
+
+    TopVisitorsResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/TopVisitor"
+
+    UsageSummaryResponse:
+      type: object
+      properties:
+        unique_users:
+          type: integer
+        active_30d:
+          type: integer
+        countries:
+          type: integer
+        returning_pct:
+          type: number
+        as_of:
+          type: string
+          format: date-time
+      required:
+        - unique_users
+        - active_30d
+        - countries
+        - returning_pct
+        - as_of
+
+    TopCountry:
+      type: object
+      properties:
+        country:
+          type: string
+        unique_users:
+          type: integer
+      required:
+        - country
+        - unique_users
+
+    TopCountriesResponse:
+      type: array
+      items:
+        $ref: "#/components/schemas/TopCountry"
+
+    UsageCapabilityItem:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        unique_users:
+          type: integer
+        request_count:
+          type: integer
+      required:
+        - id
+        - label
+        - unique_users
+
+    UsageCapabilitiesResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageCapabilityItem"
+        as_of:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - items
+
+    TopEntityRow:
+      type: object
+      properties:
+        id:
+          type: string
+        unique_users:
+          type: integer
+        label:
+          type: string
+          nullable: true
+        organism_name:
+          type: string
+          nullable: true
+        assembly_accession:
+          type: string
+          nullable: true
+        provider:
+          type: string
+          nullable: true
+        database:
+          type: string
+          nullable: true
+        rank:
+          type: string
+          nullable: true
+      required:
+        - id
+        - unique_users
+
+    TopEntitiesResponse:
+      type: object
+      properties:
+        top_assemblies:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopEntityRow"
+        top_annotations:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopEntityRow"
+        top_taxons:
+          type: array
+          items:
+            $ref: "#/components/schemas/TopEntityRow"
+        as_of:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - top_assemblies
+        - top_annotations
+        - top_taxons

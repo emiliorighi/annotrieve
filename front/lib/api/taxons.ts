@@ -80,7 +80,7 @@ export async function getFlattenedTree(format: 'json' | 'tsv' = 'tsv'): Promise<
 /**
  * Parses TSV text into FlatTreeNode array
  */
-function parseTsvToFlatTreeNodes(tsvText: string): FlatTreeNode[] {
+export function parseTsvToFlatTreeNodes(tsvText: string): FlatTreeNode[] {
   const lines = tsvText.trim().split('\n')
   if (lines.length === 0) return []
   

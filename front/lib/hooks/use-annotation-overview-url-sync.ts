@@ -15,29 +15,10 @@ import {
   syncLatestAnnotationsSearch,
 } from "@/lib/annotations-url-writer"
 import { getAnnotation } from "@/lib/api/annotations"
-import {
-  isPortalAnnotation,
-  migrateToPortalAnnotation,
-  normalizeAnnotation,
-} from "@/lib/annotation-display"
-import type { PortalAnnotation } from "@/lib/types"
+import { toPortalAnnotation } from "@/lib/annotation-display"
 import { useUIStore } from "@/lib/stores/ui"
 
 type AppRouter = ReturnType<typeof useRouter>
-
-function toPortalAnnotation(raw: unknown): PortalAnnotation | null {
-  if (!raw || typeof raw !== "object") return null
-  const record = raw as Record<string, unknown>
-  const migrated = migrateToPortalAnnotation(record) ?? normalizeAnnotation(record)
-  if (migrated && isPortalAnnotation(migrated)) return migrated
-  if (record.annotation_id && record.features_summary && record.organism_name) {
-    return {
-      ...record,
-      kind: "portal",
-    } as PortalAnnotation
-  }
-  return null
-}
 
 function getShownOverviewAnnotationId(): string | null {
   const { rightSidebar } = useUIStore.getState()

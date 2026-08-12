@@ -3,16 +3,14 @@
 import { useMemo } from "react"
 import { useAnnotationsFiltersStore } from "@/lib/stores/annotations-filters"
 import { useAnnotationSubsetsStore } from "@/lib/stores/annotation-subsets"
-import { buildParamsFromFilters } from "@/lib/utils"
+import {
+  buildAnalyticsParamsEntries,
+  type AnalyticsParamsEntry,
+} from "@/lib/analytics-params"
 
 export type DataSource = "current" | "subsets"
 
-export interface ParamsEntry {
-  id: string
-  name: string
-  color?: string
-  params: Record<string, any>
-}
+export type ParamsEntry = AnalyticsParamsEntry
 
 interface UseAnalyticsDataOptions {
   dataSource: DataSource
@@ -34,20 +32,12 @@ export function useAnalyticsData({
   const subsets = useAnnotationSubsetsStore((state) => state.subsets)
 
   return useMemo<ParamsEntry[]>(() => {
-    if (dataSource === "current") {
-      const params = buildAnnotationsParams(false, [])
-      delete params.limit
-      delete params.offset
-      return [{ id: "current", name: "Current filters", params }]
-    }
-
-    return subsets
-      .filter((s) => selectedSubsetIds.includes(s.id))
-      .map((s) => ({
-        id: s.id,
-        name: s.name,
-        color: s.color,
-        params: buildParamsFromFilters(s.filters),
-      }))
+    const currentParams = buildAnnotationsParams(false, [])
+    return buildAnalyticsParamsEntries({
+      dataSource,
+      selectedSubsetIds,
+      currentParams,
+      subsets,
+    })
   }, [dataSource, selectedSubsetIds, subsets, buildAnnotationsParams])
 }

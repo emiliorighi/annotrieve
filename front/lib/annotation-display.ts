@@ -136,6 +136,21 @@ export function normalizeAnnotation(raw: unknown): Annotation | null {
   return migrateToCustomAnnotation(record) ?? migrateToPortalAnnotation(record)
 }
 
+/** Normalize API/store payloads into a portal annotation for overview open. */
+export function toPortalAnnotation(raw: unknown): PortalAnnotation | null {
+  if (!raw || typeof raw !== "object") return null
+  const record = raw as Record<string, unknown>
+  const migrated = migrateToPortalAnnotation(record) ?? normalizeAnnotation(record)
+  if (migrated && isPortalAnnotation(migrated)) return migrated
+  if (record.annotation_id && record.features_summary && record.organism_name) {
+    return {
+      ...record,
+      kind: "portal",
+    } as PortalAnnotation
+  }
+  return null
+}
+
 export function getAnnotationDisplayName(a: Annotation): string {
   if (isCustomAnnotation(a)) return a.custom_name.trim() || a.annotation_id
   return a.organism_name?.trim() || a.assembly_name || a.annotation_id
@@ -158,6 +173,11 @@ export function sortAnnotationsCustomFirst(annotations: Annotation[]): Annotatio
     const bRank = isCustomAnnotation(b) ? 0 : 1
     return aRank - bRank
   })
+}
+
+/** Favorite IDs that need a portal API fetch (exclude custom uploads). */
+export function remoteFavoriteIds(favoriteIds: string[], customIds: Set<string>): string[] {
+  return favoriteIds.filter((id) => !customIds.has(id))
 }
 
 /**
