@@ -60,6 +60,7 @@ def create_app() -> FastAPI:
             "Accept",            # For content negotiation
             "Range",             # For partial content requests (genome browsers)
             "X-Requested-With",  # Common header for AJAX requests
+            "X-Zenodo-Session",  # Opaque Zenodo OAuth broker session (alternative to cookie)
         ],
         expose_headers=[
             "Content-Length",    # For file downloads

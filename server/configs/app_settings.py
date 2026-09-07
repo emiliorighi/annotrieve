@@ -21,5 +21,30 @@ class Settings:
     # Subdirectory under LOCAL_ANNOTATIONS_DIR where temporary uploads are stored
     UPLOAD_TMP_SUBDIR: str = os.getenv("UPLOAD_TMP_SUBDIR", "uploads_tmp")
 
+    # Zenodo OAuth (optional until keys are configured)
+    ZENODO_CLIENT_ID: str = os.getenv("ZENODO_CLIENT_ID", "")
+    ZENODO_CLIENT_SECRET: str = os.getenv("ZENODO_CLIENT_SECRET", "")
+    # Production: https://zenodo.org — sandbox: https://sandbox.zenodo.org
+    ZENODO_BASE_URL: str = os.getenv("ZENODO_BASE_URL", "https://zenodo.org").rstrip("/")
+    # Must match the redirect URI registered on the Zenodo application exactly
+    ZENODO_REDIRECT_URI: str = os.getenv("ZENODO_REDIRECT_URI", "")
+    ZENODO_OAUTH_SCOPES: str = os.getenv(
+        "ZENODO_OAUTH_SCOPES", "deposit:write deposit:actions"
+    )
+    # Where the OAuth callback sends the browser after success/failure
+    ZENODO_FRONTEND_RETURN_URL: str = os.getenv(
+        "ZENODO_FRONTEND_RETURN_URL", "/annotrieve/"
+    )
+    # Browser cookie holding the opaque Annotrieve↔Zenodo session id
+    ZENODO_SESSION_COOKIE: str = os.getenv("ZENODO_SESSION_COOKIE", "annotrieve_zenodo_sid")
+    ZENODO_SESSION_TTL_SECONDS: int = int(
+        os.getenv("ZENODO_SESSION_TTL_SECONDS", str(60 * 60 * 24 * 30))
+    )
+    ZENODO_COOKIE_SECURE: bool = os.getenv("ZENODO_COOKIE_SECURE", "true").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+
 
 settings = Settings()

@@ -140,6 +140,50 @@ class UploadRateLimit(DynamicDocument):
     }
 
 
+class ZenodoOAuthSession(DynamicDocument):
+    """
+    Server-side Zenodo OAuth broker session for anonymous browser clients.
+
+    The browser only ever sees an opaque session_id (httpOnly cookie and/or
+    X-Zenodo-Session header). Access/refresh tokens never leave the API.
+    """
+
+    session_id = StringField(required=True, unique=True)
+    # CSRF state for the authorization-code round trip
+    oauth_state = StringField(required=True)
+    # Optional path/URL the UI asked to return to after callback
+    return_to = StringField()
+
+    access_token = StringField()
+    refresh_token = StringField()
+    token_type = StringField(default="Bearer")
+    scope = StringField()
+    expires_at = DateTimeField()
+
+    created_at = DateTimeField(default=datetime.utcnow)
+    updated_at = DateTimeField(default=datetime.utcnow)
+    # Touched on each authenticated use; Mongo TTL deletes idle sessions
+    last_seen_at = DateTimeField(default=datetime.utcnow)
+
+    meta = {
+        "collection": "zenodo_oauth_sessions",
+        "indexes": [
+            "session_id",
+            "oauth_state",
+            {
+                "fields": ["last_seen_at"],
+                # Default TTL matches ~30d; override via ZENODO_SESSION_TTL_SECONDS
+                # is enforced in application code. Mongo TTL is a safety net.
+                "expireAfterSeconds": 60 * 60 * 24 * 45,
+            },
+        ],
+    }
+
+    @property
+    def is_connected(self) -> bool:
+        return bool(self.access_token)
+
+
 class BioProject(DynamicDocument):
     accession = StringField(required=True, unique=True)
     title = StringField(required=True)
