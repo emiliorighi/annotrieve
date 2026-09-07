@@ -64,6 +64,7 @@ def _clear_collections() -> None:
         UploadRateLimit,
         UsageRollup,
         UserAnalytics,
+        ZenodoOAuthRateLimit,
         ZenodoOAuthSession,
     )
 
@@ -80,6 +81,7 @@ def _clear_collections() -> None:
         UsageRollup,
         UploadRateLimit,
         ZenodoOAuthSession,
+        ZenodoOAuthRateLimit,
     ):
         try:
             model.objects.delete()

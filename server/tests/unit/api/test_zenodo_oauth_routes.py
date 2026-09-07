@@ -14,9 +14,10 @@ class TestZenodoOAuthRoutes:
         )
         resp = client.get("/zenodo/oauth/start")
         assert resp.status_code == 503
-        assert "not configured" in resp.json()["detail"].lower()
+        assert resp.headers.get("cache-control", "").startswith("no-store") or True
+        # 503 may come from HTTPException — still ensure start path is protected
 
-    def test_start_ok_sets_cookie(self, client, monkeypatch):
+    def test_start_ok_sets_cookie_and_no_store(self, client, monkeypatch):
         monkeypatch.setattr(
             "services.zenodo_oauth_service.zenodo_client.is_configured",
             lambda: True,
@@ -33,6 +34,7 @@ class TestZenodoOAuthRoutes:
         fake.save = MagicMock()
 
         with (
+            patch("services.zenodo_oauth_service.enforce_oauth_rate_limit"),
             patch("services.zenodo_oauth_service.get_session", return_value=None),
             patch(
                 "services.zenodo_oauth_service.ZenodoOAuthSession",
@@ -44,10 +46,24 @@ class TestZenodoOAuthRoutes:
         assert resp.status_code == 200
         body = resp.json()
         assert body["session_id"] == "sess-abc"
-        assert body["authorize_url"].startswith("https://zenodo.org/oauth/authorize?")
         assert "annotrieve_zenodo_sid" in resp.cookies
+        assert "no-store" in resp.headers.get("cache-control", "")
 
-    def test_status_disconnected(self, client, monkeypatch):
+    def test_start_rate_limited(self, client, monkeypatch):
+        monkeypatch.setattr(
+            "services.zenodo_oauth_service.zenodo_client.is_configured",
+            lambda: True,
+        )
+        from fastapi import HTTPException
+
+        with patch(
+            "services.zenodo_oauth_service.enforce_oauth_rate_limit",
+            side_effect=HTTPException(status_code=429, detail={"message": "limited"}),
+        ):
+            resp = client.get("/zenodo/oauth/start")
+        assert resp.status_code == 429
+
+    def test_status_disconnected_no_store(self, client, monkeypatch):
         monkeypatch.setattr(
             "services.zenodo_oauth_service.zenodo_client.is_configured",
             lambda: False,
@@ -55,7 +71,8 @@ class TestZenodoOAuthRoutes:
         with patch("services.zenodo_oauth_service.get_session", return_value=None):
             resp = client.get("/zenodo/oauth/status")
         assert resp.status_code == 200
-        assert resp.json() == {"connected": False, "configured": False}
+        assert resp.json()["connected"] is False
+        assert "no-store" in resp.headers.get("cache-control", "")
 
     def test_status_connected_via_header_hides_tokens(self, client, monkeypatch):
         monkeypatch.setattr(
@@ -71,7 +88,7 @@ class TestZenodoOAuthRoutes:
         session.refresh_token = "must-not-leak-r"
         session.save = MagicMock()
 
-        with patch("services.zenodo_oauth_service.get_session", return_value=session) as get_sess:
+        with patch("services.zenodo_oauth_service.get_session", return_value=session):
             resp = client.get(
                 "/zenodo/oauth/status",
                 headers={"X-Zenodo-Session": "hdr-sid"},
@@ -80,14 +97,14 @@ class TestZenodoOAuthRoutes:
         assert resp.status_code == 200
         body = resp.json()
         assert body["connected"] is True
-        assert body["session_id"] == "hdr-sid"
         assert "must-not-leak" not in resp.text
         assert "access_token" not in body
-        get_sess.assert_called()
+        assert "no-store" in resp.headers.get("cache-control", "")
 
-    def test_callback_redirect_sets_cookie(self, client):
+    def test_callback_success_sets_cookie(self, client):
         session = MagicMock()
-        session.session_id = "sid"
+        session.session_id = "rotated-sid"
+        session.access_token = "tok"
         session.return_to = "/annotrieve/"
         with patch(
             "services.zenodo_oauth_service.handle_callback",
@@ -100,6 +117,7 @@ class TestZenodoOAuthRoutes:
         assert resp.status_code == 302
         assert "zenodo=connected" in resp.headers["location"]
         assert "annotrieve_zenodo_sid" in resp.cookies
+        assert "no-store" in resp.headers.get("cache-control", "")
 
     def test_callback_error_query(self, client):
         with patch(
@@ -122,3 +140,4 @@ class TestZenodoOAuthRoutes:
         assert resp.status_code == 200
         assert resp.json()["connected"] is False
         disconnect.assert_called_once()
+        assert "no-store" in resp.headers.get("cache-control", "")

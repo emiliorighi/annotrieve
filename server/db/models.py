@@ -184,6 +184,27 @@ class ZenodoOAuthSession(DynamicDocument):
         return bool(self.access_token)
 
 
+class ZenodoOAuthRateLimit(DynamicDocument):
+    """
+    Per-IP hits on Zenodo OAuth start/callback for a rolling hourly window.
+    """
+
+    ip = StringField(required=True)
+    action = StringField(required=True)  # start | callback
+    created_at = DateTimeField(default=datetime.utcnow)
+
+    meta = {
+        "collection": "zenodo_oauth_rate_limits",
+        "indexes": [
+            ("ip", "action"),
+            {
+                "fields": ["created_at"],
+                "expireAfterSeconds": 60 * 60 * 6,
+            },
+        ],
+    }
+
+
 class BioProject(DynamicDocument):
     accession = StringField(required=True, unique=True)
     title = StringField(required=True)

@@ -45,6 +45,8 @@ class Settings:
         "true",
         "yes",
     )
+    # Rolling hourly cap per client IP for oauth start + callback (anti-spam)
+    ZENODO_OAUTH_HOURLY_LIMIT: int = int(os.getenv("ZENODO_OAUTH_HOURLY_LIMIT", "30"))
 
 
 settings = Settings()

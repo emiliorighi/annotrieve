@@ -11,9 +11,13 @@ from fastapi import HTTPException, Request, Response
 
 from clients import zenodo_oauth as zenodo_client
 from configs.app_settings import settings
-from db.models import ZenodoOAuthSession
+from db.models import ZenodoOAuthRateLimit, ZenodoOAuthSession
 
 SESSION_HEADER = "X-Zenodo-Session"
+NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    "Pragma": "no-cache",
+}
 
 
 def _utcnow() -> datetime:
@@ -33,6 +37,42 @@ def _require_configured() -> None:
 
 def _new_id() -> str:
     return secrets.token_urlsafe(32)
+
+
+def client_ip_from_request(request: Request) -> str:
+    """Leftmost X-Forwarded-For hop (Traefik), else ASGI client host."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def enforce_oauth_rate_limit(ip: str, action: str) -> None:
+    """
+    Rolling 1h limit on oauth start/callback per IP.
+
+    Raises HTTPException(429) when the combined start+callback budget is exhausted.
+    """
+    ip = ip or "unknown"
+    now = _utcnow()
+    window_start = now - timedelta(hours=1)
+    used = ZenodoOAuthRateLimit.objects(ip=ip, created_at__gte=window_start).count()
+    limit = max(1, settings.ZENODO_OAUTH_HOURLY_LIMIT)
+    if used >= limit:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": "Zenodo OAuth rate limit exceeded; try again later",
+                "limit": limit,
+                "window_hours": 1,
+                "remaining": 0,
+            },
+        )
+    ZenodoOAuthRateLimit(ip=ip, action=action, created_at=now).save()
 
 
 def _attach_session_cookie(response: Response, session_id: str) -> None:
@@ -101,33 +141,25 @@ def start_oauth(
     return_to: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Create (or reuse) a broker session and return the Zenodo authorize URL.
+    Create a fresh broker session and return the Zenodo authorize URL.
 
-    Sets the session cookie on ``response``.
+    Always mints a new ``session_id`` (invalidates any prior cookie session) to
+    reduce session-fixation risk. Sets the session cookie on ``response``.
     """
     _require_configured()
+    enforce_oauth_rate_limit(client_ip_from_request(request), "start")
 
-    session_id = resolve_session_id(request)
-    session = get_session(session_id)
+    prior = get_session(resolve_session_id(request))
+    if prior is not None:
+        prior.delete()
+
     state = _new_id()
-
-    if session is None:
-        session = ZenodoOAuthSession(
-            session_id=_new_id(),
-            oauth_state=state,
-            return_to=return_to,
-        )
-        session.save()
-    else:
-        session.oauth_state = state
-        if return_to is not None:
-            session.return_to = return_to
-        # Starting a new authorize round clears prior tokens until callback succeeds
-        session.access_token = None
-        session.refresh_token = None
-        session.expires_at = None
-        session.scope = None
-        touch_session(session)
+    session = ZenodoOAuthSession(
+        session_id=_new_id(),
+        oauth_state=state,
+        return_to=return_to,
+    )
+    session.save()
 
     _attach_session_cookie(response, session.session_id)
     authorize = zenodo_client.authorize_url(state=state)
@@ -140,16 +172,21 @@ def start_oauth(
 
 def handle_callback(
     *,
+    request: Request,
     code: Optional[str],
     state: Optional[str],
     error: Optional[str] = None,
     error_description: Optional[str] = None,
 ) -> Tuple[str, Optional[ZenodoOAuthSession]]:
     """
-    Exchange ``code`` for tokens when ``state`` matches a pending session.
+    Exchange ``code`` for tokens when ``state`` matches the pending session
+    **and** the browser presents that same session via cookie/header.
 
+    On success, rotates ``session_id`` (session fixation mitigation).
     Returns (frontend_redirect_url, session_or_none).
     """
+    enforce_oauth_rate_limit(client_ip_from_request(request), "callback")
+
     if error:
         return (
             _frontend_redirect(ok=False, reason=error, detail=error_description),
@@ -168,16 +205,35 @@ def handle_callback(
             None,
         )
 
+    browser_sid = resolve_session_id(request)
+    if not browser_sid or browser_sid != session.session_id:
+        return (
+            _frontend_redirect(
+                ok=False,
+                reason="session_mismatch",
+                detail="OAuth callback is not bound to this browser session",
+                return_to=session.return_to,
+            ),
+            None,
+        )
+
     try:
         payload = zenodo_client.exchange_authorization_code(code)
     except zenodo_client.ZenodoOAuthError as exc:
         return (
-            _frontend_redirect(ok=False, reason="token_exchange_failed", detail=str(exc)),
+            _frontend_redirect(
+                ok=False,
+                reason="token_exchange_failed",
+                detail=str(exc),
+                return_to=session.return_to,
+            ),
+            # Keep existing cookie/session id so the user can retry connect
             session,
         )
 
     _apply_token_payload(session, payload)
-    # One-time state
+    # Rotate identifiers after successful login
+    session.session_id = _new_id()
     session.oauth_state = _new_id()
     session.save()
     return (
